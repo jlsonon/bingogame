@@ -33,6 +33,19 @@ export default function Player() {
   // For round transition checkbox logic
   const [roundChoices, setRoundChoices] = useState<Record<number, boolean>>({});
   const [nearWinAlert, setNearWinAlert] = useState<string | null>(null);
+  const [claimedDikitIndices, setClaimedDikitIndices] = useState<number[]>([]);
+
+  // Reset round-specific data when roundNumber changes
+  useEffect(() => {
+     if (room?.roundNumber) {
+        setClaimedDikitIndices([]);
+        setMarkedCells(prev => {
+           const reset: Record<number, number[]> = {};
+           Object.keys(prev).forEach(idx => { reset[Number(idx)] = [0]; });
+           return reset;
+        });
+     }
+  }, [room?.roundNumber, room?.status === 'waiting']);
 
   useEffect(() => {
     if (!socket || !code) return;
@@ -163,8 +176,8 @@ export default function Player() {
   };
 
   const handleDikitClaim = () => {
-    if (currentDikitCheck && room?.status === 'playing') {
-       const { claimDikit } = useGameStore.getState();
+    if (currentDikitCheck && room?.status === 'playing' && !claimedDikitIndices.includes(currentCardIdx)) {
+       setClaimedDikitIndices(prev => [...prev, currentCardIdx]);
        claimDikit(currentCardIdx, markedCells[currentCardIdx] || []);
     }
   };
@@ -461,14 +474,14 @@ export default function Player() {
 
       {/* The "Big Orange Button" - Floating Claim */}
       <AnimatePresence>
-         {room.status === 'playing' && (currentWinCheck.valid || currentDikitCheck) && activeTab === 'cards' && (
+         {room.status === 'playing' && (currentWinCheck.valid || (currentDikitCheck && !claimedDikitIndices.includes(currentCardIdx))) && activeTab === 'cards' && (
             <motion.div 
                initial={{ y: 100, scale: 0.8 }}
                animate={{ y: 0, scale: 1 }}
                exit={{ y: 100, scale: 0.8 }}
                className="fixed bottom-20 left-4 right-4 z-40 flex flex-col gap-2"
             >
-               {currentDikitCheck && (
+               {currentDikitCheck && !claimedDikitIndices.includes(currentCardIdx) && (
                   <button 
                      onClick={handleDikitClaim}
                      className="w-full bg-[#0D9488] text-white py-3 rounded-2xl font-black text-lg uppercase tracking-[0.1em] shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none"

@@ -112,11 +112,18 @@ export const useGameStore = create<GameState>((set, get) => ({
     
     newSocket.on("room_updated", (room: Room) => {
       const sessionId = get().sessionId;
+      const currentRoom = get().room;
+      
+      // If round changed or game reset, clear local alerts
+      const roundChanged = currentRoom && (room.roundNumber !== currentRoom.roundNumber || room.status === 'waiting');
+      
       set({
         room,
         me: room.players[sessionId] || null,
         latestBall: room.calledNumbers.at(-1) || null,
-        winner: room.status === 'waiting' ? null : get().winner
+        winner: room.status === 'waiting' ? null : get().winner,
+        claimAlert: roundChanged ? null : get().claimAlert,
+        dikitAlert: roundChanged ? null : get().dikitAlert
       });
     });
 

@@ -5,24 +5,24 @@ import { getBallLetter } from '../lib/bingo';
 import { PatternVisualizer } from '../components/PatternVisualizer';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { Trophy, Users, Ticket, PlayCircle } from 'lucide-react';
+import { Trophy, Users, Ticket, PlayCircle, Monitor } from 'lucide-react';
 
 export default function Display() {
   const { code } = useParams();
   const { socket, room, latestBall, winner, dikitAlert, dismissDikit, connect } = useGameStore();
   const [lastBalls, setLastBalls] = useState<number[]>([]);
   const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [audioEnabled, setAudioEnabled] = useState(false);
 
   useEffect(() => {
     connect();
     
-    // Load voices
     const loadVoices = () => {
        const voices = window.speechSynthesis.getVoices();
-       // Try to find a clean male voice
        const preferred = voices.find(v => 
           v.name.includes('David') || 
           v.name.includes('Daniel') || 
+          v.name.includes('Microsoft David') ||
           (v.name.includes('Male') && v.lang.startsWith('en')) ||
           (v.name.includes('Google UK English Male'))
        );
@@ -33,16 +33,27 @@ export default function Display() {
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }, [connect]);
 
+  // Voice Trigger logic
   useEffect(() => {
-    if (latestBall) {
+    if (latestBall && audioEnabled) {
+      // Cancel any ongoing speech to avoid overlap/queueing
+      window.speechSynthesis.cancel();
+
       const letter = getBallLetter(latestBall);
-      const utterance = new SpeechSynthesisUtterance(`${letter} ${latestBall}`);
+      const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
       if (maleVoice) utterance.voice = maleVoice;
-      utterance.rate = 0.85; // Slightly slower for clarity
-      utterance.pitch = maleVoice?.name.includes('David') ? 1.0 : 0.9; // Adjust pitch for depth
+      utterance.rate = 0.8;
+      utterance.pitch = 0.9;
       window.speechSynthesis.speak(utterance);
     }
-  }, [latestBall, maleVoice]);
+  }, [latestBall, maleVoice, audioEnabled]);
+
+  const enableAudio = () => {
+     setAudioEnabled(true);
+     // Required to unlock audio on some browsers
+     const silence = new SpeechSynthesisUtterance("");
+     window.speechSynthesis.speak(silence);
+  };
 
   useEffect(() => {
     if (room?.calledNumbers) {
@@ -84,7 +95,21 @@ export default function Display() {
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&bgcolor=FAF7F2&color=3D3A35`;
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col overflow-hidden relative">
+      {/* Audio Unlock Overlay */}
+      {!audioEnabled && (
+         <div className="fixed inset-0 z-[100] bg-[#3D3A35]/60 backdrop-blur-md flex items-center justify-center">
+            <button 
+               onClick={enableAudio}
+               className="bg-[#EA580C] text-white px-12 py-8 rounded-[40px] font-black text-3xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center gap-4 border-4 border-white"
+            >
+               <Monitor size={64} />
+               ENABLE BINGO ANNOUNCER
+               <span className="text-sm font-bold opacity-80">(Required to play voice)</span>
+            </button>
+         </div>
+      )}
+
       {/* Top Bar */}
       <header className="h-24 bg-white border-b-4 border-[#E8E2D9] px-12 flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-6">

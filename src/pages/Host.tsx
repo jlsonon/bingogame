@@ -431,30 +431,33 @@ export default function Host() {
                    <div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Pattern Library</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[...PRESET_PATTERNS, ...patternLibrary].map(pattern => {
-                            const selected = room.patterns.some(item => item.id === pattern.id);
-                            const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
-                            return (
-                              <div key={pattern.id} className="relative group">
-                                <button
-                                  type="button"
-                                  onClick={() => togglePattern(pattern)}
-                                  className={`w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
-                                >
-                                  {pattern.name}
-                                </button>
-                                {!isPreset && (
-                                   <button 
-                                      onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
-                                      className="absolute -top-2 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        <div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar border-2 border-[#FAF7F2] rounded-2xl p-2 bg-[#FAF7F2]/50">
+                           <div className="grid grid-cols-2 gap-2">
+                             {[...PRESET_PATTERNS, ...patternLibrary].map(pattern => {
+                               const selected = room.patterns.some(item => item.id === pattern.id);
+                               const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
+                               return (
+                                 <div key={pattern.id} className="relative group">
+                                   <button
+                                     type="button"
+                                     onClick={() => togglePattern(pattern)}
+                                     className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
                                    >
-                                      <Plus size={10} className="rotate-45" strokeWidth={4} />
+                                     {pattern.name}
+                                     {selected && <div className="absolute top-1 right-1 w-2 h-2 bg-white rounded-full" />}
                                    </button>
-                                )}
-                              </div>
-                            );
-                          })}
+                                   {!isPreset && (
+                                      <button 
+                                         onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
+                                         className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"
+                                      >
+                                         <Plus size={8} className="rotate-45" strokeWidth={5} />
+                                      </button>
+                                   )}
+                                 </div>
+                               );
+                             })}
+                           </div>
                         </div>
                       </div>
 

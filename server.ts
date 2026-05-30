@@ -143,7 +143,7 @@ function sanitizePatterns(value: unknown): BingoPattern[] {
     })
     .filter((pattern): pattern is BingoPattern => Boolean(pattern));
 
-  return patterns.length ? patterns.slice(0, 12) : DEFAULT_BINGO_PATTERNS;
+  return patterns.length ? patterns : DEFAULT_BINGO_PATTERNS;
 }
 
 function touchRoom(code: string) {
