@@ -21,7 +21,7 @@ export function PatternVisualizer({ patterns, className = "" }: Props) {
               if (pattern.id === 'row-any') isSelected = i < 5; // Highlight first row as example
               if (pattern.id === 'col-any') isSelected = i % 5 === 0; // Highlight first column as example
               if (pattern.id === 'diag-any') isSelected = [0, 6, 12, 18, 24].includes(i); // Highlight one diagonal
-              if (pattern.match === 'dikit') isSelected = [10, 11].includes(i); // Highlight 2 adjacent
+              if (pattern.match === 'dikit') isSelected = [0, 1].includes(i); // Highlight top-left 2 as example (away from FREE)
               
               const isFree = i === 12;
 

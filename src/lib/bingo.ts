@@ -75,16 +75,19 @@ function patternCellsFor(pattern: BingoPattern): number[][] {
 }
 
 export function checkDikitSidequest(card: number[][], marked: number[]): boolean {
-  const isMarkedIndex = (index: number) => {
+  const isMarkedNumber = (index: number) => {
     const r = Math.floor(index / 5);
     const c = index % 5;
     const val = card[r]?.[c];
-    return val === 0 || marked.includes(val);
+    // EXCLUDE index 12 (Free Space) and value 0
+    if (index === 12 || val === 0) return false;
+    return marked.includes(val);
   };
 
   for (let r = 0; r < 5; r++) {
     for (let c = 0; c < 4; c++) {
-      if (isMarkedIndex(r * 5 + c) && isMarkedIndex(r * 5 + c + 1)) {
+      // Both cells in the horizontal pair must be real marked numbers (not Free space)
+      if (isMarkedNumber(r * 5 + c) && isMarkedNumber(r * 5 + c + 1)) {
         return true;
       }
     }
