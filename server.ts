@@ -16,6 +16,7 @@ interface Player {
   activeCards: number[][][]; // Array of cards, each card is 5x5 array of numbers
   hasDikit: boolean;
   nextRoundChoice?: 'keep' | 'change';
+  isReady: boolean;
 }
 
 interface Room {
@@ -34,7 +35,8 @@ interface Room {
   nextRoundEndsAt?: number;
   claims: any[];
   hidePattern: boolean;
-  dikitWinner: string | null;
+  dikitWinners: any[];
+  verifiedWinners: any[];
   // New V2 Statistics
   stats: {
     totalCardsSold: number;
@@ -48,6 +50,7 @@ interface Room {
 const rooms: Record<string, Room> = {};
 const roomCleanupTimers: Record<string, NodeJS.Timeout> = {};
 const nextRoundTimers: Record<string, NodeJS.Timeout> = {};
+const dikitGraceTimers: Record<string, NodeJS.Timeout> = {};
 
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -76,25 +79,47 @@ function stopAutoCaller(code: string) {
   }
 }
 
-function prepareNextRound(code: string, io: Server) {
+function startAutoCaller(code: string, io: Server) {
+  const room = rooms[code];
+  if (!room || room.status !== 'playing' || room.autoCallSpeed <= 0) return;
+  
+  stopAutoCaller(code);
+  autoCallTimers[code] = setInterval(() => {
+    if (room && room.status === 'playing' && room.remainingBalls.length > 0) {
+      const ball = room.remainingBalls.pop()!;
+      room.calledNumbers.push(ball);
+      io.to(code).emit("ball_called", { ball, room });
+      io.to(code).emit("room_updated", room);
+    } else if (room && room.remainingBalls.length === 0) {
+      stopAutoCaller(code);
+    }
+  }, room.autoCallSpeed * 1000);
+}
+
+function prepareNextRound(code: string, io: Server, autoStart = false) {
   const room = rooms[code];
   if (!room || room.status !== 'next_round') return;
-  room.status = 'waiting';
+  room.status = autoStart ? 'playing' : 'waiting';
   room.calledNumbers = [];
   room.remainingBalls = initBalls();
   room.claims = [];
-  room.dikitWinner = null;
+  room.dikitWinners = [];
+  room.verifiedWinners = [];
   room.nextRoundEndsAt = undefined;
   room.roundNumber += 1;
   room.roundName = `Round ${room.roundNumber}`;
   Object.values(room.players).forEach(player => {
     player.nextRoundChoice = 'keep';
+    player.isReady = false;
   });
   if (nextRoundTimers[code]) {
     clearTimeout(nextRoundTimers[code]);
     delete nextRoundTimers[code];
   }
   io.to(code).emit("room_updated", room);
+  if (autoStart && room.autoCallSpeed > 0) {
+    startAutoCaller(code, io);
+  }
 }
 
 function normalizeCode(code: string) {
@@ -224,7 +249,8 @@ async function startServer() {
         patterns: DEFAULT_BINGO_PATTERNS,
         claims: [],
         hidePattern: false,
-        dikitWinner: null,
+        dikitWinners: [],
+        verifiedWinners: [],
         stats: {
           totalCardsSold: 0,
           totalPlayersJoined: 1, // Host counts as first player
@@ -243,7 +269,8 @@ async function startServer() {
         connected: true,
         activeCards: [],
         hasDikit: false,
-        nextRoundChoice: 'keep'
+        nextRoundChoice: 'keep',
+        isReady: false
       };
 
       newRoom.players[sessionId] = hostPlayer;
@@ -275,7 +302,8 @@ async function startServer() {
         connected: true,
         activeCards: [],
         hasDikit: false,
-        nextRoundChoice: 'keep'
+        nextRoundChoice: 'keep',
+        isReady: false
       };
 
       room.players[sessionId] = {
@@ -346,7 +374,7 @@ async function startServer() {
         io.to(code).emit("room_updated", room);
         
         if (room.autoCallSpeed > 0) {
-          startAutoCaller(code);
+          startAutoCaller(code, io);
         }
       }
     });
@@ -358,7 +386,7 @@ async function startServer() {
       if (room && host?.socketId === socket.id) {
         const settings = data.settings || {};
         if (['Bingo', 'Blackout', 'Dikit'].includes(settings.mode)) room.mode = settings.mode;
-        if ([0, 3, 5, 8].includes(settings.autoCallSpeed)) room.autoCallSpeed = settings.autoCallSpeed;
+        if (typeof settings.autoCallSpeed === 'number' && settings.autoCallSpeed >= 0) room.autoCallSpeed = settings.autoCallSpeed;
         if (typeof settings.roundName === 'string') room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
         if (typeof settings.prizeText === 'string') room.prizeText = sanitizeText(settings.prizeText, '', 80);
         if (Array.isArray(settings.patterns)) room.patterns = sanitizePatterns(settings.patterns);
@@ -407,7 +435,7 @@ async function startServer() {
         room.status = 'playing';
         io.to(code).emit("room_updated", room);
         if (room.autoCallSpeed > 0) {
-          startAutoCaller(code);
+          startAutoCaller(code, io);
         }
       }
     });
@@ -421,7 +449,8 @@ async function startServer() {
          room.calledNumbers = [];
          room.remainingBalls = initBalls();
          room.claims = [];
-         room.dikitWinner = null;
+         room.dikitWinners = [];
+         room.verifiedWinners = [];
          room.nextRoundEndsAt = undefined;
          if (nextRoundTimers[code]) {
            clearTimeout(nextRoundTimers[code]);
@@ -429,6 +458,7 @@ async function startServer() {
          }
          Object.values(room.players).forEach(player => {
            player.nextRoundChoice = 'keep';
+           player.isReady = false;
          });
          stopAutoCaller(code);
          io.to(code).emit("room_updated", room);
@@ -475,13 +505,14 @@ async function startServer() {
       const room = rooms[code];
       const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
       if (room && player && room.status === 'playing') {
-        if (room.dikitWinner) return; // Only one Dikit winner per round
+        if (room.dikitWinners.some(w => w.playerId === player.id)) return; 
+        
+        // If grace timer is already null/deleted but dikitWinners has items, the window closed.
+        if (room.dikitWinners.length > 0 && !dikitGraceTimers[code]) return;
         
         const card = player.activeCards[data.cardIndex];
         if (!isValidCard(card)) return;
         
-        room.dikitWinner = player.nickname;
-
         const dikitClaim = {
           id: randomUUID(),
           playerId: player.id,
@@ -491,8 +522,14 @@ async function startServer() {
           timestamp: Date.now()
         };
         
-        io.to(code).emit("dikit_claimed", dikitClaim);
-        io.to(code).emit("room_updated", room);
+        room.dikitWinners.push(dikitClaim);
+        
+        if (!dikitGraceTimers[code]) {
+          dikitGraceTimers[code] = setTimeout(() => {
+             delete dikitGraceTimers[code];
+             io.to(code).emit("dikit_winners_announced", room.dikitWinners);
+          }, 3000);
+        }
       }
     });
 
@@ -503,32 +540,54 @@ async function startServer() {
        if (room && host?.socketId === socket.id) {
           const claimIndex = room.claims.findIndex(c => c.id === data.claimId);
           if (claimIndex !== -1) {
-             const claim = room.claims[claimIndex];
+             const claim = room.claims.splice(claimIndex, 1)[0];
+             
              if (data.isValid) {
-                stopAutoCaller(code);
-                room.status = 'next_round';
-                room.nextRoundEndsAt = Date.now() + 20_000;
-                
-                // Record winner and increment games played
-                room.stats.gamesPlayed += 1;
+                room.verifiedWinners.push(claim);
                 room.stats.winners.push({
                    name: claim.playerName,
                    pattern: claim.pattern,
                    round: room.roundNumber
                 });
-
-                if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
-                nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 20_000);
-                io.to(code).emit("winner_announced", claim);
              } else {
-                room.claims.splice(claimIndex, 1);
                 io.to(code).emit("claim_rejected", claim);
-                room.status = 'playing';
-                if (room.autoCallSpeed > 0) {
-                  startAutoCaller(code);
-                }
+             }
+             
+             if (room.claims.length === 0) {
+                 if (room.verifiedWinners.length > 0) {
+                    room.stats.gamesPlayed += 1;
+                    room.status = 'next_round';
+                    room.nextRoundEndsAt = Date.now() + 20_000;
+                    
+                    if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
+                    nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 20_000);
+                    
+                    io.to(code).emit("winners_announced", room.verifiedWinners);
+                 } else {
+                    room.status = 'playing';
+                    if (room.autoCallSpeed > 0) {
+                      startAutoCaller(code, io);
+                    }
+                 }
              }
              io.to(code).emit("room_updated", room);
+          }
+       }
+    });
+
+    socket.on("set_player_ready", (data: { code: string }) => {
+       const code = normalizeCode(data.code);
+       const room = rooms[code];
+       const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
+       if (room && player && room.status === 'next_round') {
+          player.isReady = true;
+          io.to(code).emit("room_updated", room);
+          
+          const connectedPlayers = Object.values(room.players).filter(p => p.connected);
+          const allReady = connectedPlayers.every(p => p.isReady);
+          if (allReady && connectedPlayers.length > 0) {
+             if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
+             prepareNextRound(code, io, true); // true = auto-start
           }
        }
     });
@@ -584,24 +643,6 @@ async function startServer() {
       }
     });
   });
-
-  function startAutoCaller(code: string) {
-    stopAutoCaller(code);
-    const room = rooms[code];
-    if (room && room.autoCallSpeed > 0 && room.status === 'playing') {
-      autoCallTimers[code] = setInterval(() => {
-        const currentRoom = rooms[code];
-        if (currentRoom && currentRoom.status === 'playing' && currentRoom.remainingBalls.length > 0) {
-           const ball = currentRoom.remainingBalls.pop()!;
-           currentRoom.calledNumbers.push(ball);
-           io.to(code).emit("ball_called", { ball, room: currentRoom });
-           io.to(code).emit("room_updated", currentRoom);
-        } else {
-           stopAutoCaller(code);
-        }
-      }, room.autoCallSpeed * 1000);
-    }
-  }
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

@@ -87,7 +87,8 @@ export default function Player() {
 
   useEffect(() => {
     if (winner) {
-      if (winner.playerId === me?.id) {
+      const iWon = winner.some((w: any) => w.playerId === me?.id);
+      if (iWon) {
          confetti({ particleCount: 300, spread: 100, origin: { y: 0.5 } });
       } else {
          confetti({ particleCount: 50, spread: 40, origin: { y: 1 }, colors: ['#94a3b8']});
@@ -440,10 +441,21 @@ export default function Player() {
                   <button 
                      onClick={applyRoundChoices}
                      disabled={Object.keys(roundChoices).length === 0}
-                     className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${Object.keys(roundChoices).length > 0 ? 'bg-[#3D3A35] text-white' : 'bg-white border-2 border-[#E8E2D9] text-[#DED9D1]'}`}
+                     className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${Object.keys(roundChoices).length > 0 ? 'bg-[#3D3A35] text-white' : 'hidden'}`}
                   >
                      Confirm Changes
                   </button>
+                  
+                  {Object.keys(roundChoices).length === 0 && (
+                     <button 
+                        onClick={() => useGameStore.getState().setPlayerReady()}
+                        disabled={me.isReady}
+                        className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${!me.isReady ? 'bg-[#0D9488] text-white shadow-[0_6px_0_#0F766E]' : 'bg-white border-4 border-[#0D9488] text-[#0D9488]'}`}
+                     >
+                        {!me.isReady ? "I'm Ready" : "Waiting for others..."}
+                     </button>
+                  )}
+                  
                   <p className="text-center text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">
                      {Object.keys(roundChoices).length > 0 ? 'Cards will be refreshed' : 'Keeping current cards'}
                   </p>
@@ -553,18 +565,38 @@ export default function Player() {
                initial={{ y: -100, opacity: 0 }}
                animate={{ y: 20, opacity: 1 }}
                exit={{ y: -100, opacity: 0 }}
-               className="fixed top-14 left-4 right-4 z-[55] bg-[#0D9488] text-white p-4 rounded-2xl shadow-2xl border-2 border-white flex items-center gap-4"
+               className="fixed top-14 left-4 right-4 z-[55] bg-[#0D9488] text-white p-4 rounded-2xl shadow-2xl border-2 border-white flex flex-col gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar"
             >
-               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0">
-                  <Trophy size={24} />
+               <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+                     <Trophy size={24} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                     <div className="text-[10px] font-black uppercase tracking-widest opacity-80">{dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Hit!'}</div>
+                     <div className="text-lg font-black truncate leading-tight">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div>
+                  </div>
+                  <button onClick={() => useGameStore.getState().dismissDikit()} className="text-white/50 hover:text-white shrink-0">
+                     <Plus size={20} className="rotate-45" />
+                  </button>
                </div>
-               <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-black uppercase tracking-widest opacity-80">Sidequest Hit!</div>
-                  <div className="text-lg font-black truncate leading-tight">{dikitAlert.playerName} hit Dikit!</div>
+
+               <div className="flex gap-4 overflow-x-auto w-full pb-2 snap-x">
+                  {dikitAlert.map((alert: any, aIdx: number) => (
+                     <div key={aIdx} className="bg-white/10 p-4 rounded-2xl border border-white/20 shrink-0 snap-center">
+                        <div className="text-center text-xs font-bold mb-2">{alert.playerName}</div>
+                        <div className="grid grid-cols-5 gap-1">
+                           {alert.card.map((row: any)=> row.map((num: any, idx: number) => {
+                              const called = num === 0 || room.calledNumbers.includes(num);
+                              return (
+                                 <div key={idx} className={`w-6 h-6 flex items-center justify-center font-black text-[8px] rounded-md border ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>
+                                    {num === 0 ? 'FR' : num}
+                                 </div>
+                              )
+                           }))}
+                        </div>
+                     </div>
+                  ))}
                </div>
-               <button onClick={() => useGameStore.getState().dismissDikit()} className="text-white/50 hover:text-white">
-                  <Plus size={20} className="rotate-45" />
-               </button>
             </motion.div>
          )}
       </AnimatePresence>
@@ -573,17 +605,50 @@ export default function Player() {
       <AnimatePresence>
         {winner && room.status !== 'next_round' && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-[60] p-6">
-             <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-white rounded-[48px] border-[8px] border-[#FACC15] w-full max-w-sm p-10 shadow-2xl text-center relative overflow-hidden">
+             <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-white rounded-[48px] border-[8px] border-[#FACC15] w-full max-w-sm p-10 shadow-2xl text-center relative overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/10 to-transparent opacity-50" />
-                <div className="relative z-10">
-                  <div className="w-24 h-24 mx-auto bg-[#FACC15] rounded-full flex items-center justify-center mb-6 shadow-xl">
+                <div className="relative z-10 flex flex-col min-h-0">
+                  <div className="w-24 h-24 mx-auto bg-[#FACC15] rounded-full flex items-center justify-center mb-6 shadow-xl shrink-0">
                     <Trophy className="text-white" size={48} />
                   </div>
-                  <h2 className="text-5xl font-black text-[#3D3A35] mb-2 uppercase italic tracking-tighter">BINGO!</h2>
-                  <p className="text-xl text-[#7A746B] font-bold mb-10 leading-tight">
-                     {winner.playerId === me?.id ? "YOU WON THE ROUND!" : <><span className="text-[#0D9488] font-black">{winner.playerName}</span><br />won the round!</>}
-                  </p>
-                  <button onClick={dismissWinner} className="w-full py-5 bg-[#3D3A35] text-white rounded-[24px] font-black text-lg uppercase tracking-widest hover:bg-black active:scale-95 transition-all shadow-xl">
+                  
+                  {winner.some((w: any) => w.playerId === me?.id) ? (
+                     <>
+                        <h2 className="text-5xl font-black text-[#3D3A35] mb-2 uppercase italic tracking-tighter shrink-0">YOU WON!</h2>
+                        <p className="text-xl text-[#7A746B] font-bold mb-10 leading-tight shrink-0">
+                           Congratulations!
+                        </p>
+                     </>
+                  ) : (
+                     <>
+                        <h2 className="text-5xl font-black text-[#3D3A35] mb-2 uppercase italic tracking-tighter shrink-0">{winner.length > 1 ? 'WINNERS!' : 'ROUND OVER'}</h2>
+                        <p className="text-xl text-[#7A746B] font-bold mb-4 leading-tight shrink-0">
+                           <span className="font-bold text-[#EA580C]">{winner.map((w: any) => w.playerName).join(', ')}</span> claimed Bingo.
+                        </p>
+                        
+                        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar mb-8">
+                           <div className="flex flex-col gap-4">
+                              {winner.map((w: any, wIdx: number) => (
+                                 <div key={wIdx} className="bg-[#FAF7F2] p-4 rounded-3xl border-2 border-[#E8E2D9] shadow-inner">
+                                    <div className="text-sm font-black text-[#3D3A35] mb-2">{w.playerName}</div>
+                                    <div className="grid grid-cols-5 gap-1 mx-auto max-w-[200px]">
+                                       {w.card.map((row: any)=> row.map((num: any, idx: number) => {
+                                          const called = num === 0 || room.calledNumbers.includes(num);
+                                          return (
+                                             <div key={idx} className={`aspect-square flex items-center justify-center font-black text-[10px] rounded-md border transition-all ${num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C]' : 'bg-white border-[#E8E2D9] text-[#DED9D1]'}`}>
+                                                {num === 0 ? 'FR' : num}
+                                             </div>
+                                          )
+                                       }))}
+                                    </div>
+                                 </div>
+                              ))}
+                           </div>
+                        </div>
+                     </>
+                  )}
+
+                  <button onClick={dismissWinner} className="w-full py-5 bg-[#3D3A35] text-white rounded-[24px] font-black text-lg uppercase tracking-widest hover:bg-black active:scale-95 transition-all shadow-xl shrink-0 mt-auto">
                      Awesome
                   </button>
                 </div>

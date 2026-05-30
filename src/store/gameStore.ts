@@ -12,6 +12,7 @@ export interface Player {
   activeCards: number[][][]; // Array of cards, each card is 5x5 array of numbers
   hasDikit: boolean;
   nextRoundChoice?: 'keep' | 'change';
+  isReady: boolean;
 }
 
 export interface Room {
@@ -30,7 +31,8 @@ export interface Room {
   nextRoundEndsAt?: number;
   claims: any[];
   hidePattern: boolean;
-  dikitWinner: string | null;
+  dikitWinners: any[];
+  verifiedWinners: any[];
   stats: {
     totalCardsSold: number;
     totalPlayersJoined: number;
@@ -68,13 +70,14 @@ interface GameState {
   claimBingo: (cardIndex: number, markedCells: number[]) => void;
   claimDikit: (cardIndex: number, markedCells: number[]) => void;
   setNextRoundChoice: (choice: 'keep' | 'change') => void;
+  setPlayerReady: () => void;
   leaveRoom: () => void;
 
   // Events
   latestBall: number | null;
   claimAlert: any | null;
-  dikitAlert: any | null;
-  winner: any | null;
+  dikitAlert: any[] | null;
+  winner: any[] | null;
   dismissWinner: () => void;
   dismissDikit: () => void;
 }
@@ -138,18 +141,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({ claimAlert: claim });
     });
 
-    newSocket.on("dikit_claimed", (claim: any) => {
-      set({ dikitAlert: claim });
+    newSocket.on("dikit_winners_announced", (claims: any[]) => {
+      set({ dikitAlert: claims });
       // Auto dismiss after 7 seconds
       setTimeout(() => {
-         if (get().dikitAlert?.id === claim.id) {
-            set({ dikitAlert: null });
-         }
+         set({ dikitAlert: null });
       }, 7000);
     });
 
-    newSocket.on("winner_announced", (claim: any) => {
-      set({ winner: claim, claimAlert: null });
+    newSocket.on("winners_announced", (claims: any[]) => {
+      set({ winner: claims, claimAlert: null });
     });
 
     newSocket.on("claim_rejected", () => {
@@ -288,6 +289,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   setNextRoundChoice: (choice: 'keep' | 'change') => {
     const { socket, room } = get();
     if (socket && room) socket.emit("set_next_round_choice", { code: room.id, choice });
+  },
+
+  setPlayerReady: () => {
+    const { socket, room } = get();
+    if (socket && room) socket.emit("set_player_ready", { code: room.id });
   },
 
   dismissWinner: () => set({ winner: null }),

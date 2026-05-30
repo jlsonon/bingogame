@@ -337,7 +337,7 @@ export default function Display() {
         </div>
       </main>
 
-      {/* Overlays */}
+      {/* Winner Modal */}
       <AnimatePresence>
         {winner && room.status !== 'next_round' && (
           <motion.div 
@@ -349,18 +349,39 @@ export default function Display() {
              <motion.div
                initial={{ scale: 0.8, y: 100 }}
                animate={{ scale: 1, y: 0 }}
-               className="bg-white rounded-[64px] border-[12px] border-[#FACC15] p-16 shadow-[0_0_100px_rgba(250,204,21,0.3)] text-center max-w-4xl w-full relative overflow-hidden"
+               className="bg-white rounded-[64px] border-[12px] border-[#FACC15] p-16 shadow-[0_0_100px_rgba(250,204,21,0.3)] text-center max-w-[90vw] w-full relative overflow-hidden flex flex-col max-h-[90vh]"
              >
                 <div className="absolute top-0 left-0 w-full h-4 bg-gradient-to-r from-[#FACC15] via-[#EA580C] to-[#FACC15]" />
-                <Trophy className="text-[#FACC15] mx-auto mb-8 drop-shadow-lg" size={160} />
-                <h2 className="text-8xl font-black text-[#3D3A35] tracking-tighter mb-4 uppercase italic">Bingo!</h2>
-                <p className="text-3xl text-[#7A746B] font-bold mb-12">
-                   Round winner is <span className="text-[#EA580C] font-black">{winner.playerName}</span>
+                <Trophy className="text-[#FACC15] mx-auto mb-8 drop-shadow-lg shrink-0" size={120} />
+                <h2 className="text-7xl font-black text-[#3D3A35] tracking-tighter mb-4 uppercase italic shrink-0">{winner.length > 1 ? `${winner.length} WINNERS!` : 'BINGO!'}</h2>
+                <p className="text-3xl text-[#7A746B] font-bold mb-8 shrink-0">
+                   <span className="text-[#EA580C] font-black">{winner.map((w: any) => w.playerName).join(', ')}</span> won the round!
                 </p>
-                <div className="flex gap-6 justify-center items-center">
+
+                <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar mb-8">
+                   <div className="flex flex-wrap gap-8 justify-center p-4">
+                      {winner.map((w: any, wIdx: number) => (
+                         <div key={wIdx} className="bg-[#FAF7F2] p-8 rounded-[40px] border-4 border-[#E8E2D9] shadow-inner">
+                            <div className="text-2xl font-black text-[#3D3A35] mb-6">{w.playerName}</div>
+                            <div className="grid grid-cols-5 gap-2">
+                               {w.card.map((row: any)=> row.map((num: any, idx: number) => {
+                                  const called = num === 0 || room.calledNumbers.includes(num);
+                                  return (
+                                     <div key={idx} className={`w-14 h-14 flex items-center justify-center font-black text-xl rounded-xl border-2 transition-all ${num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-lg scale-105' : 'bg-white border-[#E8E2D9] text-[#DED9D1]'}`}>
+                                        {num === 0 ? 'FR' : num}
+                                     </div>
+                                  )
+                               }))}
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="flex gap-6 justify-center items-center shrink-0">
                    <div className="bg-[#FAF7F2] px-8 py-4 rounded-3xl border-2 border-[#E8E2D9]">
                       <div className="text-xs font-black text-[#A19B91] uppercase tracking-widest mb-1">Pattern</div>
-                      <div className="text-2xl font-black text-[#3D3A35]">{winner.pattern}</div>
+                      <div className="text-2xl font-black text-[#3D3A35]">{winner[0]?.pattern}</div>
                    </div>
                    {room.prizeText && (
                      <div className="bg-[#FACC15]/20 px-8 py-4 rounded-3xl border-2 border-[#FACC15]">
@@ -407,24 +428,29 @@ export default function Display() {
                initial={{ x: -500, opacity: 0 }}
                animate={{ x: 0, opacity: 1 }}
                exit={{ x: -500, opacity: 0 }}
-               className="fixed bottom-12 left-12 z-40 bg-[#0D9488] text-white p-10 rounded-[48px] shadow-[0_20px_50px_rgba(13,148,136,0.3)] border-4 border-white flex flex-col items-center gap-6"
+               className="fixed bottom-12 left-12 z-40 bg-[#0D9488] text-white p-10 rounded-[48px] shadow-[0_20px_50px_rgba(13,148,136,0.3)] border-4 border-white flex flex-col items-center gap-6 max-w-[60vw]"
             >
                <div className="text-center">
-                  <div className="text-sm font-black uppercase tracking-[0.4em] opacity-80 mb-2">Sidequest Win!</div>
-                  <div className="text-5xl font-black italic tracking-tighter">{dikitAlert.playerName}</div>
+                  <div className="text-sm font-black uppercase tracking-[0.4em] opacity-80 mb-2">{dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Win!'}</div>
+                  <div className="text-5xl font-black italic tracking-tighter">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div>
                </div>
 
-               <div className="bg-white/10 p-6 rounded-[32px] border-2 border-white/20">
-                  <div className="grid grid-cols-5 gap-1.5">
-                     {dikitAlert.card.map((row: any)=> row.map((num: any, idx: number) => {
-                        const called = num === 0 || room.calledNumbers.includes(num);
-                        return (
-                           <div key={idx} className={`w-12 h-12 flex items-center justify-center font-black text-sm rounded-xl border-2 ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/30'}`}>
-                              {num === 0 ? 'FR' : num}
-                           </div>
-                        )
-                     }))}
-                  </div>
+               <div className="flex gap-6 overflow-x-auto w-full pb-4 px-4 snap-x">
+                  {dikitAlert.map((alert: any, aIdx: number) => (
+                     <div key={aIdx} className="bg-white/10 p-6 rounded-[32px] border-2 border-white/20 shrink-0 snap-center">
+                        <div className="text-center text-sm font-bold mb-4">{alert.playerName}</div>
+                        <div className="grid grid-cols-5 gap-1.5">
+                           {alert.card.map((row: any)=> row.map((num: any, idx: number) => {
+                              const called = num === 0 || room.calledNumbers.includes(num);
+                              return (
+                                 <div key={idx} className={`w-12 h-12 flex items-center justify-center font-black text-sm rounded-xl border-2 ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/30'}`}>
+                                    {num === 0 ? 'FR' : num}
+                                 </div>
+                              )
+                           }))}
+                        </div>
+                     </div>
+                  ))}
                </div>
                
                <div className="text-xl font-black uppercase tracking-[0.2em]">Hit Dikit!</div>
