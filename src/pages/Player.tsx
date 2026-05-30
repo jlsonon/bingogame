@@ -2,15 +2,27 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BingoCard } from '../components/BingoCard';
-import { generateRandomCard, checkValidWin } from '../lib/bingo';
+import { generateRandomCard, checkValidWin, getBallLetter } from '../lib/bingo';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Plus, Trash2, ArrowLeft, ArrowRight, Loader } from 'lucide-react';
 
+function Countdown({ endsAt }: { endsAt?: number }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const seconds = Math.max(0, Math.ceil(((endsAt || now) - now) / 1000));
+  return <span className="tabular-nums">{seconds}s</span>;
+}
+
 export default function Player() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { socket, room, me, updateMyCards, claimBingo, latestBall, winner, dismissWinner, claimAlert, rejoinRoom } = useGameStore();
+  const { socket, room, me, updateMyCards, claimBingo, latestBall, winner, dismissWinner, claimAlert, rejoinRoom, setNextRoundChoice } = useGameStore();
 
   const [cards, setCards] = useState<number[][][]>([]);
   const [markedCells, setMarkedCells] = useState<Record<number, number[]>>({}); // cardIndex -> marked cells
@@ -122,13 +134,22 @@ export default function Player() {
   // Check if current card has bingo
   const currentWinCheck = useMemo(() => {
     if (!room || cards.length === 0 || !room.calledNumbers) return { valid: false, pattern: '' };
-    return checkValidWin(cards[currentCardIdx], markedCells[currentCardIdx] || [], room.calledNumbers, room.mode);
-  }, [cards, currentCardIdx, markedCells, room?.calledNumbers, room?.mode]);
+    return checkValidWin(cards[currentCardIdx], markedCells[currentCardIdx] || [], room.calledNumbers, room.mode, room.patterns);
+  }, [cards, currentCardIdx, markedCells, room?.calledNumbers, room?.mode, room?.patterns]);
 
   const handleClaim = () => {
     if (currentWinCheck.valid && room?.status === 'playing') {
        claimBingo(currentCardIdx, markedCells[currentCardIdx] || []);
     }
+  };
+
+  const changeCardForNextRound = () => {
+    const newCard = generateRandomCard();
+    const nextCards = [...cards];
+    nextCards[currentCardIdx] = newCard;
+    setCards(nextCards);
+    setMarkedCells(prev => ({ ...prev, [currentCardIdx]: [0] }));
+    setNextRoundChoice('change');
   };
 
   if (!room || !me) return null;
@@ -147,7 +168,9 @@ export default function Player() {
             </div>
          </div>
          <div className="flex flex-col items-end">
-             <div className="text-[10px] font-bold text-[#7A746B] uppercase tracking-widest">{room.mode} MODE</div>
+             <div className="text-[10px] font-bold text-[#7A746B] uppercase tracking-widest">
+               {room.mode}{room.mode === 'Bingo' ? ` · ${room.patterns.map(pattern => pattern.name).join(', ')}` : ''}
+             </div>
              <div className="flex items-center gap-1 font-bold text-xs uppercase tracking-wider mt-0.5">
                {room.status === 'playing' ? <><span className="w-2 h-2 rounded-full bg-[#0D9488] animate-pulse" /> <span className="text-[#0D9488]">LIVE</span></> : <span className="text-[#A19B91]">{room.status.toUpperCase()}</span>}
              </div>
@@ -158,7 +181,7 @@ export default function Player() {
       <main className="flex-1 flex flex-col items-center p-4 gap-6 max-w-md mx-auto w-full relative">
          
          {/* Live Caller Mini */}
-         {room.status === 'playing' && (
+         {(room.status === 'playing' || latestBall) && (
            <div className="w-full bg-white rounded-[24px] p-4 border-2 border-[#E8E2D9] flex items-center justify-between shadow-sm">
               <div className="flex flex-col items-start px-2">
                  <span className="text-[10px] font-bold text-[#A19B91] uppercase tracking-[0.2em]">Latest Call</span>
@@ -166,11 +189,14 @@ export default function Player() {
                     {latestBall ? (
                        <motion.div 
                          key={latestBall}
-                         initial={{ scale: 0.5, opacity: 0 }}
-                         animate={{ scale: 1, opacity: 1 }}
-                         className="text-4xl font-black text-[#EA580C] leading-none mt-1 drop-shadow-sm"
+                         initial={{ scale: 0.5, opacity: 0, rotate: -15 }}
+                         animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                         className="mt-1 flex items-center gap-3"
                        >
-                          {latestBall}
+                          <span className="w-20 h-20 rounded-full bg-[#FACC15] border-4 border-white outline outline-4 outline-[#FACC15] shadow-lg flex flex-col items-center justify-center text-[#854D0E]">
+                            <span className="text-sm font-black leading-none">{getBallLetter(latestBall)}</span>
+                            <span className="text-4xl font-black leading-none">{latestBall}</span>
+                          </span>
                        </motion.div>
                     ) : (
                        <div className="text-xl font-bold text-[#DED9D1] mt-1">--</div>
@@ -208,6 +234,29 @@ export default function Player() {
          {room.status === 'waiting' && cards.length > 0 && (
            <div className="bg-[#FDFBF7] border-2 border-[#E8E2D9] p-4 rounded-[24px] w-full text-center shadow-sm">
               <span className="text-[#3D3A35] font-bold">Waiting for host to begin...</span>
+           </div>
+         )}
+
+         {room.status === 'next_round' && cards.length > 0 && (
+           <div className="bg-[#FACC15]/20 border-2 border-[#FACC15]/60 p-4 rounded-[24px] w-full text-center shadow-sm space-y-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest text-[#854D0E]">Next Round</div>
+                <div className="text-4xl font-black text-[#854D0E]"><Countdown endsAt={room.nextRoundEndsAt} /></div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setNextRoundChoice('keep')}
+                  className={`flex-1 py-3 rounded-2xl font-black text-sm ${me.nextRoundChoice !== 'change' ? 'bg-[#0D9488] text-white' : 'bg-white text-[#7A746B] border border-[#DED9D1]'}`}
+                >
+                  Keep Card
+                </button>
+                <button
+                  onClick={changeCardForNextRound}
+                  className={`flex-1 py-3 rounded-2xl font-black text-sm ${me.nextRoundChoice === 'change' ? 'bg-[#EA580C] text-white' : 'bg-white text-[#EA580C] border border-[#DED9D1]'}`}
+                >
+                  Change Card
+                </button>
+              </div>
            </div>
          )}
 
@@ -258,7 +307,7 @@ export default function Player() {
          </div>
 
          {/* Card Management */}
-         {room.status === 'waiting' && cards.length > 0 && (
+         {(room.status === 'waiting' || room.status === 'next_round') && cards.length > 0 && (
             <div className="flex gap-3 w-full px-2">
                {cards.length < 4 && (
                  <button onClick={addRandomCard} className="flex-1 py-3 bg-[#0D9488] text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none uppercase tracking-wider">

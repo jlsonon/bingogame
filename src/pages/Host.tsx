@@ -5,14 +5,49 @@ import { BallCaller } from '../components/BallCaller';
 import { Play, Square, Settings, Share2, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import { PRESET_PATTERNS, type BingoPattern } from '../lib/bingo';
+
+function Countdown({ endsAt }: { endsAt?: number }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const seconds = Math.max(0, Math.ceil(((endsAt || now) - now) / 1000));
+  return <span className="tabular-nums">{seconds}s</span>;
+}
+
+function PatternGrid({ cells, onToggle }: { cells: number[], onToggle?: (cell: number) => void }) {
+  return (
+    <div className="grid grid-cols-5 gap-1">
+      {Array.from({ length: 25 }, (_, i) => {
+        const selected = cells.includes(i);
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onToggle?.(i)}
+            className={`aspect-square rounded-md border text-[10px] font-black ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-white border-[#DED9D1] text-[#A19B91]'}`}
+          >
+            {i === 12 ? 'FR' : ''}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function Host() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { socket, room, latestBall, startGame, pauseGame, resumeGame, resetGame, callNextBall, updateSettings, verifyClaim, winner, dismissWinner, me, rejoinRoom } = useGameStore();
+  const { socket, room, latestBall, startGame, pauseGame, resumeGame, resetGame, startNextRound, callNextBall, updateSettings, verifyClaim, winner, dismissWinner, me, rejoinRoom } = useGameStore();
 
   const [showSettings, setShowSettings] = useState(false);
   const [copyLabel, setCopyLabel] = useState('Copy');
+  const [customName, setCustomName] = useState('Custom Pattern');
+  const [customCells, setCustomCells] = useState<number[]>([12]);
   
   useEffect(() => {
     if (!socket || !code) return;
@@ -50,6 +85,36 @@ export default function Host() {
       return;
     }
     handleCopy();
+  };
+
+  const togglePattern = (pattern: BingoPattern) => {
+    const exists = room.patterns.some(item => item.id === pattern.id);
+    const next = exists
+      ? room.patterns.filter(item => item.id !== pattern.id)
+      : [...room.patterns, pattern];
+    updateSettings({ patterns: next });
+  };
+
+  const addCustomPattern = () => {
+    const cells = [...new Set([...customCells, 12])].sort((a, b) => a - b);
+    updateSettings({
+      patterns: [
+        ...room.patterns,
+        {
+          id: `custom-${Date.now()}`,
+          name: customName.trim() || 'Custom Pattern',
+          type: 'custom',
+          match: 'cells',
+          cells
+        }
+      ]
+    });
+    setCustomName('Custom Pattern');
+    setCustomCells([12]);
+  };
+
+  const removePattern = (id: string) => {
+    updateSettings({ patterns: room.patterns.filter(pattern => pattern.id !== id) });
   };
 
   return (
@@ -91,7 +156,9 @@ export default function Host() {
               <div className="min-w-0">
                 <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">Current Round</div>
                 <h1 className="text-2xl font-black text-[#3D3A35] truncate">{room.roundName}</h1>
-                {room.prizeText && <p className="text-sm font-bold text-[#EA580C] truncate">{room.prizeText}</p>}
+                <p className="text-sm font-bold text-[#EA580C] truncate">
+                  {room.mode}{room.mode === 'Bingo' ? ` · ${room.patterns.map(pattern => pattern.name).join(', ')}` : ''}{room.prizeText ? ` · ${room.prizeText}` : ''}
+                </p>
               </div>
               <div className="bg-[#FDFBF7] border border-[#E8E2D9] rounded-2xl p-3 flex items-center gap-3">
                 <img src={qrUrl} alt="Join room QR code" className="w-20 h-20 rounded-lg bg-white" />
@@ -149,6 +216,18 @@ export default function Host() {
                    <button onClick={resetGame} className="w-full py-5 bg-[#3D3A35] text-white rounded-2xl font-black text-xl transition-all shadow-[0_6px_0_#1C1917] active:translate-y-[6px] active:shadow-none uppercase tracking-tighter">
                       New Round
                    </button>
+                )}
+
+                {room.status === 'next_round' && (
+                   <div className="space-y-3">
+                     <div className="rounded-2xl bg-[#FACC15]/20 border border-[#FACC15]/50 p-4 text-center">
+                       <div className="text-xs font-bold uppercase tracking-widest text-[#854D0E]">Next Round Opens In</div>
+                       <div className="text-4xl font-black text-[#854D0E]"><Countdown endsAt={room.nextRoundEndsAt} /></div>
+                     </div>
+                     <button onClick={startNextRound} className="w-full py-5 bg-[#0D9488] text-white rounded-2xl font-black text-xl transition-all shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none uppercase tracking-tighter">
+                        Start Next Round
+                     </button>
+                   </div>
                 )}
 
              </div>
@@ -230,11 +309,68 @@ export default function Host() {
                       onChange={e => updateSettings({ mode: e.target.value })}
                       className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 font-bold"
                     >
-                       <option value="Standard">Standard (Lines + corners)</option>
+                       <option value="Bingo">Bingo (selected patterns)</option>
                        <option value="Blackout">Blackout</option>
                        <option value="Dikit">Dikit Only (2 Adjacent)</option>
                     </select>
                  </div>
+
+                 {room.mode === 'Bingo' && (
+                   <div className="space-y-3">
+                      <div>
+                        <div className="text-sm font-bold text-slate-700 block mb-1.5">Bingo Patterns</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {PRESET_PATTERNS.map(pattern => {
+                            const selected = room.patterns.some(item => item.id === pattern.id);
+                            return (
+                              <button
+                                key={pattern.id}
+                                type="button"
+                                onClick={() => togglePattern(pattern)}
+                                className={`px-3 py-2 rounded-xl border text-xs font-black ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
+                              >
+                                {pattern.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                        <input
+                          value={customName}
+                          onChange={e => setCustomName(e.target.value)}
+                          className="w-full p-2 bg-white rounded-xl border border-slate-200 font-bold text-sm"
+                          maxLength={28}
+                        />
+                        <PatternGrid
+                          cells={customCells}
+                          onToggle={cell => setCustomCells(prev => {
+                            if (cell === 12) return prev;
+                            return prev.includes(cell) ? prev.filter(item => item !== cell) : [...prev, cell];
+                          })}
+                        />
+                        <button
+                          type="button"
+                          onClick={addCustomPattern}
+                          className="w-full bg-[#3D3A35] text-white py-2 rounded-xl font-bold text-sm"
+                        >
+                          Add Custom Pattern
+                        </button>
+                      </div>
+
+                      {room.patterns.some(pattern => pattern.type === 'custom') && (
+                        <div className="space-y-2">
+                          {room.patterns.filter(pattern => pattern.type === 'custom').map(pattern => (
+                            <div key={pattern.id} className="flex items-center justify-between gap-2 rounded-xl bg-white border border-slate-200 p-2">
+                              <span className="text-sm font-bold text-slate-700 truncate">{pattern.name}</span>
+                              <button type="button" onClick={() => removePattern(pattern.id)} className="text-xs font-black text-[#EA580C]">Remove</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                   </div>
+                 )}
 
                  <div>
                     <label className="text-sm font-bold text-slate-700 block mb-1.5">Auto-Call Speed</label>

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
+import type { BingoPattern, GameMode } from '../lib/bingo';
 
 export interface Player {
   id: string;
@@ -10,19 +11,23 @@ export interface Player {
   connected: boolean;
   activeCards: number[][][]; // Array of cards, each card is 5x5 array of numbers
   hasDikit: boolean;
+  nextRoundChoice?: 'keep' | 'change';
 }
 
 export interface Room {
   id: string;
-  mode: 'Standard' | 'Dikit' | 'Blackout' | 'Custom';
-  status: 'waiting' | 'playing' | 'paused' | 'finished';
+  mode: GameMode;
+  status: 'waiting' | 'playing' | 'paused' | 'finished' | 'next_round';
   remainingBalls: number[];
   calledNumbers: number[];
   players: Record<string, Player>;
   hostId: string;
   prizeText: string;
   roundName: string;
+  roundNumber: number;
   autoCallSpeed: number;
+  patterns: BingoPattern[];
+  nextRoundEndsAt?: number;
   claims: any[];
 }
 
@@ -45,6 +50,7 @@ interface GameState {
   pauseGame: () => void;
   resumeGame: () => void;
   resetGame: () => void;
+  startNextRound: () => void;
   callNextBall: () => void;
   updateSettings: (settings: any) => void;
   verifyClaim: (claimId: string, isValid: boolean) => void;
@@ -52,6 +58,7 @@ interface GameState {
   // Player actions
   updateMyCards: (cards: number[][][]) => void;
   claimBingo: (cardIndex: number, markedCells: number[]) => void;
+  setNextRoundChoice: (choice: 'keep' | 'change') => void;
 
   // Events
   latestBall: number | null;
@@ -198,6 +205,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
+  startNextRound: () => {
+    const { socket, room } = get();
+    if (socket && room) {
+       set({ latestBall: null, winner: null, claimAlert: null });
+       socket.emit("start_next_round", { code: room.id });
+    }
+  },
+
   callNextBall: () => {
     const { socket, room } = get();
     if (socket && room) socket.emit("call_next_ball", { code: room.id });
@@ -224,6 +239,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   claimBingo: (cardIndex: number, markedCells: number[]) => {
     const { socket, room } = get();
     if (socket && room) socket.emit("claim_bingo", { code: room.id, cardIndex, markedCells });
+  },
+
+  setNextRoundChoice: (choice: 'keep' | 'change') => {
+    const { socket, room } = get();
+    if (socket && room) socket.emit("set_next_round_choice", { code: room.id, choice });
   },
 
   dismissWinner: () => set({ winner: null })

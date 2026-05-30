@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
 import { createServer as createViteServer } from "vite";
-import { checkValidWin } from "./src/lib/bingo";
+import { checkValidWin, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
 
 interface Player {
   id: string;
@@ -15,19 +15,23 @@ interface Player {
   connected: boolean;
   activeCards: number[][][]; // Array of cards, each card is 5x5 array of numbers
   hasDikit: boolean;
+  nextRoundChoice?: 'keep' | 'change';
 }
 
 interface Room {
   id: string;
-  mode: 'Standard' | 'Dikit' | 'Blackout' | 'Custom';
-  status: 'waiting' | 'playing' | 'paused' | 'finished';
+  mode: GameMode;
+  status: 'waiting' | 'playing' | 'paused' | 'finished' | 'next_round';
   remainingBalls: number[];
   calledNumbers: number[];
   players: Record<string, Player>; // socketId -> Player
   hostId: string;
   prizeText: string;
   roundName: string;
+  roundNumber: number;
   autoCallSpeed: number; // in seconds, 0 means manual
+  patterns: BingoPattern[];
+  nextRoundEndsAt?: number;
   claims: any[];
 }
 
@@ -85,6 +89,34 @@ function isValidCardSet(cards: unknown): cards is number[][][] {
   return Array.isArray(cards) && cards.length > 0 && cards.length <= 4 && cards.every(isValidCard);
 }
 
+function sanitizePatterns(value: unknown): BingoPattern[] {
+  if (!Array.isArray(value)) return DEFAULT_BINGO_PATTERNS;
+  const presetIds = new Set(PRESET_PATTERNS.map(pattern => pattern.id));
+  const patterns = value
+    .map((pattern): BingoPattern | null => {
+      if (!pattern || typeof pattern !== 'object') return null;
+      const source = pattern as Partial<BingoPattern>;
+      const id = sanitizeText(source.id, randomUUID(), 48);
+      const match = source.match === 'dikit' ? 'dikit' : 'cells';
+      const preset = presetIds.has(id) ? PRESET_PATTERNS.find(item => item.id === id) : null;
+      if (preset) return preset;
+      const cells = Array.isArray(source.cells)
+        ? [...new Set(source.cells.filter(cell => Number.isInteger(cell) && cell >= 0 && cell < 25))]
+        : [];
+      if (match === 'cells' && cells.length === 0) return null;
+      return {
+        id,
+        name: sanitizeText(source.name, 'Custom Pattern', 28),
+        type: 'custom',
+        match,
+        cells
+      };
+    })
+    .filter((pattern): pattern is BingoPattern => Boolean(pattern));
+
+  return patterns.length ? patterns.slice(0, 12) : DEFAULT_BINGO_PATTERNS;
+}
+
 function touchRoom(code: string) {
   if (roomCleanupTimers[code]) {
     clearTimeout(roomCleanupTimers[code]);
@@ -134,7 +166,7 @@ async function startServer() {
       
       const newRoom: Room = {
         id: code,
-        mode: 'Standard',
+        mode: 'Bingo',
         status: 'waiting',
         remainingBalls: initBalls(),
         calledNumbers: [],
@@ -142,7 +174,9 @@ async function startServer() {
         hostId: sessionId,
         prizeText: '',
         roundName: 'Round 1',
+        roundNumber: 1,
         autoCallSpeed: 0,
+        patterns: DEFAULT_BINGO_PATTERNS,
         claims: []
       };
 
@@ -154,7 +188,8 @@ async function startServer() {
         isHost: true,
         connected: true,
         activeCards: [],
-        hasDikit: false
+        hasDikit: false,
+        nextRoundChoice: 'keep'
       };
 
       newRoom.players[sessionId] = hostPlayer;
@@ -182,13 +217,15 @@ async function startServer() {
         isHost: false,
         connected: true,
         activeCards: [],
-        hasDikit: false
+        hasDikit: false,
+        nextRoundChoice: 'keep'
       };
 
       room.players[sessionId] = {
         ...room.players[sessionId],
         ...newPlayer,
         isHost: room.players[sessionId]?.isHost || false,
+        nextRoundChoice: room.players[sessionId]?.nextRoundChoice || 'keep',
         activeCards: room.players[sessionId]?.activeCards || []
       };
       socket.join(code);
@@ -226,7 +263,8 @@ async function startServer() {
           isHost: false,
           connected: true,
           activeCards: [],
-          hasDikit: false
+          hasDikit: false,
+          nextRoundChoice: 'keep'
         };
       } else {
         if (callback) callback({ success: false, message: "Host session not found" });
@@ -269,10 +307,11 @@ async function startServer() {
       const host = room?.players[room.hostId];
       if (room && host?.socketId === socket.id) {
         const settings = data.settings || {};
-        if (['Standard', 'Blackout', 'Dikit'].includes(settings.mode)) room.mode = settings.mode;
+        if (['Bingo', 'Blackout', 'Dikit'].includes(settings.mode)) room.mode = settings.mode;
         if ([0, 3, 5, 8].includes(settings.autoCallSpeed)) room.autoCallSpeed = settings.autoCallSpeed;
         if (typeof settings.roundName === 'string') room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
         if (typeof settings.prizeText === 'string') room.prizeText = sanitizeText(settings.prizeText, '', 80);
+        if (Array.isArray(settings.patterns)) room.patterns = sanitizePatterns(settings.patterns);
         io.to(code).emit("room_updated", room);
       }
     });
@@ -331,6 +370,10 @@ async function startServer() {
          room.calledNumbers = [];
          room.remainingBalls = initBalls();
          room.claims = [];
+         room.nextRoundEndsAt = undefined;
+         Object.values(room.players).forEach(player => {
+           player.nextRoundChoice = 'keep';
+         });
          stopAutoCaller(code);
          io.to(code).emit("room_updated", room);
        }
@@ -344,7 +387,7 @@ async function startServer() {
         const card = player.activeCards[data.cardIndex];
         const markedCells = Array.isArray(data.markedCells) ? data.markedCells.filter(Number.isInteger) : [];
         if (!isValidCard(card)) return;
-        const winCheck = checkValidWin(card, markedCells, room.calledNumbers, room.mode);
+        const winCheck = checkValidWin(card, markedCells, room.calledNumbers, room.mode, room.patterns);
         if (!winCheck.valid) {
           socket.emit("claim_rejected", { message: "Invalid claim" });
           return;
@@ -380,8 +423,10 @@ async function startServer() {
           if (claimIndex !== -1) {
              const claim = room.claims[claimIndex];
              if (data.isValid) {
+                stopAutoCaller(code);
+                room.status = 'next_round';
+                room.nextRoundEndsAt = Date.now() + 60_000;
                 io.to(code).emit("winner_announced", claim);
-                room.status = 'finished';
              } else {
                 room.claims.splice(claimIndex, 1);
                 io.to(code).emit("claim_rejected", claim);
@@ -393,6 +438,35 @@ async function startServer() {
              io.to(code).emit("room_updated", room);
           }
        }
+    });
+
+    socket.on("set_next_round_choice", (data: { code: string, choice: 'keep' | 'change' }) => {
+      const code = normalizeCode(data.code);
+      const room = rooms[code];
+      const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
+      if (room && player && room.status === 'next_round' && ['keep', 'change'].includes(data.choice)) {
+        player.nextRoundChoice = data.choice;
+        io.to(code).emit("room_updated", room);
+      }
+    });
+
+    socket.on("start_next_round", (data: { code: string }) => {
+      const code = normalizeCode(data.code);
+      const room = rooms[code];
+      const host = room?.players[room.hostId];
+      if (room && host?.socketId === socket.id && room.status === 'next_round') {
+        room.status = 'waiting';
+        room.calledNumbers = [];
+        room.remainingBalls = initBalls();
+        room.claims = [];
+        room.nextRoundEndsAt = undefined;
+        room.roundNumber += 1;
+        room.roundName = `Round ${room.roundNumber}`;
+        Object.values(room.players).forEach(player => {
+          player.nextRoundChoice = 'keep';
+        });
+        io.to(code).emit("room_updated", room);
+      }
     });
 
     socket.on("disconnect", () => {
