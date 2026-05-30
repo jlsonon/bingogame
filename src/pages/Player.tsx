@@ -339,7 +339,7 @@ export default function Player() {
                      </div>
                      <div className="bg-white p-5 rounded-3xl border-2 border-[#E8E2D9] shadow-sm">
                         <Ticket size={20} className="text-[#EA580C] mb-2" />
-                        <div className="text-3xl font-black tabular-nums">{room.stats.totalCardsSold}</div>
+                        <div className="text-3xl font-black tabular-nums">{room.stats?.totalCardsSold || 0}</div>
                         <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Cards in Play</div>
                      </div>
                   </div>
@@ -350,7 +350,7 @@ export default function Player() {
                         <h4 className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Hall of Fame</h4>
                      </div>
                      <div className="space-y-3">
-                        {room.stats.winners.slice(-5).reverse().map((w, i) => (
+                        {room.stats?.winners?.slice(-5).reverse().map((w, i) => (
                            <div key={i} className="flex items-center justify-between py-2 border-b border-[#FAF7F2] last:border-0">
                               <div>
                                  <div className="text-sm font-black text-[#3D3A35]">{w.name}</div>
@@ -361,7 +361,7 @@ export default function Player() {
                               </div>
                            </div>
                         ))}
-                        {room.stats.winners.length === 0 && (
+                        {(room.stats?.winners?.length || 0) === 0 && (
                            <div className="text-center py-6 text-[#DED9D1] font-bold italic text-xs">Waiting for the first winner!</div>
                         )}
                      </div>

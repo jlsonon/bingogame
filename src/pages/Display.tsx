@@ -244,21 +244,21 @@ export default function Display() {
                   <Ticket size={32} />
                   <span className="text-lg font-bold">Cards Active</span>
                 </div>
-                <span className="text-4xl font-black tabular-nums">{room.stats.totalCardsSold}</span>
+                <span className="text-4xl font-black tabular-nums">{room.stats?.totalCardsSold || 0}</span>
               </div>
               <div className="flex items-center justify-between text-[#0D9488]">
                 <div className="flex items-center gap-4">
                   <PlayCircle size={32} />
                   <span className="text-lg font-bold">Rounds Played</span>
                 </div>
-                <span className="text-4xl font-black tabular-nums">{room.stats.gamesPlayed}</span>
+                <span className="text-4xl font-black tabular-nums">{room.stats?.gamesPlayed || 0}</span>
               </div>
             </div>
 
             <div className="mt-auto pt-8 border-t border-white/10">
               <h4 className="text-xs font-black text-[#A19B91] uppercase tracking-widest mb-4">Latest Winners</h4>
               <div className="space-y-3">
-                {room.stats.winners.slice(-3).reverse().map((w, i) => (
+                {room.stats?.winners?.slice(-3).reverse().map((w, i) => (
                   <div key={i} className="flex items-center justify-between bg-white/5 p-3 rounded-2xl border border-white/5">
                     <div>
                       <div className="font-black text-white">{w.name}</div>
@@ -267,7 +267,7 @@ export default function Display() {
                     <Trophy className="text-[#FACC15]" size={20} />
                   </div>
                 ))}
-                {room.stats.winners.length === 0 && (
+                {(room.stats?.winners?.length || 0) === 0 && (
                   <div className="text-[#7A746B] italic text-sm">No winners yet this session</div>
                 )}
               </div>
