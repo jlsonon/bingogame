@@ -1,0 +1,6 @@
+{
+  "name": "LuckyBingo",
+  "description": "Multiplayer real-time bingo for mobile, highly optimized for local barangay/community games with customizable patterns and anti-cheat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
