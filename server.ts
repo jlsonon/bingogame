@@ -139,7 +139,7 @@ async function startServer() {
         remainingBalls: initBalls(),
         calledNumbers: [],
         players: {},
-        hostId: socket.id,
+        hostId: sessionId,
         prizeText: '',
         roundName: 'Round 1',
         autoCallSpeed: 0,
