@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { getBallLetter } from '../lib/bingo';
 import { PatternVisualizer } from '../components/PatternVisualizer';
@@ -9,10 +9,20 @@ import { Trophy, Users, Ticket, PlayCircle, Monitor } from 'lucide-react';
 
 export default function Display() {
   const { code } = useParams();
-  const { socket, room, latestBall, winner, dikitAlert, dismissDikit, connect } = useGameStore();
+  const navigate = useNavigate();
+  const { socket, room, latestBall, winner, dikitAlert, dismissDikit, connect, rejoinRoom } = useGameStore();
   const [lastBalls, setLastBalls] = useState<number[]>([]);
   const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!socket || !code) return;
+    if (!room) {
+      rejoinRoom(code, 'player').then(success => {
+        if (!success) navigate('/');
+      });
+    }
+  }, [socket, code, room, rejoinRoom, navigate]);
 
   useEffect(() => {
     connect();
