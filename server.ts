@@ -253,7 +253,7 @@ async function startServer() {
       const newPlayer: Player = {
         id: sessionId,
         socketId: socket.id,
-        nickname: sanitizeText(data.nickname, 'Player', 24),
+        nickname: sanitizeText(data.nickname || 'Guest', 'Player', 24),
         avatarColor: data.avatarColor || '#ef4444',
         isHost: false,
         connected: true,
@@ -293,13 +293,13 @@ async function startServer() {
       if (existing) {
         existing.socketId = socket.id;
         existing.connected = true;
-        existing.nickname = sanitizeText(data.nickname, existing.nickname, 24);
+        existing.nickname = sanitizeText(data.nickname || existing.nickname, existing.nickname, 24);
         existing.avatarColor = data.avatarColor || existing.avatarColor;
       } else if (!wantsHost) {
         room.players[sessionId] = {
           id: sessionId,
           socketId: socket.id,
-          nickname: sanitizeText(data.nickname, 'Player', 24),
+          nickname: sanitizeText(data.nickname || 'Guest', 'Player', 24),
           avatarColor: data.avatarColor || '#ef4444',
           isHost: false,
           connected: true,
@@ -358,6 +358,7 @@ async function startServer() {
         if (typeof settings.roundName === 'string') room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
         if (typeof settings.prizeText === 'string') room.prizeText = sanitizeText(settings.prizeText, '', 80);
         if (Array.isArray(settings.patterns)) room.patterns = sanitizePatterns(settings.patterns);
+        if (typeof settings.hidePattern === 'boolean') room.hidePattern = settings.hidePattern;
         io.to(code).emit("room_updated", room);
       }
     });

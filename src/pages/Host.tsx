@@ -280,7 +280,7 @@ export default function Host() {
                     ) : (
                        <div className="text-[#DED9D1] flex flex-col items-center gap-2">
                           <Eye size={32} className="opacity-30" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Hidden</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-center leading-tight px-4">Pattern Hidden from Screens</span>
                        </div>
                     )}
                  </div>
