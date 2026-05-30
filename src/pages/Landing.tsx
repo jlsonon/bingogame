@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { motion } from 'framer-motion';
 import { Dices, PlayCircle, Settings2, Users } from 'lucide-react';
@@ -8,11 +8,14 @@ const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7'
 
 export default function Landing() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialCode = searchParams.get('code') || '';
+
   const { nickname, avatarColor, setProfile, createRoom, joinRoom } = useGameStore();
 
   const [localName, setLocalName] = useState(nickname);
   const [localColor, setLocalColor] = useState(avatarColor);
-  const [joinCode, setJoinCode] = useState('');
+  const [joinCode, setJoinCode] = useState(initialCode.toUpperCase());
   const [cardCount, setCardCount] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

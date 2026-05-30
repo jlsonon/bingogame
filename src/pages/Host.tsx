@@ -91,7 +91,7 @@ export default function Host() {
 
   if (!room) return null;
 
-  const joinUrl = `${window.location.origin}/play/${room.id}`;
+  const joinUrl = `${window.location.origin}/?code=${room.id}`;
   const displayUrl = `${window.location.origin}/display/${room.id}`;
 
   const handleCopy = () => {

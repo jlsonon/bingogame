@@ -101,7 +101,7 @@ export default function Display() {
     );
   }
 
-  const joinUrl = `${window.location.origin}/play/${room.id}`;
+  const joinUrl = `${window.location.origin}/?code=${room.id}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&bgcolor=FAF7F2&color=3D3A35`;
 
   return (

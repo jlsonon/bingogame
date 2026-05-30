@@ -311,20 +311,8 @@ async function startServer() {
         existing.connected = true;
         existing.nickname = sanitizeText(data.nickname || existing.nickname, existing.nickname, 24);
         existing.avatarColor = data.avatarColor || existing.avatarColor;
-      } else if (!wantsHost) {
-        room.players[sessionId] = {
-          id: sessionId,
-          socketId: socket.id,
-          nickname: sanitizeText(data.nickname || 'Guest', 'Player', 24),
-          avatarColor: data.avatarColor || '#ef4444',
-          isHost: false,
-          connected: true,
-          activeCards: [],
-          hasDikit: false,
-          nextRoundChoice: 'keep'
-        };
       } else {
-        if (callback) callback({ success: false, message: "Host session not found" });
+        if (callback) callback({ success: false, message: "Session not found. Please join from the landing page." });
         return;
       }
 

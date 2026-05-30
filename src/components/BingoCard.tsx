@@ -17,15 +17,15 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
   const isMarked = (num: number) => num === 0 || markedCells.includes(num);
 
   return (
-    <div className="bg-white p-2 sm:p-4 rounded-[24px] sm:rounded-[40px] border-[3px] sm:border-4 border-[#3D3A35] shadow-[6px_6px_0px_rgba(61,58,53,0.1)] sm:shadow-[12px_12px_0px_rgba(61,58,53,0.1)] w-full h-full select-none touch-manipulation flex flex-col overflow-hidden">
-      <div className="grid grid-cols-5 gap-1 mb-2 text-center">
+    <div className="@container bg-white p-[4cqw] rounded-[8cqw] border-[max(2px,0.8cqw)] border-[#3D3A35] shadow-[max(4px,1.5cqw)_max(4px,1.5cqw)_0px_rgba(61,58,53,0.1)] w-full h-full select-none touch-manipulation flex flex-col overflow-hidden">
+      <div className="grid grid-cols-5 gap-1 mb-[2cqw] text-center">
         {BINGO_HEADERS.map((letter, i) => (
-          <div key={i} className="font-sans font-black text-base sm:text-3xl text-[#EA580C] drop-shadow-sm leading-none">
+          <div key={i} className="font-sans font-black text-[6cqw] text-[#EA580C] drop-shadow-sm leading-none">
             {letter}
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-5 gap-1 sm:gap-1.5 flex-1 min-h-0">
+      <div className="grid grid-cols-5 gap-[1.5cqw] flex-1 min-h-0">
         {card.map((row, rIndex) => (
           row.map((num, cIndex) => {
             const called = isCalled(num);
@@ -42,19 +42,17 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
                 key={`${rIndex}-${cIndex}`}
                 onClick={handleClick}
                 className={cn(
-                  "aspect-square flex items-center justify-center rounded-lg sm:rounded-2xl font-black cursor-pointer transition-all duration-200 relative overflow-hidden",
-                  // Dynamic text size based on container
-                  "text-[clamp(12px,4vw,28px)]",
-                  num === 0 ? "bg-[#FACC15] border-2 border-white text-[#854D0E] shadow-sm uppercase tracking-tighter" :
-                  marked && called ? "bg-[#0D9488] border-2 border-[#0D9488] text-white shadow-inner shadow-black/20 scale-[0.98]" :
-                  marked && !called ? "bg-white border-2 border-[#EA580C] text-[#EA580C]" :
-                  !marked && called ? "bg-[#0D9488]/10 border-2 border-[#0D9488]/30 text-[#3D3A35] opacity-60" :
-                  "bg-[#FDFBF7] border-2 border-[#E8E2D9] text-[#3D3A35] hover:bg-orange-50",
+                  "aspect-square flex items-center justify-center rounded-[3cqw] font-black cursor-pointer transition-all duration-200 relative overflow-hidden text-[6cqw]",
+                  num === 0 ? "bg-[#FACC15] border-[max(1px,0.5cqw)] border-white text-[#854D0E] shadow-sm uppercase tracking-tighter" :
+                  marked && called ? "bg-[#0D9488] border-[max(1px,0.5cqw)] border-[#0D9488] text-white shadow-inner shadow-black/20 scale-[0.96]" :
+                  marked && !called ? "bg-white border-[max(1px,0.5cqw)] border-[#EA580C] text-[#EA580C]" :
+                  !marked && called ? "bg-[#0D9488]/10 border-[max(1px,0.5cqw)] border-[#0D9488]/30 text-[#3D3A35] opacity-60" :
+                  "bg-[#FDFBF7] border-[max(1px,0.5cqw)] border-[#E8E2D9] text-[#3D3A35] hover:bg-orange-50",
                   readOnly && !marked && !called && "opacity-40 grayscale-[50%]"
                 )}
               >
                 {num === 0 ? (
-                  <span className="text-[6px] sm:text-[10px] uppercase tracking-tighter mix-blend-multiply opacity-90 font-black">Free</span>
+                  <span className="text-[3cqw] uppercase tracking-tighter mix-blend-multiply opacity-90 font-black">Free</span>
                 ) : (
                   <span>{num}</span>
                 )}
@@ -68,8 +66,8 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
                         exit={{ opacity: 0, scale: 1.5 }}
                         className="absolute inset-0 z-10 pointer-events-none"
                       >
-                         <div className="absolute inset-0 bg-[#FACC15] animate-ping opacity-30 rounded-lg sm:rounded-xl" />
-                         <div className="absolute inset-0 ring-2 sm:ring-4 ring-inset ring-[#FACC15] shadow-[0_0_10px_#FACC15] sm:shadow-[0_0_20px_#FACC15] rounded-lg sm:rounded-xl" />
+                         <div className="absolute inset-0 bg-[#FACC15] animate-ping opacity-30 rounded-[3cqw]" />
+                         <div className="absolute inset-0 ring-[max(2px,1cqw)] ring-inset ring-[#FACC15] shadow-[0_0_10px_#FACC15] rounded-[3cqw]" />
                       </motion.div>
                    )}
                 </AnimatePresence>

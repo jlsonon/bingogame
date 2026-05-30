@@ -52,7 +52,6 @@ interface GameState {
   createRoom: () => Promise<string>;
   joinRoom: (code: string) => Promise<boolean>;
   rejoinRoom: (code: string, role: 'host' | 'player') => Promise<boolean>;
-  leaveRoom: () => void;
   
   // Host actions
   startGame: () => void;
@@ -69,6 +68,7 @@ interface GameState {
   claimBingo: (cardIndex: number, markedCells: number[]) => void;
   claimDikit: (cardIndex: number, markedCells: number[]) => void;
   setNextRoundChoice: (choice: 'keep' | 'change') => void;
+  leaveRoom: () => void;
 
   // Events
   latestBall: number | null;
@@ -212,9 +212,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   leaveRoom: () => {
-     localStorage.removeItem('bingo_room_code');
-     localStorage.removeItem('bingo_room_role');
-     set({ room: null, me: null, latestBall: null, winner: null, claimAlert: null });
+    const { socket } = get();
+    if (socket) {
+      socket.disconnect();
+    }
+    localStorage.removeItem('bingo_room_code');
+    localStorage.removeItem('bingo_room_role');
+    set({ socket: null, room: null, me: null, latestBall: null, winner: null, claimAlert: null, dikitAlert: null });
   },
 
   startGame: () => {
