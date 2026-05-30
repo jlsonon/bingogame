@@ -120,14 +120,14 @@ export default function Player() {
   };
 
   const currentWinCheck = useMemo(() => {
-    if (!room || cards.length === 0 || !room.calledNumbers || !cards[currentCardIdx]) return { valid: false, pattern: '' };
+    if (!room || cards.length === 0 || !room.calledNumbers || !cards[currentCardIdx]) return { valid: false, pattern: '', cellsAway: 99 };
     return checkValidWin(cards[currentCardIdx], markedCells[currentCardIdx] || [], room.calledNumbers, room.mode, room.patterns);
   }, [cards, currentCardIdx, markedCells, room?.calledNumbers, room?.mode, room?.patterns]);
 
   const cardStatus = useMemo(() => {
-    if (!room) return [];
+    if (!room || cards.length === 0) return [];
     return cards.map((card, index) => {
-      const win = checkValidWin(card, markedCells[index] || [], room.calledNumbers, room.mode, room.patterns);
+      const win = checkValidWin(card, markedCells[index] || [], room.calledNumbers || [], room.mode, room.patterns || []);
       const hasLatest = latestBall ? card.flat().includes(latestBall) : false;
       const markedCount = (markedCells[index] || []).filter(num => num !== 0).length;
       return { win, hasLatest, markedCount };
@@ -253,14 +253,20 @@ export default function Player() {
                   {/* The Main Card - Optimized for thumb reach */}
                   <div className="flex-1 flex items-center justify-center min-h-0">
                      <div className="w-full max-w-[min(100%,400px)] aspect-square touch-none">
-                        <BingoCard 
-                           card={cards[currentCardIdx]}
-                           markedCells={markedCells[currentCardIdx] || []}
-                           calledNumbers={room.calledNumbers}
-                           onToggleCell={toggleCell}
-                           readOnly={room.status !== 'playing'}
-                           highlightLatest={latestBall}
-                        />
+                        {cards[currentCardIdx] ? (
+                           <BingoCard 
+                              card={cards[currentCardIdx]}
+                              markedCells={markedCells[currentCardIdx] || []}
+                              calledNumbers={room.calledNumbers || []}
+                              onToggleCell={toggleCell}
+                              readOnly={room.status !== 'playing'}
+                              highlightLatest={latestBall}
+                           />
+                        ) : (
+                           <div className="w-full aspect-square bg-white rounded-[32px] border-2 border-dashed border-[#E8E2D9] flex items-center justify-center">
+                              <Loader className="animate-spin text-[#EA580C]" size={32} />
+                           </div>
+                        )}
                      </div>
                   </div>
 
