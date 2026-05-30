@@ -71,6 +71,7 @@ export default function Player() {
        const initialCount = parseInt(localStorage.getItem('bingo_initial_cards') || '1');
        const newCards = Array.from({ length: initialCount }, () => generateRandomCard());
        setCards(newCards);
+       updateMyCards(newCards);
        const initialMarked: Record<number, number[]> = {};
        newCards.forEach((_, i) => { initialMarked[i] = [0]; });
        setMarkedCells(initialMarked);
@@ -249,29 +250,29 @@ export default function Player() {
                   </AnimatePresence>
 
                   {/* Multi-Card Grid */}
-                  <div className={`flex-1 grid gap-2 min-h-0 ${
-                    cards.length === 1 ? 'grid-cols-1 grid-rows-1' :
-                    cards.length === 2 ? 'grid-cols-1 grid-rows-2' :
-                    'grid-cols-2 grid-rows-2'
+                  <div className={`flex-1 grid gap-2 min-h-0 place-items-center ${
+                    cards.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
                   }`}>
                      {cards.map((card, idx) => (
-                        <div key={idx} className="relative w-full h-full min-h-0">
-                           <BingoCard 
-                              card={card}
-                              markedCells={markedCells[idx] || []}
-                              calledNumbers={room.calledNumbers || []}
-                              onToggleCell={(num) => toggleCell(idx, num)}
-                              readOnly={room.status !== 'playing'}
-                              highlightLatest={latestBall}
-                           />
+                        <div key={idx} className="relative w-full h-full flex items-center justify-center min-h-0 overflow-hidden">
+                           <div className="w-full h-full max-w-[400px] max-h-[400px] aspect-square">
+                              <BingoCard 
+                                 card={card}
+                                 markedCells={markedCells[idx] || []}
+                                 calledNumbers={room.calledNumbers || []}
+                                 onToggleCell={(num) => toggleCell(idx, num)}
+                                 readOnly={room.status !== 'playing'}
+                                 highlightLatest={latestBall}
+                              />
+                           </div>
                            {cardStatus[idx]?.win.valid && (
-                              <div className="absolute inset-0 border-4 border-[#EA580C] rounded-2xl pointer-events-none animate-pulse z-20" />
+                              <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[24px] sm:rounded-[40px] pointer-events-none animate-pulse z-20" />
                            )}
                         </div>
                      ))}
                      {/* Empty slots if < 4 cards and in a 2x2 layout */}
                      {cards.length === 3 && (
-                        <div className="bg-white/10 border-2 border-dashed border-[#E8E2D9] rounded-2xl flex items-center justify-center">
+                        <div className="w-full h-full bg-white/10 border-2 border-dashed border-[#E8E2D9] rounded-[24px] flex items-center justify-center">
                            <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest">Empty Slot</span>
                         </div>
                      )}
