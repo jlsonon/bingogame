@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BallCaller } from '../components/BallCaller';
-import { Play, Square, Settings, Share2, Copy } from 'lucide-react';
+import { Maximize2, Play, Square, Settings, Share2, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern } from '../lib/bingo';
@@ -68,6 +68,18 @@ export default function Host() {
     }
   }, [winner]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || room?.status !== 'playing' || room.autoCallSpeed !== 0) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return;
+      event.preventDefault();
+      callNextBall();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [room?.status, room?.autoCallSpeed, callNextBall]);
+
   if (!room) return null;
 
   const joinUrl = `${window.location.origin}/play/${room.id}`;
@@ -117,6 +129,10 @@ export default function Host() {
     updateSettings({ patterns: room.patterns.filter(pattern => pattern.id !== id) });
   };
 
+  const enterFullscreen = () => {
+    document.documentElement.requestFullscreen?.();
+  };
+
   return (
     <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans text-[#3D3A35]">
       {/* Header */}
@@ -131,6 +147,9 @@ export default function Host() {
           </button>
           <button onClick={handleShare} className="p-2 text-[#A19B91] hover:text-[#3D3A35] transition-colors" title="Share invite">
              <Share2 size={20} />
+          </button>
+          <button onClick={enterFullscreen} className="p-2 text-[#A19B91] hover:text-[#3D3A35] transition-colors" title="Projector mode">
+             <Maximize2 size={20} />
           </button>
         </div>
         <div className="flex items-center gap-4 sm:gap-6">
@@ -148,10 +167,9 @@ export default function Host() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full flex flex-col md:flex-row gap-6">
+      <main className="flex-1 p-4 md:p-6 w-full grid grid-cols-1 xl:grid-cols-[minmax(360px,42vw)_1fr_340px] gap-6">
         
-        {/* Left Column (Controls & Caller) */}
-        <div className="flex-1 space-y-6">
+        <div className="space-y-6">
            <div className="bg-white rounded-[24px] p-5 border-2 border-[#E8E2D9] shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="min-w-0">
                 <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">Current Round</div>
@@ -221,12 +239,10 @@ export default function Host() {
                 {room.status === 'next_round' && (
                    <div className="space-y-3">
                      <div className="rounded-2xl bg-[#FACC15]/20 border border-[#FACC15]/50 p-4 text-center">
-                       <div className="text-xs font-bold uppercase tracking-widest text-[#854D0E]">Next Round Opens In</div>
+                       <div className="text-xs font-bold uppercase tracking-widest text-[#854D0E]">Preparing Next Round In</div>
                        <div className="text-4xl font-black text-[#854D0E]"><Countdown endsAt={room.nextRoundEndsAt} /></div>
                      </div>
-                     <button onClick={startNextRound} className="w-full py-5 bg-[#0D9488] text-white rounded-2xl font-black text-xl transition-all shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none uppercase tracking-tighter">
-                        Start Next Round
-                     </button>
+                     <div className="text-center text-sm font-bold text-[#7A746B]">Players are choosing cards. The next round opens automatically.</div>
                    </div>
                 )}
 
@@ -234,11 +250,12 @@ export default function Host() {
            </div>
         </div>
 
-        {/* Right Column (Board & Players) */}
-        <div className="w-full md:w-80 space-y-6">
-           
+        <div className="space-y-6">
            <div className="bg-white rounded-[32px] p-5 border-2 border-[#E8E2D9] shadow-sm">
-             <h3 className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest mb-4">Number Board</h3>
+             <div className="flex items-center justify-between mb-4">
+               <h3 className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">Number Board</h3>
+               <span className="text-xs font-black text-[#EA580C]">{room.calledNumbers.length}/75</span>
+             </div>
              <div className="grid grid-cols-5 gap-1">
                {['B','I','N','G','O'].map(l => <div key={l} className="text-center font-black text-[#A19B91] text-xs">{l}</div>)}
                {Array.from({length: 75}, (_, i) => i + 1).map(num => (
@@ -251,7 +268,9 @@ export default function Host() {
                ))}
              </div>
            </div>
+        </div>
 
+        <div className="space-y-6">
            <div className="bg-white rounded-[32px] p-5 border-2 border-[#E8E2D9] shadow-sm">
               <h3 className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest mb-3">Players</h3>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
@@ -439,9 +458,17 @@ export default function Host() {
         </div>
       )}
 
+      {winner && room.status === 'next_round' && (
+        <div className="fixed bottom-4 left-4 right-4 xl:left-auto xl:right-6 xl:w-96 z-[55] bg-white border-2 border-[#FACC15] rounded-2xl shadow-xl p-4">
+          <div className="text-xs font-black uppercase tracking-widest text-[#854D0E]">Winner Verified</div>
+          <div className="text-lg font-black text-[#3D3A35]">{winner.playerName}</div>
+          <div className="text-sm font-bold text-[#7A746B]">Next round opens in <Countdown endsAt={room.nextRoundEndsAt} /></div>
+        </div>
+      )}
+
       {/* Winner Modal */}
       <AnimatePresence>
-        {winner && (
+        {winner && room.status !== 'next_round' && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center z-[60] p-4">
              <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl text-center relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-yellow-100 to-orange-50 opacity-50" />

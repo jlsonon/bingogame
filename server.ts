@@ -37,6 +37,7 @@ interface Room {
 
 const rooms: Record<string, Room> = {};
 const roomCleanupTimers: Record<string, NodeJS.Timeout> = {};
+const nextRoundTimers: Record<string, NodeJS.Timeout> = {};
 
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -63,6 +64,26 @@ function stopAutoCaller(code: string) {
     clearInterval(autoCallTimers[code]);
     delete autoCallTimers[code];
   }
+}
+
+function prepareNextRound(code: string, io: Server) {
+  const room = rooms[code];
+  if (!room || room.status !== 'next_round') return;
+  room.status = 'waiting';
+  room.calledNumbers = [];
+  room.remainingBalls = initBalls();
+  room.claims = [];
+  room.nextRoundEndsAt = undefined;
+  room.roundNumber += 1;
+  room.roundName = `Round ${room.roundNumber}`;
+  Object.values(room.players).forEach(player => {
+    player.nextRoundChoice = 'keep';
+  });
+  if (nextRoundTimers[code]) {
+    clearTimeout(nextRoundTimers[code]);
+    delete nextRoundTimers[code];
+  }
+  io.to(code).emit("room_updated", room);
 }
 
 function normalizeCode(code: string) {
@@ -282,6 +303,7 @@ async function startServer() {
       const room = rooms[code];
       const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
       if (room && player && isValidCardSet(data.cards)) {
+        if (!['waiting', 'next_round'].includes(room.status)) return;
         player.activeCards = data.cards;
         io.to(code).emit("room_updated", room);
       }
@@ -371,6 +393,10 @@ async function startServer() {
          room.remainingBalls = initBalls();
          room.claims = [];
          room.nextRoundEndsAt = undefined;
+         if (nextRoundTimers[code]) {
+           clearTimeout(nextRoundTimers[code]);
+           delete nextRoundTimers[code];
+         }
          Object.values(room.players).forEach(player => {
            player.nextRoundChoice = 'keep';
          });
@@ -426,6 +452,8 @@ async function startServer() {
                 stopAutoCaller(code);
                 room.status = 'next_round';
                 room.nextRoundEndsAt = Date.now() + 60_000;
+                if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
+                nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 60_000);
                 io.to(code).emit("winner_announced", claim);
              } else {
                 room.claims.splice(claimIndex, 1);
@@ -455,17 +483,7 @@ async function startServer() {
       const room = rooms[code];
       const host = room?.players[room.hostId];
       if (room && host?.socketId === socket.id && room.status === 'next_round') {
-        room.status = 'waiting';
-        room.calledNumbers = [];
-        room.remainingBalls = initBalls();
-        room.claims = [];
-        room.nextRoundEndsAt = undefined;
-        room.roundNumber += 1;
-        room.roundName = `Round ${room.roundNumber}`;
-        Object.values(room.players).forEach(player => {
-          player.nextRoundChoice = 'keep';
-        });
-        io.to(code).emit("room_updated", room);
+        prepareNextRound(code, io);
       }
     });
 
@@ -480,6 +498,10 @@ async function startServer() {
           const connectedPlayers = Object.values(room.players).filter(p => p.connected);
           if (connectedPlayers.length === 0) {
             stopAutoCaller(code);
+            if (nextRoundTimers[code]) {
+              clearTimeout(nextRoundTimers[code]);
+              delete nextRoundTimers[code];
+            }
             scheduleRoomCleanup(code);
           } else if (room.hostId === player.id) {
             const nextHost = connectedPlayers[0];

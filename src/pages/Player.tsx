@@ -137,6 +137,23 @@ export default function Player() {
     return checkValidWin(cards[currentCardIdx], markedCells[currentCardIdx] || [], room.calledNumbers, room.mode, room.patterns);
   }, [cards, currentCardIdx, markedCells, room?.calledNumbers, room?.mode, room?.patterns]);
 
+  const cardStatus = useMemo(() => {
+    if (!room) return [];
+    return cards.map((card, index) => {
+      const win = checkValidWin(card, markedCells[index] || [], room.calledNumbers, room.mode, room.patterns);
+      const hasLatest = latestBall ? card.flat().includes(latestBall) : false;
+      const markedCount = (markedCells[index] || []).filter(num => num !== 0).length;
+      return { win, hasLatest, markedCount };
+    });
+  }, [cards, markedCells, room, latestBall]);
+
+  useEffect(() => {
+    const winningIndex = cardStatus.findIndex(status => status.win.valid);
+    if (winningIndex !== -1 && winningIndex !== currentCardIdx && room?.status === 'playing') {
+      setCurrentCardIdx(winningIndex);
+    }
+  }, [cardStatus, currentCardIdx, room?.status]);
+
   const handleClaim = () => {
     if (currentWinCheck.valid && room?.status === 'playing') {
        claimBingo(currentCardIdx, markedCells[currentCardIdx] || []);
@@ -152,23 +169,34 @@ export default function Player() {
     setNextRoundChoice('change');
   };
 
+  const changeAllCardsForNextRound = () => {
+    const nextCards = cards.map(() => generateRandomCard());
+    const nextMarked: Record<number, number[]> = {};
+    nextCards.forEach((_, index) => {
+      nextMarked[index] = [0];
+    });
+    setCards(nextCards);
+    setMarkedCells(nextMarked);
+    setNextRoundChoice('change');
+  };
+
   if (!room || !me) return null;
 
   return (
     <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans touch-manipulation text-[#3D3A35]">
       {/* Header */}
-      <header className="bg-white border-b-2 border-[#E8E2D9] px-6 h-16 flex items-center justify-between sticky top-0 z-20 shrink-0">
+      <header className="bg-white border-b-2 border-[#E8E2D9] px-4 h-14 flex items-center justify-between sticky top-0 z-20 shrink-0">
          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold tracking-tighter border-2 border-white shadow-sm" style={{ backgroundColor: me.avatarColor || '#ccc' }}>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold tracking-tighter border-2 border-white shadow-sm" style={{ backgroundColor: me.avatarColor || '#ccc' }}>
                {me.nickname.substring(0,2).toUpperCase()}
             </div>
             <div className="leading-tight">
-               <div className="font-bold text-[#3D3A35]">{me.nickname}</div>
+               <div className="font-bold text-[#3D3A35] leading-none">{me.nickname}</div>
                <div className="text-[10px] text-[#A19B91] font-bold uppercase tracking-widest">ROOM {room.id}</div>
             </div>
          </div>
          <div className="flex flex-col items-end">
-             <div className="text-[10px] font-bold text-[#7A746B] uppercase tracking-widest">
+             <div className="text-[10px] font-bold text-[#7A746B] uppercase tracking-widest max-w-40 truncate">
                {room.mode}{room.mode === 'Bingo' ? ` · ${room.patterns.map(pattern => pattern.name).join(', ')}` : ''}
              </div>
              <div className="flex items-center gap-1 font-bold text-xs uppercase tracking-wider mt-0.5">
@@ -178,11 +206,11 @@ export default function Player() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center p-4 gap-6 max-w-md mx-auto w-full relative">
+      <main className="flex-1 flex flex-col items-center p-3 gap-3 max-w-md mx-auto w-full relative">
          
          {/* Live Caller Mini */}
          {(room.status === 'playing' || latestBall) && (
-           <div className="w-full bg-white rounded-[24px] p-4 border-2 border-[#E8E2D9] flex items-center justify-between shadow-sm">
+           <div className="w-full bg-white rounded-[24px] p-3 border-2 border-[#E8E2D9] flex items-center justify-between shadow-sm">
               <div className="flex flex-col items-start px-2">
                  <span className="text-[10px] font-bold text-[#A19B91] uppercase tracking-[0.2em]">Latest Call</span>
                  <AnimatePresence mode="popLayout">
@@ -193,9 +221,9 @@ export default function Player() {
                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
                          className="mt-1 flex items-center gap-3"
                        >
-                          <span className="w-20 h-20 rounded-full bg-[#FACC15] border-4 border-white outline outline-4 outline-[#FACC15] shadow-lg flex flex-col items-center justify-center text-[#854D0E]">
+                          <span className="w-24 h-24 rounded-full bg-[#FACC15] border-4 border-white outline outline-4 outline-[#FACC15] shadow-lg flex flex-col items-center justify-center text-[#854D0E]">
                             <span className="text-sm font-black leading-none">{getBallLetter(latestBall)}</span>
-                            <span className="text-4xl font-black leading-none">{latestBall}</span>
+                            <span className="text-5xl font-black leading-none">{latestBall}</span>
                           </span>
                        </motion.div>
                     ) : (
@@ -213,7 +241,7 @@ export default function Player() {
            </div>
          )}
 
-         <div className="w-full bg-white rounded-[18px] px-4 py-3 border border-[#E8E2D9] flex items-center justify-between gap-3">
+         <div className="w-full bg-white rounded-[18px] px-4 py-2.5 border border-[#E8E2D9] flex items-center justify-between gap-3">
             <div className="min-w-0">
                <div className="text-xs font-black text-[#3D3A35] truncate">{room.roundName}</div>
                <div className="text-[10px] text-[#A19B91] font-bold uppercase tracking-wider">
@@ -239,29 +267,42 @@ export default function Player() {
 
          {room.status === 'next_round' && cards.length > 0 && (
            <div className="bg-[#FACC15]/20 border-2 border-[#FACC15]/60 p-4 rounded-[24px] w-full text-center shadow-sm space-y-3">
+              {winner && (
+                <div className="rounded-2xl bg-white/70 border border-[#FACC15]/50 p-3">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-[#854D0E]">Winner</div>
+                  <div className="text-lg font-black text-[#3D3A35]">{winner.playerName}</div>
+                  <div className="text-xs font-bold text-[#7A746B]">{winner.pattern}</div>
+                </div>
+              )}
               <div>
                 <div className="text-xs font-bold uppercase tracking-widest text-[#854D0E]">Next Round</div>
                 <div className="text-4xl font-black text-[#854D0E]"><Countdown endsAt={room.nextRoundEndsAt} /></div>
               </div>
-              <div className="flex gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => setNextRoundChoice('keep')}
-                  className={`flex-1 py-3 rounded-2xl font-black text-sm ${me.nextRoundChoice !== 'change' ? 'bg-[#0D9488] text-white' : 'bg-white text-[#7A746B] border border-[#DED9D1]'}`}
+                  className={`py-3 rounded-2xl font-black text-xs ${me.nextRoundChoice !== 'change' ? 'bg-[#0D9488] text-white' : 'bg-white text-[#7A746B] border border-[#DED9D1]'}`}
                 >
-                  Keep Card
+                  Keep All
                 </button>
                 <button
                   onClick={changeCardForNextRound}
-                  className={`flex-1 py-3 rounded-2xl font-black text-sm ${me.nextRoundChoice === 'change' ? 'bg-[#EA580C] text-white' : 'bg-white text-[#EA580C] border border-[#DED9D1]'}`}
+                  className={`py-3 rounded-2xl font-black text-xs ${me.nextRoundChoice === 'change' ? 'bg-[#EA580C] text-white' : 'bg-white text-[#EA580C] border border-[#DED9D1]'}`}
                 >
-                  Change Card
+                  Change This
+                </button>
+                <button
+                  onClick={changeAllCardsForNextRound}
+                  className="py-3 rounded-2xl font-black text-xs bg-white text-[#EA580C] border border-[#DED9D1]"
+                >
+                  Change All
                 </button>
               </div>
            </div>
          )}
 
          {/* Card Selector Header */}
-         <div className="w-full flex items-center justify-between px-2">
+         <div className="w-full flex items-center justify-between px-1">
             <button 
                onClick={() => setCurrentCardIdx(Math.max(0, currentCardIdx - 1))}
                disabled={currentCardIdx === 0}
@@ -282,6 +323,29 @@ export default function Player() {
                <ArrowRight size={20} />
             </button>
          </div>
+
+         {cards.length > 1 && (
+           <div className="w-full overflow-x-auto pb-1">
+             <div className="flex gap-2 min-w-max px-1">
+               {cards.map((_, i) => {
+                 const status = cardStatus[i];
+                 const active = i === currentCardIdx;
+                 return (
+                   <button
+                     key={i}
+                     onClick={() => setCurrentCardIdx(i)}
+                     className={`w-24 shrink-0 rounded-2xl border px-3 py-2 text-left ${active ? 'bg-[#3D3A35] border-[#3D3A35] text-white' : status?.win.valid ? 'bg-[#EA580C] border-[#EA580C] text-white' : status?.hasLatest ? 'bg-[#FACC15]/30 border-[#FACC15] text-[#854D0E]' : 'bg-white border-[#E8E2D9] text-[#7A746B]'}`}
+                   >
+                     <div className="text-xs font-black">Card {i + 1}</div>
+                     <div className="text-[10px] font-bold uppercase tracking-wide">
+                       {status?.win.valid ? status.win.pattern : status?.hasLatest ? 'Has Call' : `${status?.markedCount || 0} marks`}
+                     </div>
+                   </button>
+                 );
+               })}
+             </div>
+           </div>
+         )}
 
          {/* Card Container */}
          <div className="w-full relative">
@@ -329,13 +393,13 @@ export default function Player() {
             <button 
                onClick={handleClaim}
                disabled={!currentWinCheck.valid || room.status !== 'playing'}
-               className={`w-full max-w-md mx-auto block py-5 rounded-3xl font-black text-2xl tracking-widest uppercase transition-all shadow-xl active:scale-95 ${
+               className={`w-full max-w-md mx-auto block py-5 rounded-3xl font-black text-xl tracking-widest uppercase transition-all shadow-xl active:scale-95 ${
                  currentWinCheck.valid && room.status === 'playing' 
                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-orange-300 animate-pulse' 
                    : 'bg-slate-100 text-slate-300 shadow-none'
                }`}
             >
-               BINGO
+               {currentWinCheck.valid ? `BINGO - ${currentWinCheck.pattern}` : 'BINGO'}
             </button>
          </div>
       )}
@@ -369,7 +433,7 @@ export default function Player() {
 
       {/* Winner Modal */}
       <AnimatePresence>
-        {winner && (
+        {winner && room.status !== 'next_round' && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-[#3D3A35]/60 backdrop-blur-sm flex justify-center items-center z-[60] p-4">
              <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-[#FAF7F2] border-4 border-[#3D3A35] rounded-[24px] w-full max-w-sm p-8 shadow-[12px_12px_0px_rgba(61,58,53,0.1)] text-center relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#EA580C]/10 to-[#FACC15]/5 opacity-50" />

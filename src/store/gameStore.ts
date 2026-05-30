@@ -101,7 +101,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     
     newSocket.on("room_updated", (room: Room) => {
       const sessionId = get().sessionId;
-      set({ room, me: room.players[sessionId] || null });
+      set({
+        room,
+        me: room.players[sessionId] || null,
+        latestBall: room.calledNumbers.at(-1) || null,
+        winner: room.status === 'waiting' ? null : get().winner
+      });
     });
 
     newSocket.on("ball_called", (data: { ball: number, room: Room }) => {
@@ -114,7 +119,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
 
     newSocket.on("winner_announced", (claim: any) => {
-      set({ winner: claim, claimAlert: null, room: { ...get().room!, status: 'finished' } });
+      set({ winner: claim, claimAlert: null });
     });
 
     newSocket.on("claim_rejected", () => {
