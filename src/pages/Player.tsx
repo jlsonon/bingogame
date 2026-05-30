@@ -318,9 +318,16 @@ export default function Player() {
                      <h3 className="text-xs font-black text-[#A19B91] uppercase tracking-[0.3em] mb-2">Winning Pattern</h3>
                      <p className="text-2xl font-black text-[#EA580C] uppercase tracking-tighter italic">{room.mode}</p>
                   </div>
-                  <div className="bg-white p-8 rounded-[40px] border-4 border-[#E8E2D9] shadow-xl">
-                     <PatternVisualizer patterns={room.patterns} className="scale-[2] origin-center" />
-                  </div>
+                  {!room.hidePattern ? (
+                    <div className="bg-white p-8 rounded-[40px] border-4 border-[#E8E2D9] shadow-xl">
+                       <PatternVisualizer patterns={room.patterns} className="scale-[2] origin-center" />
+                    </div>
+                  ) : (
+                    <div className="bg-white p-12 rounded-[40px] border-4 border-dashed border-[#E8E2D9] flex flex-col items-center gap-4 text-[#DED9D1]">
+                       <Eye size={64} className="opacity-20" />
+                       <span className="text-xs font-black uppercase tracking-[0.4em]">Mystery Pattern</span>
+                    </div>
+                  )}
                   {room.prizeText && (
                     <div className="bg-[#FACC15]/20 px-6 py-4 rounded-2xl border-2 border-[#FACC15] text-center">
                        <p className="text-[10px] font-black text-[#854D0E] uppercase tracking-widest mb-1">Prize</p>

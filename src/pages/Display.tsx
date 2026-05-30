@@ -5,7 +5,7 @@ import { getBallLetter } from '../lib/bingo';
 import { PatternVisualizer } from '../components/PatternVisualizer';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { Trophy, Users, Ticket, PlayCircle, Monitor } from 'lucide-react';
+import { Trophy, Users, Ticket, PlayCircle, Monitor, Eye } from 'lucide-react';
 
 export default function Display() {
   const { code } = useParams();
@@ -243,7 +243,14 @@ export default function Display() {
               {/* Pattern Visualization */}
               <div className="bg-white rounded-[32px] p-6 border-2 border-[#E8E2D9] shadow-sm">
                 <h3 className="text-sm font-black text-[#A19B91] uppercase tracking-widest mb-4">Winning Patterns</h3>
-                <PatternVisualizer patterns={room.patterns} />
+                {!room.hidePattern ? (
+                   <PatternVisualizer patterns={room.patterns} />
+                ) : (
+                   <div className="h-32 flex flex-col items-center justify-center text-[#DED9D1] gap-2">
+                      <Eye size={40} className="opacity-20" />
+                      <span className="text-xs font-black uppercase tracking-[0.3em]">Mystery Pattern</span>
+                   </div>
+                )}
               </div>
             </div>
           </div>

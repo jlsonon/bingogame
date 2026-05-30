@@ -29,6 +29,7 @@ export interface Room {
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
   claims: any[];
+  hidePattern: boolean;
   stats: {
     totalCardsSold: number;
     totalPlayersJoined: number;

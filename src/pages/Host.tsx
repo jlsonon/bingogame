@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BallCaller } from '../components/BallCaller';
 import { PatternVisualizer } from '../components/PatternVisualizer';
-import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus } from 'lucide-react';
+import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter } from '../lib/bingo';
@@ -275,7 +275,14 @@ export default function Host() {
               <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-6 shadow-sm flex flex-col">
                  <div className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em] mb-4 text-center">Active Pattern</div>
                  <div className="flex-1 flex items-center justify-center">
-                    <PatternVisualizer patterns={room.patterns} className="scale-125 origin-center" />
+                    {!room.hidePattern ? (
+                       <PatternVisualizer patterns={room.patterns} className="scale-125 origin-center" />
+                    ) : (
+                       <div className="text-[#DED9D1] flex flex-col items-center gap-2">
+                          <Eye size={32} className="opacity-30" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Hidden</span>
+                       </div>
+                    )}
                  </div>
                  <div className="mt-4 pt-4 border-t-2 border-[#FAF7F2] text-center">
                     <div className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest leading-none mb-1">Mode</div>
@@ -491,6 +498,21 @@ export default function Host() {
                       </div>
                    </div>
                  )}
+
+                 <div className="pt-4 border-t-2 border-[#FAF7F2]">
+                    <div className="flex items-center justify-between bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]">
+                       <div className="flex flex-col">
+                          <span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Mystery Mode</span>
+                          <span className="text-[10px] font-bold text-[#A19B91] uppercase tracking-tighter">Hide winning pattern from screens</span>
+                       </div>
+                       <button
+                          onClick={() => updateSettings({ hidePattern: !room.hidePattern })}
+                          className={`w-14 h-8 rounded-full transition-all relative ${room.hidePattern ? 'bg-[#0D9488]' : 'bg-[#DED9D1]'}`}
+                       >
+                          <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${room.hidePattern ? 'left-7' : 'left-1'}`} />
+                       </button>
+                    </div>
+                 </div>
               </div>
 
               <button 

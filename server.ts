@@ -33,6 +33,7 @@ interface Room {
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
   claims: any[];
+  hidePattern: boolean;
   // New V2 Statistics
   stats: {
     totalCardsSold: number;
@@ -207,6 +208,7 @@ async function startServer() {
         autoCallSpeed: 0,
         patterns: DEFAULT_BINGO_PATTERNS,
         claims: [],
+        hidePattern: false,
         stats: {
           totalCardsSold: 0,
           totalPlayersJoined: 1, // Host counts as first player
