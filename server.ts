@@ -34,6 +34,7 @@ interface Room {
   nextRoundEndsAt?: number;
   claims: any[];
   hidePattern: boolean;
+  dikitWinner: string | null;
   // New V2 Statistics
   stats: {
     totalCardsSold: number;
@@ -82,6 +83,7 @@ function prepareNextRound(code: string, io: Server) {
   room.calledNumbers = [];
   room.remainingBalls = initBalls();
   room.claims = [];
+  room.dikitWinner = null;
   room.nextRoundEndsAt = undefined;
   room.roundNumber += 1;
   room.roundName = `Round ${room.roundNumber}`;
@@ -186,6 +188,19 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  app.get("/api/rooms", (req, res) => {
+    const activeRooms = Object.values(rooms)
+      .map(r => ({
+        id: r.id,
+        status: r.status,
+        players: Object.values(r.players).filter(p => p.connected).length,
+        mode: r.mode,
+        hostName: r.players[r.hostId]?.nickname || 'Unknown'
+      }))
+      .filter(r => r.players > 0);
+    res.json(activeRooms);
+  });
+
   io.on("connection", (socket: Socket) => {
     socket.on("create_room", (data: { sessionId?: string, nickname: string, avatarColor?: string }, callback) => {
       let code = generateRoomCode();
@@ -209,6 +224,7 @@ async function startServer() {
         patterns: DEFAULT_BINGO_PATTERNS,
         claims: [],
         hidePattern: false,
+        dikitWinner: null,
         stats: {
           totalCardsSold: 0,
           totalPlayersJoined: 1, // Host counts as first player
@@ -417,6 +433,7 @@ async function startServer() {
          room.calledNumbers = [];
          room.remainingBalls = initBalls();
          room.claims = [];
+         room.dikitWinner = null;
          room.nextRoundEndsAt = undefined;
          if (nextRoundTimers[code]) {
            clearTimeout(nextRoundTimers[code]);
@@ -470,9 +487,13 @@ async function startServer() {
       const room = rooms[code];
       const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
       if (room && player && room.status === 'playing') {
+        if (room.dikitWinner) return; // Only one Dikit winner per round
+        
         const card = player.activeCards[data.cardIndex];
         if (!isValidCard(card)) return;
         
+        room.dikitWinner = player.nickname;
+
         const dikitClaim = {
           id: randomUUID(),
           playerId: player.id,
@@ -483,6 +504,7 @@ async function startServer() {
         };
         
         io.to(code).emit("dikit_claimed", dikitClaim);
+        io.to(code).emit("room_updated", room);
       }
     });
 

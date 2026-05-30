@@ -30,6 +30,7 @@ export interface Room {
   nextRoundEndsAt?: number;
   claims: any[];
   hidePattern: boolean;
+  dikitWinner: string | null;
   stats: {
     totalCardsSold: number;
     totalPlayersJoined: number;

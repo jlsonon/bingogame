@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { motion } from 'framer-motion';
@@ -16,6 +16,14 @@ export default function Landing() {
   const [cardCount, setCardCount] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [publicRooms, setPublicRooms] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/rooms')
+      .then(res => res.json())
+      .then(data => setPublicRooms(data))
+      .catch(() => console.error("Could not fetch rooms"));
+  }, []);
 
   const handleHost = async () => {
     if (!localName.trim()) { setError('Please enter a nickname'); return; }
@@ -115,6 +123,7 @@ export default function Landing() {
               </div>
 
               <button 
+                id="join-btn"
                 onClick={handleJoin}
                 disabled={loading}
                 className="w-full bg-[#EA580C] text-white py-5 rounded-[24px] font-black text-xl transition-all flex items-center justify-center gap-3 shadow-[0_8px_0_#9A3412] active:translate-y-[8px] active:shadow-none touch-manipulation uppercase tracking-widest"
@@ -123,6 +132,37 @@ export default function Landing() {
                 Join Game
               </button>
           </div>
+
+          {publicRooms.length > 0 && (
+             <div className="bg-[#FAF7F2] p-4 rounded-3xl border-2 border-[#E8E2D9]">
+                <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-3">Live Rooms</h3>
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                   {publicRooms.map(room => (
+                      <button
+                         key={room.id}
+                         onClick={() => {
+                            setJoinCode(room.id);
+                            // Need a small timeout to let state update before joining
+                            setTimeout(() => {
+                               const btn = document.getElementById('join-btn');
+                               if (btn) btn.click();
+                            }, 50);
+                         }}
+                         className="w-full flex items-center justify-between bg-white border border-[#DED9D1] p-3 rounded-xl hover:border-[#0D9488] hover:bg-[#F3EFE9] transition-colors text-left"
+                      >
+                         <div>
+                            <div className="text-sm font-black text-[#3D3A35] uppercase tracking-widest">{room.id}</div>
+                            <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Host: {room.hostName} · {room.mode}</div>
+                         </div>
+                         <div className="flex items-center gap-1.5 bg-[#0D9488]/10 text-[#0D9488] px-2 py-1 rounded-full">
+                            <span className="w-1.5 h-1.5 bg-[#0D9488] rounded-full animate-pulse" />
+                            <span className="text-[10px] font-black">{room.players}</span>
+                         </div>
+                      </button>
+                   ))}
+                </div>
+             </div>
+          )}
 
           <div className="relative flex items-center justify-center py-2">
             <div className="absolute border-t-2 border-[#FAF7F2] w-full" />
