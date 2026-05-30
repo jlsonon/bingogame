@@ -462,6 +462,27 @@ async function startServer() {
       }
     });
 
+    socket.on("claim_dikit", (data: { code: string, cardIndex: number, markedCells: number[] }) => {
+      const code = normalizeCode(data.code);
+      const room = rooms[code];
+      const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
+      if (room && player && room.status === 'playing') {
+        const card = player.activeCards[data.cardIndex];
+        if (!isValidCard(card)) return;
+        
+        const dikitClaim = {
+          id: randomUUID(),
+          playerId: player.id,
+          playerName: player.nickname,
+          cardIndex: data.cardIndex,
+          card,
+          timestamp: Date.now()
+        };
+        
+        io.to(code).emit("dikit_claimed", dikitClaim);
+      }
+    });
+
     socket.on("verify_claim", (data: { code: string, claimId: string, isValid: boolean }) => {
        const code = normalizeCode(data.code);
        const room = rooms[code];
@@ -473,7 +494,7 @@ async function startServer() {
              if (data.isValid) {
                 stopAutoCaller(code);
                 room.status = 'next_round';
-                room.nextRoundEndsAt = Date.now() + 60_000;
+                room.nextRoundEndsAt = Date.now() + 20_000;
                 
                 // Record winner and increment games played
                 room.stats.gamesPlayed += 1;
@@ -484,7 +505,7 @@ async function startServer() {
                 });
 
                 if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
-                nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 60_000);
+                nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 20_000);
                 io.to(code).emit("winner_announced", claim);
              } else {
                 room.claims.splice(claimIndex, 1);

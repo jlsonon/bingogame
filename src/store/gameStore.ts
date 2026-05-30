@@ -65,13 +65,16 @@ interface GameState {
   // Player actions
   updateMyCards: (cards: number[][][]) => void;
   claimBingo: (cardIndex: number, markedCells: number[]) => void;
+  claimDikit: (cardIndex: number, markedCells: number[]) => void;
   setNextRoundChoice: (choice: 'keep' | 'change') => void;
 
   // Events
   latestBall: number | null;
   claimAlert: any | null;
+  dikitAlert: any | null;
   winner: any | null;
   dismissWinner: () => void;
+  dismissDikit: () => void;
 }
 
 const SOCKET_URL = window.location.origin;
@@ -94,6 +97,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   avatarColor: localStorage.getItem('bingo_avatar') || '#3b82f6',
   latestBall: null,
   claimAlert: null,
+  dikitAlert: null,
   winner: null,
 
   setProfile: (nickname, avatarColor) => {
@@ -123,6 +127,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     newSocket.on("bingo_claim_alert", (claim: any) => {
       set({ claimAlert: claim });
+    });
+
+    newSocket.on("dikit_claimed", (claim: any) => {
+      set({ dikitAlert: claim });
+      // Auto dismiss after 7 seconds
+      setTimeout(() => {
+         if (get().dikitAlert?.id === claim.id) {
+            set({ dikitAlert: null });
+         }
+      }, 7000);
     });
 
     newSocket.on("winner_announced", (claim: any) => {
@@ -253,11 +267,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (socket && room) socket.emit("claim_bingo", { code: room.id, cardIndex, markedCells });
   },
 
+  claimDikit: (cardIndex: number, markedCells: number[]) => {
+    const { socket, room } = get();
+    if (socket && room) socket.emit("claim_dikit", { code: room.id, cardIndex, markedCells });
+  },
+
   setNextRoundChoice: (choice: 'keep' | 'change') => {
     const { socket, room } = get();
     if (socket && room) socket.emit("set_next_round_choice", { code: room.id, choice });
   },
 
-  dismissWinner: () => set({ winner: null })
+  dismissWinner: () => set({ winner: null }),
+  dismissDikit: () => set({ dikitAlert: null })
 
 }));

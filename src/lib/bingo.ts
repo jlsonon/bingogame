@@ -74,6 +74,24 @@ function patternCellsFor(pattern: BingoPattern): number[][] {
   return [pattern.cells];
 }
 
+export function checkDikitSidequest(card: number[][], marked: number[]): boolean {
+  const isMarkedIndex = (index: number) => {
+    const r = Math.floor(index / 5);
+    const c = index % 5;
+    const val = card[r]?.[c];
+    return val === 0 || marked.includes(val);
+  };
+
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (isMarkedIndex(r * 5 + c) && isMarkedIndex(r * 5 + c + 1)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function checkValidWin(
   card: number[][],
   marked: number[],

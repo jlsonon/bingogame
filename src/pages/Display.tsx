@@ -9,22 +9,40 @@ import { Trophy, Users, Ticket, PlayCircle } from 'lucide-react';
 
 export default function Display() {
   const { code } = useParams();
-  const { socket, room, latestBall, winner, connect } = useGameStore();
+  const { socket, room, latestBall, winner, dikitAlert, dismissDikit, connect } = useGameStore();
   const [lastBalls, setLastBalls] = useState<number[]>([]);
+  const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
 
   useEffect(() => {
     connect();
+    
+    // Load voices
+    const loadVoices = () => {
+       const voices = window.speechSynthesis.getVoices();
+       // Try to find a clean male voice
+       const preferred = voices.find(v => 
+          v.name.includes('David') || 
+          v.name.includes('Daniel') || 
+          (v.name.includes('Male') && v.lang.startsWith('en')) ||
+          (v.name.includes('Google UK English Male'))
+       );
+       setMaleVoice(preferred || voices.find(v => v.lang.startsWith('en')) || voices[0]);
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
   }, [connect]);
 
   useEffect(() => {
     if (latestBall) {
       const letter = getBallLetter(latestBall);
       const utterance = new SpeechSynthesisUtterance(`${letter} ${latestBall}`);
-      utterance.rate = 0.9;
-      utterance.pitch = 1.1;
+      if (maleVoice) utterance.voice = maleVoice;
+      utterance.rate = 0.85; // Slightly slower for clarity
+      utterance.pitch = maleVoice?.name.includes('David') ? 1.0 : 0.9; // Adjust pitch for depth
       window.speechSynthesis.speak(utterance);
     }
-  }, [latestBall]);
+  }, [latestBall, maleVoice]);
 
   useEffect(() => {
     if (room?.calledNumbers) {
@@ -338,6 +356,38 @@ export default function Display() {
              </div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* Sidequest Alert */}
+      <AnimatePresence>
+         {dikitAlert && !winner && (
+            <motion.div 
+               initial={{ x: -500, opacity: 0 }}
+               animate={{ x: 0, opacity: 1 }}
+               exit={{ x: -500, opacity: 0 }}
+               className="fixed bottom-12 left-12 z-40 bg-[#0D9488] text-white p-10 rounded-[48px] shadow-[0_20px_50px_rgba(13,148,136,0.3)] border-4 border-white flex flex-col items-center gap-6"
+            >
+               <div className="text-center">
+                  <div className="text-sm font-black uppercase tracking-[0.4em] opacity-80 mb-2">Sidequest Win!</div>
+                  <div className="text-5xl font-black italic tracking-tighter">{dikitAlert.playerName}</div>
+               </div>
+
+               <div className="bg-white/10 p-6 rounded-[32px] border-2 border-white/20">
+                  <div className="grid grid-cols-5 gap-1.5">
+                     {dikitAlert.card.map((row: any)=> row.map((num: any, idx: number) => {
+                        const called = num === 0 || room.calledNumbers.includes(num);
+                        return (
+                           <div key={idx} className={`w-12 h-12 flex items-center justify-center font-black text-sm rounded-xl border-2 ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/30'}`}>
+                              {num === 0 ? 'FR' : num}
+                           </div>
+                        )
+                     }))}
+                  </div>
+               </div>
+               
+               <div className="text-xl font-black uppercase tracking-[0.2em]">Hit Dikit!</div>
+            </motion.div>
+         )}
       </AnimatePresence>
     </div>
   );

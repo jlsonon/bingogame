@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BingoCard } from '../components/BingoCard';
 import { PatternVisualizer } from '../components/PatternVisualizer';
-import { generateRandomCard, checkValidWin, getBallLetter } from '../lib/bingo';
+import { generateRandomCard, checkValidWin, getBallLetter, checkDikitSidequest } from '../lib/bingo';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Plus, Trash2, ArrowLeft, ArrowRight, Loader, LayoutGrid, Eye, History, Settings2, Trophy, CheckCircle2, Users, Ticket } from 'lucide-react';
@@ -21,7 +21,7 @@ function Countdown({ endsAt }: { endsAt?: number }) {
 export default function Player() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { socket, room, me, updateMyCards, claimBingo, latestBall, winner, dismissWinner, claimAlert, rejoinRoom, setNextRoundChoice } = useGameStore();
+  const { socket, room, me, updateMyCards, claimBingo, claimDikit, latestBall, winner, dismissWinner, claimAlert, dikitAlert, rejoinRoom, setNextRoundChoice } = useGameStore();
 
   const [cards, setCards] = useState<number[][][]>([]);
   const [markedCells, setMarkedCells] = useState<Record<number, number[]>>({}); // cardIndex -> marked cells
@@ -124,6 +124,11 @@ export default function Player() {
     return checkValidWin(cards[currentCardIdx], markedCells[currentCardIdx] || [], room.calledNumbers, room.mode, room.patterns);
   }, [cards, currentCardIdx, markedCells, room?.calledNumbers, room?.mode, room?.patterns]);
 
+  const currentDikitCheck = useMemo(() => {
+    if (!room || cards.length === 0 || !cards[currentCardIdx]) return false;
+    return checkDikitSidequest(cards[currentCardIdx], markedCells[currentCardIdx] || []);
+  }, [cards, currentCardIdx, markedCells, room]);
+
   const cardStatus = useMemo(() => {
     if (!room || cards.length === 0) return [];
     return cards.map((card, index) => {
@@ -154,6 +159,13 @@ export default function Player() {
     if (currentWinCheck.valid && room?.status === 'playing') {
        claimBingo(currentCardIdx, markedCells[currentCardIdx] || []);
        setShowClaimConfirm(false);
+    }
+  };
+
+  const handleDikitClaim = () => {
+    if (currentDikitCheck && room?.status === 'playing') {
+       const { claimDikit } = useGameStore.getState();
+       claimDikit(currentCardIdx, markedCells[currentCardIdx] || []);
     }
   };
 
@@ -449,19 +461,29 @@ export default function Player() {
 
       {/* The "Big Orange Button" - Floating Claim */}
       <AnimatePresence>
-         {room.status === 'playing' && currentWinCheck.valid && activeTab === 'cards' && (
+         {room.status === 'playing' && (currentWinCheck.valid || currentDikitCheck) && activeTab === 'cards' && (
             <motion.div 
                initial={{ y: 100, scale: 0.8 }}
                animate={{ y: 0, scale: 1 }}
                exit={{ y: 100, scale: 0.8 }}
-               className="fixed bottom-20 left-4 right-4 z-40"
+               className="fixed bottom-20 left-4 right-4 z-40 flex flex-col gap-2"
             >
-               <button 
-                  onClick={() => setShowClaimConfirm(true)}
-                  className="w-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white py-5 rounded-[24px] font-black text-2xl uppercase tracking-[0.2em] italic shadow-[0_8px_0_#9A3412] active:translate-y-[6px] active:shadow-none animate-bounce"
-               >
-                  Bingo!
-               </button>
+               {currentDikitCheck && (
+                  <button 
+                     onClick={handleDikitClaim}
+                     className="w-full bg-[#0D9488] text-white py-3 rounded-2xl font-black text-lg uppercase tracking-[0.1em] shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none"
+                  >
+                     Dikit Hit!
+                  </button>
+               )}
+               {currentWinCheck.valid && (
+                  <button 
+                     onClick={() => setShowClaimConfirm(true)}
+                     className="w-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white py-5 rounded-[24px] font-black text-2xl uppercase tracking-[0.15em] shadow-[0_8px_0_#9A3412] active:translate-y-[6px] active:shadow-none animate-bounce"
+                  >
+                     BINGO AVAILABLE!
+                  </button>
+               )}
             </motion.div>
          )}
       </AnimatePresence>
@@ -510,6 +532,29 @@ export default function Player() {
             </div>
          </div>
       )}
+
+      {/* Dikit Sidequest Toast */}
+      <AnimatePresence>
+         {dikitAlert && (
+            <motion.div 
+               initial={{ y: -100, opacity: 0 }}
+               animate={{ y: 20, opacity: 1 }}
+               exit={{ y: -100, opacity: 0 }}
+               className="fixed top-14 left-4 right-4 z-[55] bg-[#0D9488] text-white p-4 rounded-2xl shadow-2xl border-2 border-white flex items-center gap-4"
+            >
+               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+                  <Trophy size={24} />
+               </div>
+               <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-widest opacity-80">Sidequest Hit!</div>
+                  <div className="text-lg font-black truncate leading-tight">{dikitAlert.playerName} hit Dikit!</div>
+               </div>
+               <button onClick={() => useGameStore.getState().dismissDikit()} className="text-white/50 hover:text-white">
+                  <Plus size={20} className="rotate-45" />
+               </button>
+            </motion.div>
+         )}
+      </AnimatePresence>
 
       {/* Winner Modal */}
       <AnimatePresence>

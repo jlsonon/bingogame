@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BallCaller } from '../components/BallCaller';
 import { PatternVisualizer } from '../components/PatternVisualizer';
-import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy } from 'lucide-react';
+import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter } from '../lib/bingo';
@@ -41,13 +41,23 @@ function PatternGrid({ cells, onToggle }: { cells: number[], onToggle?: (cell: n
 export default function Host() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { socket, room, latestBall, startGame, pauseGame, resumeGame, resetGame, startNextRound, callNextBall, updateSettings, verifyClaim, winner, dismissWinner, me, rejoinRoom } = useGameStore();
+  const { socket, room, latestBall, startGame, pauseGame, resumeGame, resetGame, startNextRound, callNextBall, updateSettings, verifyClaim, winner, dismissWinner, dikitAlert, dismissDikit, me, rejoinRoom } = useGameStore();
 
   const [showSettings, setShowSettings] = useState(false);
   const [copyLabel, setCopyLabel] = useState('Copy');
   const [customName, setCustomName] = useState('Custom Pattern');
   const [customCells, setCustomCells] = useState<number[]>([12]);
   
+  // Persistent Pattern Library
+  const [patternLibrary, setPatternLibrary] = useState<BingoPattern[]>(() => {
+     const saved = localStorage.getItem('bingo_pattern_library');
+     return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('bingo_pattern_library', JSON.stringify(patternLibrary));
+  }, [patternLibrary]);
+
   useEffect(() => {
     if (!socket || !code) return;
     if (!room) {
@@ -104,20 +114,28 @@ export default function Host() {
 
   const addCustomPattern = () => {
     const cells = [...new Set([...customCells, 12])].sort((a, b) => a - b);
+    const newPattern: BingoPattern = {
+      id: `custom-${Date.now()}`,
+      name: customName.trim() || 'Custom Pattern',
+      type: 'custom',
+      match: 'cells',
+      cells
+    };
+    
+    // Add to current round
     updateSettings({
-      patterns: [
-        ...room.patterns,
-        {
-          id: `custom-${Date.now()}`,
-          name: customName.trim() || 'Custom Pattern',
-          type: 'custom',
-          match: 'cells',
-          cells
-        }
-      ]
+      patterns: [...room.patterns, newPattern]
     });
+    
+    // Add to persistent library
+    setPatternLibrary(prev => [...prev, newPattern]);
+    
     setCustomName('Custom Pattern');
     setCustomCells([12]);
+  };
+
+  const deleteFromLibrary = (id: string) => {
+    setPatternLibrary(prev => prev.filter(p => p.id !== id));
   };
 
   return (
@@ -412,19 +430,29 @@ export default function Host() {
                  {room.mode === 'Bingo' && (
                    <div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Preset Patterns</label>
+                        <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Pattern Library</label>
                         <div className="grid grid-cols-2 gap-2">
-                          {PRESET_PATTERNS.map(pattern => {
+                          {[...PRESET_PATTERNS, ...patternLibrary].map(pattern => {
                             const selected = room.patterns.some(item => item.id === pattern.id);
+                            const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
                             return (
-                              <button
-                                key={pattern.id}
-                                type="button"
-                                onClick={() => togglePattern(pattern)}
-                                className={`px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
-                              >
-                                {pattern.name}
-                              </button>
+                              <div key={pattern.id} className="relative group">
+                                <button
+                                  type="button"
+                                  onClick={() => togglePattern(pattern)}
+                                  className={`w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
+                                >
+                                  {pattern.name}
+                                </button>
+                                {!isPreset && (
+                                   <button 
+                                      onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
+                                      className="absolute -top-2 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                   >
+                                      <Plus size={10} className="rotate-45" strokeWidth={4} />
+                                   </button>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
@@ -516,6 +544,40 @@ export default function Host() {
            </div>
         </div>
       )}
+
+      {/* Sidequest Hit Overlay (Transient) */}
+      <AnimatePresence>
+         {dikitAlert && (
+            <motion.div 
+               initial={{ x: 300, opacity: 0 }}
+               animate={{ x: 0, opacity: 1 }}
+               exit={{ x: 300, opacity: 0 }}
+               className="fixed bottom-6 right-6 z-[55] bg-[#0D9488] text-white p-6 rounded-[32px] shadow-2xl border-4 border-white flex flex-col items-center gap-4 w-80"
+            >
+               <div className="text-center">
+                  <div className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80 mb-1">Sidequest Win!</div>
+                  <div className="text-2xl font-black italic">{dikitAlert.playerName}</div>
+               </div>
+
+               <div className="bg-white/10 p-4 rounded-2xl border border-white/20 scale-90">
+                  <div className="grid grid-cols-5 gap-1">
+                     {dikitAlert.card.map((row: any)=> row.map((num: any, idx: number) => {
+                        const called = num === 0 || room.calledNumbers.includes(num);
+                        return (
+                           <div key={idx} className={`w-8 h-8 flex items-center justify-center font-black text-[10px] rounded-lg border ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>
+                              {num === 0 ? 'FR' : num}
+                           </div>
+                        )
+                     }))}
+                  </div>
+               </div>
+
+               <button onClick={dismissDikit} className="text-xs font-black uppercase tracking-widest bg-white/20 hover:bg-white/30 px-6 py-2 rounded-full transition-all">
+                  Dismiss
+               </button>
+            </motion.div>
+         )}
+      </AnimatePresence>
 
       {/* Winner Modal */}
       <AnimatePresence>
