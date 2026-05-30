@@ -2,19 +2,18 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BallCaller } from '../components/BallCaller';
-import { Maximize2, Play, Square, Settings, Share2, Copy } from 'lucide-react';
+import { PatternVisualizer } from '../components/PatternVisualizer';
+import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { PRESET_PATTERNS, type BingoPattern } from '../lib/bingo';
+import { PRESET_PATTERNS, type BingoPattern, getBallLetter } from '../lib/bingo';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
   const [now, setNow] = useState(Date.now());
-
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
-
   const seconds = Math.max(0, Math.ceil(((endsAt || now) - now) / 1000));
   return <span className="tabular-nums">{seconds}s</span>;
 }
@@ -83,7 +82,7 @@ export default function Host() {
   if (!room) return null;
 
   const joinUrl = `${window.location.origin}/play/${room.id}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}`;
+  const displayUrl = `${window.location.origin}/display/${room.id}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(joinUrl);
@@ -91,12 +90,8 @@ export default function Host() {
     window.setTimeout(() => setCopyLabel('Copy'), 1400);
   };
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      await navigator.share({ title: 'Join LuckyBingo', text: `Room ${room.id}`, url: joinUrl });
-      return;
-    }
-    handleCopy();
+  const openDisplay = () => {
+    window.open(displayUrl, '_blank');
   };
 
   const togglePattern = (pattern: BingoPattern) => {
@@ -125,219 +120,299 @@ export default function Host() {
     setCustomCells([12]);
   };
 
-  const removePattern = (id: string) => {
-    updateSettings({ patterns: room.patterns.filter(pattern => pattern.id !== id) });
-  };
-
-  const enterFullscreen = () => {
-    document.documentElement.requestFullscreen?.();
-  };
-
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans text-[#3D3A35]">
+    <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans text-[#3D3A35] overflow-hidden">
       {/* Header */}
-      <header className="bg-white border-b-2 border-[#E8E2D9] h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="bg-[#F3EFE9] border border-[#DED9D1] text-[#3D3A35] font-black text-xl px-4 py-2 rounded-xl tracking-wider tabular-nums flex items-center gap-3">
-            <span className="text-xs font-bold text-[#7A746B] uppercase tracking-wider hidden sm:inline">Room Code</span>
+      <header className="bg-white border-b-2 border-[#E8E2D9] h-16 px-6 flex items-center justify-between sticky top-0 z-20 shrink-0">
+        <div className="flex items-center gap-6">
+          <div className="bg-[#F3EFE9] border border-[#DED9D1] text-[#3D3A35] font-black text-xl px-4 py-1.5 rounded-xl tracking-wider tabular-nums flex items-center gap-3">
+            <span className="text-[10px] font-bold text-[#7A746B] uppercase tracking-widest hidden sm:inline">Room</span>
             {room.id}
           </div>
-          <button onClick={handleCopy} className="p-2 text-[#A19B91] hover:text-[#3D3A35] transition-colors" title={copyLabel}>
-             <Copy size={20} />
-          </button>
-          <button onClick={handleShare} className="p-2 text-[#A19B91] hover:text-[#3D3A35] transition-colors" title="Share invite">
-             <Share2 size={20} />
-          </button>
-          <button onClick={enterFullscreen} className="p-2 text-[#A19B91] hover:text-[#3D3A35] transition-colors" title="Projector mode">
-             <Maximize2 size={20} />
-          </button>
+          <div className="hidden md:flex items-center gap-1">
+             <button onClick={handleCopy} className="p-2 text-[#A19B91] hover:text-[#3D3A35] transition-colors" title={copyLabel}>
+                <Copy size={18} />
+             </button>
+             <button onClick={openDisplay} className="flex items-center gap-2 px-3 py-1.5 bg-[#0D9488]/10 text-[#0D9488] rounded-lg text-xs font-black uppercase tracking-widest hover:bg-[#0D9488]/20 transition-all">
+                <Monitor size={16} />
+                TV Mode
+             </button>
+          </div>
         </div>
-        <div className="flex items-center gap-4 sm:gap-6">
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-bold text-[#3D3A35] hidden sm:block">{me?.nickname} (Host)</span>
+
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col items-end leading-none">
+            <span className="text-xs font-black text-[#3D3A35] mb-1">{me?.nickname}</span>
             <span className="text-[10px] text-[#0D9488] font-bold uppercase flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-[#0D9488] inline-block animate-pulse" />
-              {Object.values(room.players).filter(p => p.connected).length} Online
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0D9488] inline-block animate-pulse" />
+              Host Dashboard
             </span>
           </div>
-          <button onClick={() => setShowSettings(!showSettings)} className="w-10 h-10 bg-[#F3EFE9] text-[#7A746B] border border-[#DED9D1] rounded-full flex items-center justify-center hover:bg-[#E8E2D9]">
+          <button onClick={() => setShowSettings(!showSettings)} className="w-10 h-10 bg-[#F3EFE9] text-[#7A746B] border border-[#DED9D1] rounded-xl flex items-center justify-center hover:bg-[#E8E2D9] transition-colors">
             <Settings size={20} />
           </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 p-4 md:p-6 w-full grid grid-cols-1 xl:grid-cols-[minmax(360px,42vw)_1fr_340px] gap-6">
+      {/* 3-Panel Layout */}
+      <main className="flex-1 grid grid-cols-[320px_1fr_360px] gap-0 overflow-hidden">
         
-        <div className="space-y-6">
-           <div className="bg-white rounded-[24px] p-5 border-2 border-[#E8E2D9] shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">Current Round</div>
-                <h1 className="text-2xl font-black text-[#3D3A35] truncate">{room.roundName}</h1>
-                <p className="text-sm font-bold text-[#EA580C] truncate">
-                  {room.mode}{room.mode === 'Bingo' ? ` · ${room.patterns.map(pattern => pattern.name).join(', ')}` : ''}{room.prizeText ? ` · ${room.prizeText}` : ''}
-                </p>
-              </div>
-              <div className="bg-[#FDFBF7] border border-[#E8E2D9] rounded-2xl p-3 flex items-center gap-3">
-                <img src={qrUrl} alt="Join room QR code" className="w-20 h-20 rounded-lg bg-white" />
-                <div className="text-xs font-bold text-[#7A746B] max-w-32 break-words">{joinUrl}</div>
-              </div>
-           </div>
-           <BallCaller latestBall={latestBall} history={room.calledNumbers} />
-
-           <div className="bg-white rounded-[32px] p-6 border-2 border-[#E8E2D9] shadow-sm relative overflow-hidden">
-             
-             <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-center mb-2">
-                   <h2 className="text-xl font-bold text-[#3D3A35]">Game Controls</h2>
-                   {room.status === 'playing' && (
-                     <div className="flex items-center gap-2 text-[#0D9488] font-bold bg-[#0D9488]/10 px-3 py-1 rounded-full text-sm">
-                       <span className="w-2 h-2 rounded-full bg-[#0D9488] animate-pulse" />
-                       LIVE
-                     </div>
-                   )}
-                </div>
-
-                {room.status === 'waiting' && (
-                  <button onClick={startGame} className="w-full py-5 bg-[#EA580C] text-white rounded-2xl font-black text-xl transition-all shadow-[0_6px_0_#9A3412] active:translate-y-[6px] active:shadow-none flex items-center justify-center gap-2 uppercase tracking-tighter">
-                    <Play size={24} fill="currentColor" />
-                    Start Game
-                  </button>
-                )}
-
-                {room.status === 'playing' && (
-                  <div className="flex gap-3">
-                    <button onClick={pauseGame} className="w-16 flex-shrink-0 py-4 bg-[#F3EFE9] border border-[#DED9D1] text-[#7A746B] rounded-2xl font-bold text-lg transition-all active:translate-y-1 flex items-center justify-center">
-                      <Square size={20} fill="currentColor" />
-                    </button>
-                    {room.autoCallSpeed === 0 && (
-                      <button onClick={callNextBall} className="flex-1 py-4 bg-[#EA580C] text-white rounded-2xl font-black text-lg transition-all shadow-[0_6px_0_#9A3412] active:translate-y-[6px] active:shadow-none flex items-center justify-center gap-2 uppercase tracking-tighter">
-                        Next Ball
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {room.status === 'paused' && (
-                  <div className="flex gap-3">
-                     <button onClick={resetGame} className="w-20 py-4 bg-[#F3EFE9] border border-[#DED9D1] text-[#7A746B] rounded-2xl font-bold text-sm transition-all active:translate-y-1 uppercase tracking-wider">
-                        Reset
-                     </button>
-                     <button onClick={resumeGame} className="flex-1 py-4 bg-[#0D9488] text-white rounded-2xl font-black text-lg transition-all shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none flex items-center justify-center gap-2 uppercase tracking-tighter">
-                        <Play size={20} fill="currentColor" />
-                        Resume
-                     </button>
-                  </div>
-                )}
-
-                {room.status === 'finished' && (
-                   <button onClick={resetGame} className="w-full py-5 bg-[#3D3A35] text-white rounded-2xl font-black text-xl transition-all shadow-[0_6px_0_#1C1917] active:translate-y-[6px] active:shadow-none uppercase tracking-tighter">
-                      New Round
+        {/* Left Panel: Game Controls */}
+        <section className="bg-white border-r-2 border-[#E8E2D9] p-6 flex flex-col gap-6 overflow-y-auto">
+           <div>
+              <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Round Management</h3>
+              <div className="space-y-3">
+                 {room.status === 'waiting' && (
+                   <button onClick={startGame} className="w-full py-4 bg-[#EA580C] text-white rounded-2xl font-black text-lg shadow-[0_4px_0_#9A3412] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-tighter flex items-center justify-center gap-2">
+                      <Play size={20} fill="currentColor" />
+                      Start Game
                    </button>
-                )}
-
-                {room.status === 'next_round' && (
-                   <div className="space-y-3">
-                     <div className="rounded-2xl bg-[#FACC15]/20 border border-[#FACC15]/50 p-4 text-center">
-                       <div className="text-xs font-bold uppercase tracking-widest text-[#854D0E]">Preparing Next Round In</div>
-                       <div className="text-4xl font-black text-[#854D0E]"><Countdown endsAt={room.nextRoundEndsAt} /></div>
-                     </div>
-                     <div className="text-center text-sm font-bold text-[#7A746B]">Players are choosing cards. The next round opens automatically.</div>
+                 )}
+                 {room.status === 'playing' && (
+                   <button onClick={pauseGame} className="w-full py-4 bg-[#F3EFE9] border-2 border-[#DED9D1] text-[#7A746B] rounded-2xl font-black text-lg active:translate-y-1 transition-all uppercase tracking-tighter flex items-center justify-center gap-2">
+                      <Square size={20} fill="currentColor" />
+                      Pause Game
+                   </button>
+                 )}
+                 {room.status === 'paused' && (
+                   <div className="grid grid-cols-2 gap-3">
+                      <button onClick={resetGame} className="py-4 bg-[#FAF7F2] border-2 border-[#E8E2D9] text-[#A19B91] rounded-2xl font-black text-xs uppercase tracking-widest active:translate-y-1 transition-all">
+                         End Round
+                      </button>
+                      <button onClick={resumeGame} className="py-4 bg-[#0D9488] text-white rounded-2xl font-black text-lg shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-tighter flex items-center justify-center gap-2">
+                         <Play size={20} fill="currentColor" />
+                         Resume
+                      </button>
                    </div>
-                )}
-
-             </div>
+                 )}
+                 {room.status === 'next_round' && (
+                    <button onClick={startNextRound} className="w-full py-4 bg-[#FACC15] text-[#854D0E] rounded-2xl font-black text-lg shadow-[0_4px_0_#A16207] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-tighter flex flex-col items-center leading-none">
+                       <span className="text-[10px] mb-1">Force Start</span>
+                       Next Round
+                    </button>
+                 )}
+              </div>
            </div>
-        </div>
 
-        <div className="space-y-6">
-           <div className="bg-white rounded-[32px] p-5 border-2 border-[#E8E2D9] shadow-sm">
-             <div className="flex items-center justify-between mb-4">
-               <h3 className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">Number Board</h3>
-               <span className="text-xs font-black text-[#EA580C]">{room.calledNumbers.length}/75</span>
-             </div>
-             <div className="grid grid-cols-5 gap-1">
-               {['B','I','N','G','O'].map(l => <div key={l} className="text-center font-black text-[#A19B91] text-xs">{l}</div>)}
-               {Array.from({length: 75}, (_, i) => i + 1).map(num => (
-                 <div 
-                   key={num} 
-                   className={`aspect-square flex items-center justify-center text-xs font-bold rounded border ${room.calledNumbers.includes(num) ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm' : 'bg-white text-[#A19B91] border-[#DED9D1]'}`}
-                 >
-                   {num}
+           <div className="pt-6 border-t-2 border-[#FAF7F2]">
+              <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Ball Calling</h3>
+              <div className="space-y-4">
+                 <div className="bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]">
+                    <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest block mb-2">Auto-Call Speed</label>
+                    <div className="grid grid-cols-4 gap-2">
+                       {[0, 3, 5, 8].map(speed => (
+                          <button 
+                             key={speed}
+                             onClick={() => updateSettings({ autoCallSpeed: speed })}
+                             className={`py-2 rounded-xl text-xs font-black border-2 transition-all ${room.autoCallSpeed === speed ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#DED9D1] text-[#A19B91] hover:border-[#A19B91]'}`}
+                          >
+                             {speed === 0 ? 'Off' : `${speed}s`}
+                          </button>
+                       ))}
+                    </div>
                  </div>
-               ))}
-             </div>
-           </div>
-        </div>
 
-        <div className="space-y-6">
-           <div className="bg-white rounded-[32px] p-5 border-2 border-[#E8E2D9] shadow-sm">
-              <h3 className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest mb-3">Players</h3>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                 {Object.values(room.players).map(p => (
-                   <div key={p.id} className="flex items-center gap-3 bg-[#FDFBF7] border border-[#E8E2D9] p-2 rounded-xl">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold tracking-tighter" style={{ backgroundColor: p.avatarColor || '#ccc' }}>
-                        {p.nickname.substring(0,2).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                         <div className="font-bold text-sm text-[#3D3A35] truncate">{p.nickname} {p.isHost && '(Host)'}</div>
-                         <div className="text-[10px] text-[#A19B91] font-bold uppercase tracking-wider">
-                            {p.activeCards.length} cards · {p.connected ? 'online' : 'offline'}
-                         </div>
-                      </div>
+                 {room.status === 'playing' && room.autoCallSpeed === 0 && (
+                   <button onClick={callNextBall} className="w-full py-8 bg-[#3D3A35] text-white rounded-[32px] font-black text-2xl shadow-[0_8px_0_#1C1917] active:translate-y-[8px] active:shadow-none transition-all uppercase tracking-widest">
+                      Call Ball
+                   </button>
+                 )}
+              </div>
+           </div>
+
+           <div className="mt-auto pt-6 border-t-2 border-[#FAF7F2]">
+              <div className="bg-[#FDFBF7] rounded-2xl p-4 border border-[#E8E2D9] text-center">
+                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x180&data=${encodeURIComponent(joinUrl)}`} alt="QR" className="mx-auto w-32 h-32 mb-3" />
+                 <p className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest">Join via Link</p>
+                 <p className="text-xs font-bold text-[#3D3A35] truncate mt-1">{joinUrl}</p>
+              </div>
+           </div>
+        </section>
+
+        {/* Center Panel: Current Ball & Board */}
+        <section className="bg-[#FAF7F2] p-8 flex flex-col gap-8 overflow-y-auto">
+           
+           <div className="grid grid-cols-[1fr_320px] gap-8 shrink-0">
+              <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-8 shadow-sm flex flex-col justify-center items-center relative overflow-hidden">
+                 <div className="absolute top-4 left-6 text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Latest Call</div>
+                 <AnimatePresence mode="wait">
+                    {latestBall ? (
+                       <motion.div 
+                         key={latestBall}
+                         initial={{ scale: 0.5, y: 50, opacity: 0 }}
+                         animate={{ scale: 1, y: 0, opacity: 1 }}
+                         className="flex flex-col items-center"
+                       >
+                          <div className="w-48 h-48 rounded-full bg-[#FACC15] border-[8px] border-white outline outline-8 outline-[#FACC15] shadow-xl flex flex-col items-center justify-center text-[#854D0E]">
+                            <span className="text-2xl font-black leading-none mb-1">{getBallLetter(latestBall)}</span>
+                            <span className="text-8xl font-black leading-none tracking-tighter">{latestBall}</span>
+                          </div>
+                       </motion.div>
+                    ) : (
+                       <div className="text-xl font-black text-[#DED9D1] uppercase tracking-widest">Awaiting First Ball</div>
+                    )}
+                 </AnimatePresence>
+              </div>
+
+              <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-6 shadow-sm flex flex-col">
+                 <div className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em] mb-4 text-center">Active Pattern</div>
+                 <div className="flex-1 flex items-center justify-center">
+                    <PatternVisualizer patterns={room.patterns} className="scale-125 origin-center" />
+                 </div>
+                 <div className="mt-4 pt-4 border-t-2 border-[#FAF7F2] text-center">
+                    <div className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest leading-none mb-1">Mode</div>
+                    <div className="text-lg font-black text-[#EA580C] uppercase tracking-tighter">{room.mode}</div>
+                 </div>
+              </div>
+           </div>
+
+           <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-8 shadow-sm flex-1 min-h-0 overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Master Number Board</h3>
+                <div className="text-xs font-black text-[#EA580C] tabular-nums bg-[#EA580C]/10 px-3 py-1 rounded-full">
+                   {room.calledNumbers.length} / 75
+                </div>
+              </div>
+              <div className="grid grid-cols-15 gap-2">
+                 {Array.from({length: 75}, (_, i) => i + 1).map(num => (
+                   <div 
+                     key={num} 
+                     className={`aspect-square flex items-center justify-center text-lg font-black rounded-lg border-2 transition-all ${
+                       room.calledNumbers.includes(num) 
+                         ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm' 
+                         : 'bg-[#FAF7F2] text-[#DED9D1] border-[#E8E2D9]'
+                     }`}
+                   >
+                     {num}
                    </div>
                  ))}
               </div>
            </div>
 
-        </div>
+        </section>
+
+        {/* Right Panel: Players & Stats */}
+        <section className="bg-white border-l-2 border-[#E8E2D9] flex flex-col overflow-hidden">
+           
+           <div className="p-6 border-b-2 border-[#FAF7F2] bg-[#FAF7F2]/30">
+              <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Session Stats</h3>
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="bg-white p-4 rounded-2xl border-2 border-[#E8E2D9] shadow-sm">
+                    <Ticket size={20} className="text-[#EA580C] mb-2" />
+                    <div className="text-2xl font-black tabular-nums">{room.stats.totalCardsSold}</div>
+                    <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Cards Sold</div>
+                 </div>
+                 <div className="bg-white p-4 rounded-2xl border-2 border-[#E8E2D9] shadow-sm">
+                    <Users size={20} className="text-[#0D9488] mb-2" />
+                    <div className="text-2xl font-black tabular-nums">{Object.values(room.players).length}</div>
+                    <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Players</div>
+                 </div>
+              </div>
+           </div>
+
+           <div className="flex-1 p-6 overflow-y-auto">
+              <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Connected Players</h3>
+              <div className="space-y-2">
+                 {Object.values(room.players).map(p => (
+                   <div key={p.id} className="flex items-center gap-3 bg-[#FAF7F2] border-2 border-white p-3 rounded-2xl shadow-sm">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-xs" style={{ backgroundColor: p.avatarColor || '#ccc' }}>
+                        {p.nickname.substring(0,2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                         <div className="font-black text-sm text-[#3D3A35] truncate flex items-center gap-2">
+                            {p.nickname}
+                            {!p.connected && <span className="text-[8px] font-bold bg-[#A19B91]/20 text-[#A19B91] px-1.5 py-0.5 rounded italic">OFFLINE</span>}
+                         </div>
+                         <div className="text-[10px] text-[#A19B91] font-bold uppercase tracking-wider flex justify-between">
+                            <span>{p.activeCards.length} cards</span>
+                            {room.status === 'next_round' && (
+                               <span className={p.nextRoundChoice === 'change' ? 'text-[#EA580C]' : 'text-[#0D9488]'}>
+                                  {p.nextRoundChoice === 'change' ? 'CHANGING' : 'READY'}
+                               </span>
+                            )}
+                         </div>
+                      </div>
+                   </div>
+                 ))}
+                 {Object.values(room.players).length === 0 && (
+                    <div className="text-center py-8 text-[#DED9D1] font-bold italic text-sm">No players yet</div>
+                 )}
+              </div>
+           </div>
+
+           <div className="p-6 border-t-2 border-[#FAF7F2] bg-[#FAF7F2]/30 max-h-48 overflow-y-auto">
+              <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-3">Hall of Fame</h3>
+              <div className="space-y-2">
+                 {room.stats.winners.slice(-5).reverse().map((w, i) => (
+                   <div key={i} className="flex items-center justify-between text-xs">
+                      <div className="font-bold flex items-center gap-2">
+                         <Trophy size={12} className="text-[#FACC15]" />
+                         {w.name}
+                      </div>
+                      <div className="text-[10px] text-[#A19B91] font-black uppercase tracking-tighter">{w.pattern}</div>
+                   </div>
+                 ))}
+                 {room.stats.winners.length === 0 && (
+                    <div className="text-[10px] text-[#DED9D1] font-bold italic">Round results will appear here</div>
+                 )}
+              </div>
+           </div>
+        </section>
       </main>
 
       {/* Settings Modal Setup */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative">
-              <h2 className="text-2xl font-black mb-6">Settings</h2>
+           <div className="bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl relative border-4 border-[#3D3A35]">
+              <div className="flex justify-between items-center mb-8">
+                 <h2 className="text-3xl font-black uppercase tracking-tighter">Room Config</h2>
+                 <button onClick={() => setShowSettings(false)} className="text-[#A19B91] hover:text-[#3D3A35]">
+                    <Square size={24} className="rotate-45" />
+                 </button>
+              </div>
               
-              <div className="space-y-4">
-                 <div>
-                    <label className="text-sm font-bold text-slate-700 block mb-1.5">Round Name</label>
-                    <input
-                      value={room.roundName}
-                      onChange={e => updateSettings({ roundName: e.target.value })}
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 font-bold"
-                      maxLength={40}
-                    />
+              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Round Name</label>
+                       <input
+                         value={room.roundName}
+                         onChange={e => updateSettings({ roundName: e.target.value })}
+                         className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none"
+                         maxLength={40}
+                       />
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Prize Info</label>
+                       <input
+                         value={room.prizeText}
+                         onChange={e => updateSettings({ prizeText: e.target.value })}
+                         placeholder="Optional prize"
+                         className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]"
+                         maxLength={80}
+                       />
+                    </div>
                  </div>
 
-                 <div>
-                    <label className="text-sm font-bold text-slate-700 block mb-1.5">Prize</label>
-                    <input
-                      value={room.prizeText}
-                      onChange={e => updateSettings({ prizeText: e.target.value })}
-                      placeholder="Optional prize"
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 font-bold"
-                      maxLength={80}
-                    />
-                 </div>
-
-                 <div>
-                    <label className="text-sm font-bold text-slate-700 block mb-1.5">Game Mode</label>
-                    <select 
-                      value={room.mode}
-                      onChange={e => updateSettings({ mode: e.target.value })}
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 font-bold"
-                    >
-                       <option value="Bingo">Bingo (selected patterns)</option>
-                       <option value="Blackout">Blackout</option>
-                       <option value="Dikit">Dikit Only (2 Adjacent)</option>
-                    </select>
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Game Mode</label>
+                    <div className="flex gap-2">
+                       {['Bingo', 'Blackout', 'Dikit'].map(m => (
+                          <button
+                             key={m}
+                             onClick={() => updateSettings({ mode: m })}
+                             className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${room.mode === m ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#A19B91]'}`}
+                          >
+                             {m === 'Bingo' ? 'Standard' : m}
+                          </button>
+                       ))}
+                    </div>
                  </div>
 
                  {room.mode === 'Bingo' && (
-                   <div className="space-y-3">
-                      <div>
-                        <div className="text-sm font-bold text-slate-700 block mb-1.5">Bingo Patterns</div>
+                   <div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Preset Patterns</label>
                         <div className="grid grid-cols-2 gap-2">
                           {PRESET_PATTERNS.map(pattern => {
                             const selected = room.patterns.some(item => item.id === pattern.id);
@@ -346,7 +421,7 @@ export default function Host() {
                                 key={pattern.id}
                                 type="button"
                                 onClick={() => togglePattern(pattern)}
-                                className={`px-3 py-2 rounded-xl border text-xs font-black ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
+                                className={`px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
                               >
                                 {pattern.name}
                               </button>
@@ -355,62 +430,43 @@ export default function Host() {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
-                        <input
-                          value={customName}
-                          onChange={e => setCustomName(e.target.value)}
-                          className="w-full p-2 bg-white rounded-xl border border-slate-200 font-bold text-sm"
-                          maxLength={28}
-                        />
-                        <PatternGrid
-                          cells={customCells}
-                          onToggle={cell => setCustomCells(prev => {
-                            if (cell === 12) return prev;
-                            return prev.includes(cell) ? prev.filter(item => item !== cell) : [...prev, cell];
-                          })}
-                        />
+                      <div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4 shadow-inner">
+                        <div className="flex justify-between items-center">
+                           <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Draw Custom</span>
+                           <input
+                             value={customName}
+                             onChange={e => setCustomName(e.target.value)}
+                             className="bg-white px-3 py-1 rounded-lg border-2 border-[#E8E2D9] font-bold text-[10px] focus:border-[#0D9488] outline-none"
+                             maxLength={28}
+                             placeholder="Pattern Name"
+                           />
+                        </div>
+                        <div className="flex justify-center">
+                           <PatternGrid
+                             cells={customCells}
+                             onToggle={cell => setCustomCells(prev => {
+                               if (cell === 12) return prev;
+                               return prev.includes(cell) ? prev.filter(item => item !== cell) : [...prev, cell];
+                             })}
+                           />
+                        </div>
                         <button
                           type="button"
                           onClick={addCustomPattern}
-                          className="w-full bg-[#3D3A35] text-white py-2 rounded-xl font-bold text-sm"
+                          className="w-full bg-[#3D3A35] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest active:translate-y-1 shadow-md"
                         >
-                          Add Custom Pattern
+                          Add to Round
                         </button>
                       </div>
-
-                      {room.patterns.some(pattern => pattern.type === 'custom') && (
-                        <div className="space-y-2">
-                          {room.patterns.filter(pattern => pattern.type === 'custom').map(pattern => (
-                            <div key={pattern.id} className="flex items-center justify-between gap-2 rounded-xl bg-white border border-slate-200 p-2">
-                              <span className="text-sm font-bold text-slate-700 truncate">{pattern.name}</span>
-                              <button type="button" onClick={() => removePattern(pattern.id)} className="text-xs font-black text-[#EA580C]">Remove</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                    </div>
                  )}
-
-                 <div>
-                    <label className="text-sm font-bold text-slate-700 block mb-1.5">Auto-Call Speed</label>
-                    <select 
-                      value={room.autoCallSpeed}
-                      onChange={e => updateSettings({ autoCallSpeed: parseInt(e.target.value) })}
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 font-bold"
-                    >
-                       <option value={0}>Manual (Button Click)</option>
-                       <option value={3}>Fast (3s)</option>
-                       <option value={5}>Normal (5s)</option>
-                       <option value={8}>Slow (8s)</option>
-                    </select>
-                 </div>
               </div>
 
               <button 
                 onClick={() => setShowSettings(false)}
-                className="mt-8 w-full bg-slate-900 text-white py-3 rounded-xl font-bold"
+                className="mt-8 w-full bg-[#3D3A35] text-white py-4 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all"
               >
-                 Done
+                 Save & Close
               </button>
            </div>
         </div>
@@ -418,21 +474,21 @@ export default function Host() {
 
       {/* Claims Verification Modal */}
       {room.claims.length > 0 && !winner && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-50 p-4">
-           <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-              <div className="bg-orange-500 text-white p-4 text-center">
-                 <h2 className="text-2xl font-black uppercase tracking-widest text-[#FFF8E7] drop-shadow-md">Bingo Claim!</h2>
-                 <p className="font-medium opacity-90">{room.claims[0].playerName} called Bingo</p>
+        <div className="fixed inset-0 bg-[#3D3A35]/80 backdrop-blur-md flex justify-center items-center z-50 p-4">
+           <div className="bg-white rounded-[48px] w-full max-w-xl overflow-hidden shadow-2xl flex flex-col border-[8px] border-[#EA580C]">
+              <div className="bg-[#EA580C] text-white p-8 text-center">
+                 <h2 className="text-5xl font-black uppercase tracking-tighter italic drop-shadow-md mb-2">Bingo Claim!</h2>
+                 <p className="text-xl font-bold opacity-90">{room.claims[0].playerName} called Bingo</p>
               </div>
 
-              <div className="p-4 overflow-y-auto">
-                 <div className="bg-slate-100 p-4 rounded-xl flex justify-center scale-90 origin-top">
-                    <div className="grid grid-cols-5 gap-1">
-                      {['B','I','N','G','O'].map(l => <div key={l} className="text-center font-black text-slate-400">{l}</div>)}
+              <div className="p-8 overflow-y-auto flex flex-col items-center gap-8">
+                 <div className="bg-[#FAF7F2] p-8 rounded-[40px] border-4 border-[#E8E2D9] shadow-inner scale-110">
+                    <div className="grid grid-cols-5 gap-2">
+                      {['B','I','N','G','O'].map(l => <div key={l} className="text-center font-black text-[#A19B91] text-xl mb-2">{l}</div>)}
                       {room.claims[0].card.map((row: any)=> row.map((num: any, idx: number) => {
                          const called = num === 0 || room.calledNumbers.includes(num);
                          return (
-                           <div key={idx} className={`w-10 h-10 flex items-center justify-center font-bold text-sm rounded-md ${num === 0 ? 'bg-indigo-600 text-white' : called ? 'bg-orange-500 text-white ring-2 ring-inset ring-orange-300 scale-95' : 'bg-white border text-slate-400'}`}>
+                           <div key={idx} className={`w-14 h-14 flex items-center justify-center font-black text-xl rounded-xl border-2 transition-all ${num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-lg scale-105' : 'bg-white border-[#E8E2D9] text-[#DED9D1]'}`}>
                               {num === 0 ? 'FR' : num}
                            </div>
                          )
@@ -440,17 +496,20 @@ export default function Host() {
                     </div>
                  </div>
                  
-                 <div className="mt-4 bg-orange-50 p-3 rounded-xl border border-orange-100 flex justify-between items-center">
-                    <span className="font-bold text-orange-800">Detected Pattern:</span>
-                    <span className="bg-white px-3 py-1 rounded-full text-orange-600 font-bold text-sm shadow-sm border border-orange-200">{room.claims[0].pattern}</span>
+                 <div className="w-full bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9] flex justify-between items-center px-8">
+                    <div className="flex flex-col">
+                       <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">Claimed Pattern</span>
+                       <span className="text-2xl font-black text-[#EA580C] uppercase italic leading-none">{room.claims[0].pattern}</span>
+                    </div>
+                    <Trophy className="text-[#EA580C]" size={40} />
                  </div>
               </div>
 
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
-                 <button onClick={() => verifyClaim(room.claims[0].id, false)} className="flex-1 py-4 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300">
+              <div className="p-8 bg-[#FAF7F2] border-t-4 border-[#E8E2D9] flex gap-4">
+                 <button onClick={() => verifyClaim(room.claims[0].id, false)} className="flex-1 py-5 bg-white border-4 border-[#E8E2D9] text-[#7A746B] rounded-[24px] font-black text-lg uppercase tracking-widest active:translate-y-1 transition-all">
                     Reject
                  </button>
-                 <button onClick={() => verifyClaim(room.claims[0].id, true)} className="flex-1 py-4 bg-green-500 text-white rounded-xl font-bold text-lg hover:bg-green-600 shadow-md">
+                 <button onClick={() => verifyClaim(room.claims[0].id, true)} className="flex-1 py-5 bg-[#0D9488] text-white rounded-[24px] font-black text-2xl uppercase tracking-widest shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all">
                     Verify & Win
                  </button>
               </div>
@@ -458,30 +517,23 @@ export default function Host() {
         </div>
       )}
 
-      {winner && room.status === 'next_round' && (
-        <div className="fixed bottom-4 left-4 right-4 xl:left-auto xl:right-6 xl:w-96 z-[55] bg-white border-2 border-[#FACC15] rounded-2xl shadow-xl p-4">
-          <div className="text-xs font-black uppercase tracking-widest text-[#854D0E]">Winner Verified</div>
-          <div className="text-lg font-black text-[#3D3A35]">{winner.playerName}</div>
-          <div className="text-sm font-bold text-[#7A746B]">Next round opens in <Countdown endsAt={room.nextRoundEndsAt} /></div>
-        </div>
-      )}
-
       {/* Winner Modal */}
       <AnimatePresence>
         {winner && room.status !== 'next_round' && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center z-[60] p-4">
-             <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl text-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-yellow-100 to-orange-50 opacity-50" />
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-[60] p-4">
+             <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-white rounded-[64px] border-[12px] border-[#FACC15] w-full max-w-lg p-12 shadow-2xl text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/10 to-transparent opacity-50" />
                 <div className="relative z-10">
-                  <div className="w-24 h-24 mx-auto bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-orange-200">
-                    <span className="text-5xl">🏆</span>
+                  <div className="w-32 h-32 mx-auto bg-gradient-to-br from-[#FACC15] to-[#EA580C] rounded-full flex items-center justify-center mb-8 shadow-2xl scale-110">
+                    <Trophy className="text-white" size={64} />
                   </div>
-                  <h2 className="text-4xl font-black text-slate-800 mb-2">BINGO!</h2>
-                  <p className="text-xl text-slate-600 font-medium mb-8">
-                     <span className="font-bold text-indigo-600">{winner.playerName}</span> won the round!
+                  <h2 className="text-7xl font-black text-[#3D3A35] mb-4 uppercase italic tracking-tighter">BINGO!</h2>
+                  <p className="text-2xl text-[#7A746B] font-bold mb-10 leading-tight">
+                     Round Winner<br />
+                     <span className="text-4xl font-black text-[#0D9488] mt-2 block">{winner.playerName}</span>
                   </p>
-                  <button onClick={dismissWinner} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 active:scale-95 transition-all">
-                     Continue
+                  <button onClick={dismissWinner} className="w-full py-5 bg-[#3D3A35] text-white rounded-[24px] font-black text-xl uppercase tracking-[0.2em] hover:bg-black active:scale-95 transition-all shadow-xl">
+                     Continue Game
                   </button>
                 </div>
              </motion.div>

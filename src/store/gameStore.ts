@@ -29,6 +29,13 @@ export interface Room {
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
   claims: any[];
+  stats: {
+    totalCardsSold: number;
+    totalPlayersJoined: number;
+    gamesPlayed: number;
+    winners: { name: string, pattern: string, round: number }[];
+    startTime: number;
+  };
 }
 
 interface GameState {

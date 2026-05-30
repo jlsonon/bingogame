@@ -24,7 +24,7 @@ interface Room {
   status: 'waiting' | 'playing' | 'paused' | 'finished' | 'next_round';
   remainingBalls: number[];
   calledNumbers: number[];
-  players: Record<string, Player>; // socketId -> Player
+  players: Record<string, Player>; // sessionId -> Player
   hostId: string;
   prizeText: string;
   roundName: string;
@@ -33,6 +33,14 @@ interface Room {
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
   claims: any[];
+  // New V2 Statistics
+  stats: {
+    totalCardsSold: number;
+    totalPlayersJoined: number;
+    gamesPlayed: number;
+    winners: { name: string, pattern: string, round: number }[];
+    startTime: number;
+  };
 }
 
 const rooms: Record<string, Room> = {};
@@ -198,7 +206,14 @@ async function startServer() {
         roundNumber: 1,
         autoCallSpeed: 0,
         patterns: DEFAULT_BINGO_PATTERNS,
-        claims: []
+        claims: [],
+        stats: {
+          totalCardsSold: 0,
+          totalPlayersJoined: 1, // Host counts as first player
+          gamesPlayed: 0,
+          winners: [],
+          startTime: Date.now()
+        }
       };
 
       const hostPlayer: Player = {
@@ -229,7 +244,10 @@ async function startServer() {
       }
       touchRoom(code);
       const sessionId = getSessionId(data.sessionId);
-      
+      if (!room.players[sessionId]) {
+        room.stats.totalPlayersJoined += 1;
+      }
+
       const newPlayer: Player = {
         id: sessionId,
         socketId: socket.id,
@@ -305,6 +323,10 @@ async function startServer() {
       if (room && player && isValidCardSet(data.cards)) {
         if (!['waiting', 'next_round'].includes(room.status)) return;
         player.activeCards = data.cards;
+        
+        // Update statistics
+        room.stats.totalCardsSold = Object.values(room.players).reduce((sum, p) => sum + p.activeCards.length, 0);
+        
         io.to(code).emit("room_updated", room);
       }
     });
@@ -452,6 +474,15 @@ async function startServer() {
                 stopAutoCaller(code);
                 room.status = 'next_round';
                 room.nextRoundEndsAt = Date.now() + 60_000;
+                
+                // Record winner and increment games played
+                room.stats.gamesPlayed += 1;
+                room.stats.winners.push({
+                   name: claim.playerName,
+                   pattern: claim.pattern,
+                   round: room.roundNumber
+                });
+
                 if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
                 nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 60_000);
                 io.to(code).emit("winner_announced", claim);

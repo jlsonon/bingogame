@@ -13,6 +13,7 @@ export default function Landing() {
   const [localName, setLocalName] = useState(nickname);
   const [localColor, setLocalColor] = useState(avatarColor);
   const [joinCode, setJoinCode] = useState('');
+  const [cardCount, setCardCount] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -30,6 +31,7 @@ export default function Landing() {
     
     setLoading(true);
     setProfile(localName, localColor);
+    localStorage.setItem('bingo_initial_cards', String(cardCount));
     const success = await joinRoom(joinCode);
     if (success) {
       navigate(`/play/${joinCode.toUpperCase()}`);
@@ -56,71 +58,88 @@ export default function Landing() {
             <span className="text-3xl font-black">L</span>
           </div>
           <h1 className="text-4xl font-black tracking-tight leading-none text-[#EA580C] mb-2 uppercase">LuckyBingo</h1>
-          <p className="text-[#A19B91] text-xs font-bold uppercase tracking-widest">Community Edition</p>
+          <p className="text-[#A19B91] text-xs font-bold uppercase tracking-widest">Digital Bingo Hall</p>
         </div>
 
         <div className="space-y-6">
           <div className="space-y-1">
-            <label className="text-sm font-bold text-slate-700">Your Nickname</label>
+            <label className="text-xs font-black text-[#7A746B] uppercase tracking-widest ml-1">Your Nickname</label>
             <input 
               type="text" 
-              placeholder="e.g. Kuya John"
+              placeholder="e.g. Juan Dela Cruz"
               value={localName}
               onChange={e => { setLocalName(e.target.value); setError(''); }}
-              className="w-full px-4 py-3 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-xl focus:outline-none focus:border-[#0D9488] font-medium transition-colors text-lg text-[#3D3A35]"
+              className="w-full px-4 py-3 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-bold transition-colors text-lg text-[#3D3A35]"
               maxLength={12}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">Choose Color</label>
-            <div className="flex gap-2 justify-between">
+            <label className="text-xs font-black text-[#7A746B] uppercase tracking-widest ml-1">Pick your color</label>
+            <div className="flex gap-2 justify-between px-1">
               {COLORS.map(color => (
                 <button
                   key={color}
                   onClick={() => setLocalColor(color)}
-                  className={`w-8 h-8 rounded-full transition-transform ${localColor === color ? 'scale-125 ring-2 ring-offset-2 ring-slate-800' : 'hover:scale-110'}`}
+                  className={`w-9 h-9 rounded-full transition-all ${localColor === color ? 'scale-110 ring-4 ring-offset-2 ring-slate-200 shadow-md' : 'hover:scale-105'}`}
                   style={{ backgroundColor: color }}
                 />
               ))}
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 flex gap-3">
-             <input 
-                type="text" 
-                placeholder="ROOM CODE"
-                value={joinCode}
-                onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError(''); }}
-                className="w-1/2 px-4 py-4 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-black text-center text-xl tracking-widest uppercase text-[#3D3A35]"
-                maxLength={4}
-              />
+          <div className="pt-6 border-t-2 border-[#FAF7F2] space-y-4">
+              <div className="flex gap-3">
+                 <input 
+                    type="text" 
+                    placeholder="CODE"
+                    value={joinCode}
+                    onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError(''); }}
+                    className="w-1/3 px-4 py-4 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-black text-center text-2xl tracking-[0.2em] uppercase text-[#3D3A35]"
+                    maxLength={4}
+                  />
+                  <div className="flex-1 flex flex-col gap-1.5">
+                     <label className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest ml-1">Buy Cards</label>
+                     <div className="flex gap-1.5 h-full">
+                        {[1, 2, 3, 4].map(num => (
+                           <button
+                             key={num}
+                             onClick={() => setCardCount(num)}
+                             className={`flex-1 rounded-xl font-black text-sm border-2 transition-all ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
+                           >
+                             {num}
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+              </div>
+
               <button 
                 onClick={handleJoin}
                 disabled={loading}
-                className="flex-1 bg-[#EA580C] text-white rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-2 shadow-[0_6px_0_#9A3412] active:translate-y-[6px] active:shadow-none touch-manipulation uppercase tracking-tighter"
+                className="w-full bg-[#EA580C] text-white py-5 rounded-[24px] font-black text-xl transition-all flex items-center justify-center gap-3 shadow-[0_8px_0_#9A3412] active:translate-y-[8px] active:shadow-none touch-manipulation uppercase tracking-widest"
               >
-                <PlayCircle size={24} />
-                JOIN
+                <PlayCircle size={28} fill="currentColor" />
+                Join Game
               </button>
           </div>
 
           <div className="relative flex items-center justify-center py-2">
-            <div className="absolute border-t border-slate-200 w-full" />
-            <span className="relative bg-white px-4 text-xs font-bold text-[#A19B91] uppercase tracking-wider">or</span>
+            <div className="absolute border-t-2 border-[#FAF7F2] w-full" />
+            <span className="relative bg-white px-4 text-[10px] font-black text-[#DED9D1] uppercase tracking-[0.3em]">Venue Host</span>
           </div>
 
           <button 
             onClick={handleHost}
             disabled={loading}
-            className="w-full py-4 bg-[#F3EFE9] border border-[#DED9D1] text-[#3D3A35] rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2 active:translate-y-1 touch-manipulation"
+            className="w-full py-4 bg-[#F3EFE9] border-2 border-[#DED9D1] text-[#7A746B] rounded-[24px] font-black text-sm transition-all flex items-center justify-center gap-2 active:translate-y-1 touch-manipulation uppercase tracking-widest"
           >
-            <Users size={24} />
+            <Users size={20} />
             Host New Room
           </button>
 
           {error && (
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-500 font-bold text-center text-sm">
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-500 font-black text-center text-xs uppercase tracking-wider">
               {error}
             </motion.p>
           )}

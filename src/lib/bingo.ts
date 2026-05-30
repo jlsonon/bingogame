@@ -80,9 +80,9 @@ export function checkValidWin(
   called: number[],
   mode: GameMode | string,
   patterns: BingoPattern[] = DEFAULT_BINGO_PATTERNS
-): { valid: boolean, pattern: string } {
+): { valid: boolean, pattern: string, cellsAway: number } {
   const falseClaims = marked.filter(m => m !== 0 && !called.includes(m));
-  if (falseClaims.length > 0) return { valid: false, pattern: '' };
+  if (falseClaims.length > 0) return { valid: false, pattern: '', cellsAway: 99 };
 
   const isMarkedIndex = (index: number) => {
     const r = Math.floor(index / 5);
@@ -91,37 +91,52 @@ export function checkValidWin(
     return val === 0 || marked.includes(val);
   };
 
-  const hasDikit = () => {
+  const getDikitAway = () => {
+    let maxAdj = 0;
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 4; c++) {
-        if (isMarkedIndex(r * 5 + c) && isMarkedIndex(r * 5 + c + 1)) {
-          return true;
-        }
+        let count = 0;
+        if (isMarkedIndex(r * 5 + c)) count++;
+        if (isMarkedIndex(r * 5 + c + 1)) count++;
+        maxAdj = Math.max(maxAdj, count);
       }
     }
-    return false;
+    return 2 - maxAdj;
   };
 
   if (mode === 'Dikit') {
-    return { valid: hasDikit(), pattern: hasDikit() ? 'Dikit' : '' };
+    const away = getDikitAway();
+    return { valid: away === 0, pattern: away === 0 ? 'Dikit' : '', cellsAway: away };
   }
 
   if (mode === 'Blackout') {
-    const all = Array.from({ length: 25 }, (_, i) => i).every(isMarkedIndex);
-    return { valid: all, pattern: all ? 'Blackout' : '' };
+    const markedCount = Array.from({ length: 25 }, (_, i) => i).filter(isMarkedIndex).length;
+    const away = 25 - markedCount;
+    return { valid: away === 0, pattern: away === 0 ? 'Blackout' : '', cellsAway: away };
   }
+
+  let minAway = 99;
+  let bestPattern = '';
 
   for (const pattern of patterns.length ? patterns : DEFAULT_BINGO_PATTERNS) {
     if (pattern.match === 'dikit') {
-      if (hasDikit()) return { valid: true, pattern: pattern.name };
+      const away = getDikitAway();
+      if (away === 0) return { valid: true, pattern: pattern.name, cellsAway: 0 };
+      minAway = Math.min(minAway, away);
       continue;
     }
 
-    const winner = patternCellsFor(pattern).some(cells =>
-      cells.length > 0 && cells.every(isMarkedIndex)
-    );
-    if (winner) return { valid: true, pattern: pattern.name };
+    const sets = patternCellsFor(pattern);
+    for (const cells of sets) {
+       if (cells.length === 0) continue;
+       const missing = cells.filter(idx => !isMarkedIndex(idx)).length;
+       if (missing === 0) return { valid: true, pattern: pattern.name, cellsAway: 0 };
+       if (missing < minAway) {
+          minAway = missing;
+          bestPattern = pattern.name;
+       }
+    }
   }
 
-  return { valid: false, pattern: '' };
+  return { valid: false, pattern: bestPattern, cellsAway: minAway };
 }

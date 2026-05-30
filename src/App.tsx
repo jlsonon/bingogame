@@ -5,6 +5,7 @@ import { useGameStore } from './store/gameStore';
 import Landing from './pages/Landing';
 import Host from './pages/Host';
 import Player from './pages/Player';
+import Display from './pages/Display';
 
 export default function App() {
   const connect = useGameStore(s => s.connect);
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/host/:code" element={<Host />} />
           <Route path="/play/:code" element={<Player />} />
+          <Route path="/display/:code" element={<Display />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
