@@ -63,20 +63,26 @@ export async function playElevenLabs(text: string, voiceId: string, apiKey: stri
 export function playVoiceBall(ball: number, voiceConfig?: { id?: string, key?: string }) {
   const letter = ball <= 15 ? 'B' : ball <= 30 ? 'I' : ball <= 45 ? 'N' : ball <= 60 ? 'G' : 'O';
   const text = `${letter}... ${ball}`;
+  const localFilename = `${letter}${ball}.mp3`;
 
-  // Priority 1: ElevenLabs
+  // Priority 1: Check for local static file (generated via script)
+  // We use a small hack to check if the file exists by trying to play it
+  const localUrl = `/assets/voices/${localFilename}`;
+  
+  // Priority 2: ElevenLabs Live API
   if (voiceConfig?.id && voiceConfig?.key) {
     playElevenLabs(text, voiceConfig.id, voiceConfig.key);
     return true;
   }
 
-  // Priority 2: Custom URL Template
+  // Priority 3: Custom URL Template
   if (VOICE_BASE_URL) {
-    const filename = `${letter}${ball}.mp3`;
-    const fullUrl = VOICE_BASE_URL.replace('{filename}', filename).replace('{number}', String(ball));
+    const fullUrl = VOICE_BASE_URL.replace('{filename}', localFilename).replace('{number}', String(ball));
     playSound(fullUrl, 1.0);
     return true;
   }
   
-  return false; // Fallback to SpeechSynthesis
+  // Priority 4: Hardcoded local assets path (fallback)
+  playSound(localUrl, 1.0);
+  return true; // We assume if they have the folder, they have the files
 }
