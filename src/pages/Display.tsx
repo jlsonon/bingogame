@@ -22,6 +22,7 @@ export default function Display() {
   const { code } = useParams();
   const navigate = useNavigate();
   
+  // Atomic Selectors
   const socket = useGameStore(s => s.socket);
   const room = useGameStore(s => s.room);
   const latestBall = useGameStore(s => s.latestBall);
@@ -30,17 +31,29 @@ export default function Display() {
   const connect = useGameStore(s => s.connect);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
   const dismissDikit = useGameStore(s => s.dismissDikit);
-const [lastBalls, setLastBalls] = useState<number[]>([]);
-const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
-const [audioEnabled, setAudioEnabled] = useState(false);
-const [elevenApiKey, setElevenApiKey] = useState(localStorage.getItem('bingo_eleven_key') || '');
-const [showAudioSettings, setShowSettings] = useState(false);
 
-useEffect(() => {
-  localStorage.setItem('bingo_eleven_key', elevenApiKey);
-}, [elevenApiKey]);
+  const [lastBalls, setLastBalls] = useState<number[]>([]);
+  const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  
+  // Hall Ambience & Ducking
+  const ambienceRef = useRef<HTMLAudioElement | null>(null);
 
-// UX Spectacle State
+  useEffect(() => {
+    if (audioEnabled && room?.ambienceEnabled) {
+      if (!ambienceRef.current) {
+        ambienceRef.current = new Audio('https://www.soundjay.com/misc/sounds/ambient-crowd-1.mp3');
+        ambienceRef.current.loop = true;
+        ambienceRef.current.volume = 0.15; // Soft background
+      }
+      ambienceRef.current.play().catch(e => console.warn('Ambience blocked:', e));
+    } else {
+      ambienceRef.current?.pause();
+    }
+    return () => ambienceRef.current?.pause();
+  }, [audioEnabled, room?.ambienceEnabled]);
+
+  // UX Spectacle State
   const [showHypeIntro, setShowHypeIntro] = useState(false);
   const [hypeCountdown, setHypeCountdown] = useState(3);
   const [showPatternFlash, setShowPatternFlash] = useState(false);
@@ -92,15 +105,15 @@ useEffect(() => {
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }, [connect]);
 
-  // Voice Trigger logic
+  // Voice Trigger logic with Ducking
   useEffect(() => {
     if (latestBall && audioEnabled) {
       playSound(SOUNDS.BALL_DRAW, 0.4);
       
-      const voiceTriggered = playVoiceBall(latestBall, {
-         id: room?.voiceId,
-         key: elevenApiKey
-      });
+      // DUCK AMBIENCE
+      if (ambienceRef.current) ambienceRef.current.volume = 0.05;
+      
+      const voiceTriggered = playVoiceBall(latestBall, room?.voiceMode || 'robotic');
       
       if (!voiceTriggered) {
         window.speechSynthesis.cancel();
@@ -108,10 +121,19 @@ useEffect(() => {
         const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
         if (maleVoice) utterance.voice = maleVoice;
         utterance.rate = 0.85;
+        utterance.onend = () => {
+           // RESTORE AMBIENCE
+           if (ambienceRef.current) ambienceRef.current.volume = 0.15;
+        };
         window.speechSynthesis.speak(utterance);
+      } else {
+         // If using custom/file voice, restore after 2 seconds (typical call duration)
+         setTimeout(() => {
+            if (ambienceRef.current) ambienceRef.current.volume = 0.15;
+         }, 2500);
       }
     }
-  }, [latestBall, maleVoice, audioEnabled]);
+  }, [latestBall, maleVoice, audioEnabled, room?.voiceMode]);
 
   const enableAudio = () => {
      setAudioEnabled(true);
@@ -153,7 +175,7 @@ useEffect(() => {
 
       <AnimatePresence>
          {showPatternFlash && (
-            <motion.div initial={{ opacity: 0, scale: 1.2 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="fixed inset-0 z-[105] bg-[#3D3A35]/95 backdrop-blur-xl flex flex-col items-center justify-center text-white p-12 text-center">
+            <motion.div initial={{ opacity: 0, scale: 1.2 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="fixed inset-0 z-[105] bg-[#3D3A35]/95 backdrop-blur-xl flex flex-col items-center justify-center text-white p-12 text-center" >
                <div className="mb-12"><div className="text-xl font-black uppercase tracking-[0.4em] text-[#EA580C] mb-4">Target Pattern</div><h2 className="font-display text-9xl uppercase tracking-tighter italic">{room.mode}</h2></div>
                <div className="bg-white p-16 rounded-[64px] shadow-[0_0_100px_rgba(250,204,21,0.2)]"><PatternVisualizer patterns={room.patterns} className="scale-[3] origin-center" /></div>
                <div className="mt-16 text-2xl font-bold opacity-60 uppercase tracking-widest animate-pulse">Round Starting Now</div>
@@ -161,38 +183,11 @@ useEffect(() => {
          )}
       </AnimatePresence>
 
-      {/* Audio Unlock Overlay */}
       {!audioEnabled && (
-         <div className="fixed inset-0 z-[100] bg-[#3D3A35]/60 backdrop-blur-md flex flex-col items-center justify-center p-6">
-            <div className="bg-white rounded-[48px] p-12 border-[8px] border-[#EA580C] shadow-2xl flex flex-col items-center gap-8 max-w-lg w-full text-center">
-               <button 
-                  onClick={enableAudio}
-                  className="bg-[#EA580C] text-white px-12 py-8 rounded-[40px] font-display text-4xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center gap-4 border-4 border-white tracking-widest uppercase italic w-full"
-               >
-                  <Monitor size={64} />
-                  ENABLE BINGO ANNOUNCER
-               </button>
-
-               <div className="w-full pt-8 border-t-2 border-[#FAF7F2] space-y-4">
-                  <div className="flex items-center justify-center gap-2 text-[#A19B91]">
-                     <Settings2 size={16} />
-                     <span className="text-xs font-black uppercase tracking-widest">Advanced Audio (Optional)</span>
-                  </div>
-                  <div className="space-y-1.5">
-                     <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest block text-left ml-2">ElevenLabs API Key</label>
-                     <input 
-                        type="password"
-                        placeholder="Paste your API Key here"
-                        value={elevenApiKey}
-                        onChange={e => setElevenApiKey(e.target.value)}
-                        className="w-full p-4 bg-[#FAF7F2] rounded-2xl border-2 border-[#E8E2D9] font-bold text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]"
-                     />
-                     <p className="text-[9px] text-[#A19B91] font-bold uppercase leading-tight mt-2 italic px-2">
-                        Get yours at <span className="text-[#0D9488]">elevenlabs.io</span>. Keys are saved locally on this machine only.
-                     </p>
-                  </div>
-               </div>
-            </div>
+         <div className="fixed inset-0 z-[100] bg-[#3D3A35]/60 backdrop-blur-md flex items-center justify-center">
+            <button onClick={enableAudio} className="bg-[#EA580C] text-white px-12 py-8 rounded-[40px] font-display text-4xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center gap-4 border-4 border-white tracking-widest uppercase italic">
+               <Monitor size={64} />ENABLE ANNOUNCER
+            </button>
          </div>
       )}
 
@@ -275,34 +270,15 @@ useEffect(() => {
         </div>
       </main>
 
-      {/* Sponsor Banner - Professional Event Look */}
       <footer className="h-16 bg-white border-t-4 border-[#E8E2D9] px-12 flex items-center justify-center relative overflow-hidden shrink-0">
          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#EA580C]/5 to-transparent opacity-50" />
-         <motion.div 
-            animate={{ x: [400, -400] }}
-            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            className="flex items-center gap-4 text-[#A19B91] font-black text-xs uppercase tracking-[0.4em] whitespace-nowrap"
-         >
-            <span>Powered by Lucky Bingo</span>
-            <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
-            <span>Community Event Night</span>
-            <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
-            <span>Good Luck to All Players!</span>
-            <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
-            <span>Check Your Cards!</span>
-         </motion.div>
+         <motion.div animate={{ x: [400, -400] }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }} className="flex items-center gap-4 text-[#A19B91] font-black text-xs uppercase tracking-[0.4em] whitespace-nowrap"><span>Powered by Lucky Bingo</span><div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" /><span>Community Event Night</span><div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" /><span>Good Luck to All Players!</span><div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" /><span>Check Your Cards!</span></motion.div>
       </footer>
 
       <AnimatePresence>
          {dikitAlert && (
             <motion.div initial={{ y: -200, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -200, opacity: 0 }} className="fixed top-24 left-1/2 -translate-x-1/2 z-[120] bg-[#0D9488] text-white p-8 rounded-[48px] shadow-[0_40px_100px_rgba(0,0,0,0.5)] border-8 border-white flex flex-col items-center gap-6 w-full max-w-2xl">
-               <div className="text-center">
-                  <div className="text-xs font-black uppercase tracking-[0.4em] opacity-80 mb-2">{dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Hit!'}</div>
-                  <div className="text-6xl font-display italic tracking-tighter">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div>
-                  <div className="text-sm font-black uppercase tracking-[0.3em] opacity-60 mt-2 italic">
-                     Game resuming in <Countdown endsAt={room.dikitEndsAt} />
-                  </div>
-               </div>
+               <div className="text-center"><div className="text-xs font-black uppercase tracking-[0.4em] opacity-80 mb-2">{dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Hit!'}</div><div className="text-6xl font-display italic tracking-tighter">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div><div className="text-sm font-black uppercase tracking-[0.3em] opacity-60 mt-2 italic">Game resuming in <Countdown endsAt={room.dikitEndsAt} /></div></div>
                <div className="flex gap-8 overflow-x-auto w-full pb-4 px-4 scrollbar-hide justify-center">
                   {dikitAlert.map((alert: any, aIdx: number) => (
                      <div key={aIdx} className="bg-white/10 p-6 rounded-[32px] border-2 border-white/20 shrink-0"><div className="text-center text-sm font-black mb-4 uppercase tracking-widest">{alert.playerName}</div><div className="grid grid-cols-5 gap-1.5">{alert.card.map((row: any)=> row.map((num: any, idx: number) => { const called = num === 0 || room.calledNumbers.includes(num); return (<div key={idx} className={`w-10 h-10 flex items-center justify-center font-display text-xs rounded-xl border-2 ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md scale-105' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>{num === 0 ? 'FR' : num}</div>) }))}</div></div>

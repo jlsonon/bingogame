@@ -10,6 +10,8 @@ import { z } from "zod";
 const SettingsSchema = z.object({
   mode: z.enum(['Bingo', 'Blackout', 'Dikit']).optional(),
   autoCallSpeed: z.number().min(0).optional(),
+  voiceMode: z.enum(['robotic', 'custom']).optional(),
+  ambienceEnabled: z.boolean().optional(),
   voiceId: z.string().max(64).optional(),
   roundName: z.string().max(40).optional(),
   prizeText: z.string().max(80).optional(),
@@ -53,6 +55,8 @@ interface Room {
   roundName: string;
   roundNumber: number;
   autoCallSpeed: number; // in seconds, 0 means manual
+  voiceMode: 'robotic' | 'custom';
+  ambienceEnabled: boolean;
   voiceId: string;
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
@@ -282,6 +286,8 @@ io.on("connection", (socket: Socket) => {
         roundName: 'Round 1',
         roundNumber: 1,
         autoCallSpeed: 0,
+        voiceMode: 'robotic',
+        ambienceEnabled: false,
         voiceId: '24JGmqE2AvYy6abpAy3g',
         patterns: DEFAULT_BINGO_PATTERNS,
         claims: [],
@@ -430,6 +436,8 @@ io.on("connection", (socket: Socket) => {
         const settings = data.settings || {};
         if (settings.mode) room.mode = settings.mode;
         if (typeof settings.autoCallSpeed === 'number') room.autoCallSpeed = settings.autoCallSpeed;
+        if (settings.voiceMode) room.voiceMode = settings.voiceMode;
+        if (typeof settings.ambienceEnabled === 'boolean') room.ambienceEnabled = settings.ambienceEnabled;
         if (settings.voiceId) room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
         if (settings.roundName) room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
         if (settings.prizeText) room.prizeText = sanitizeText(settings.prizeText, '', 80);
