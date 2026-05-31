@@ -6,6 +6,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { getBallLetter } from '../lib/bingo';
 import { Trophy, Users, Ticket, PlayCircle, Monitor, Eye } from 'lucide-react';
+import { SOUNDS, playSound, playVoiceBall } from '../lib/sounds';
+
+function Countdown({ endsAt }: { endsAt?: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.ceil(((endsAt || now) - now) / 1000));
+  return <span className="tabular-nums">{seconds}s</span>;
+}
 
 export default function Display() {
   const { code } = useParams();
@@ -75,14 +86,21 @@ export default function Display() {
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }, [connect]);
 
+  // Voice Trigger logic
   useEffect(() => {
     if (latestBall && audioEnabled) {
-      window.speechSynthesis.cancel();
-      const letter = getBallLetter(latestBall);
-      const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
-      if (maleVoice) utterance.voice = maleVoice;
-      utterance.rate = 0.85;
-      window.speechSynthesis.speak(utterance);
+      playSound(SOUNDS.BALL_DRAW, 0.4);
+      
+      const voiceTriggered = playVoiceBall(latestBall);
+      
+      if (!voiceTriggered) {
+        window.speechSynthesis.cancel();
+        const letter = getBallLetter(latestBall);
+        const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
+        if (maleVoice) utterance.voice = maleVoice;
+        utterance.rate = 0.85;
+        window.speechSynthesis.speak(utterance);
+      }
     }
   }, [latestBall, maleVoice, audioEnabled]);
 
@@ -99,9 +117,14 @@ export default function Display() {
 
   useEffect(() => {
     if (winner) {
+      if (room?.mode === 'Blackout') {
+         playSound(SOUNDS.JACKPOT_WIN, 1.0);
+      } else {
+         playSound(SOUNDS.BINGO_WIN, 0.8);
+      }
       confetti({ particleCount: 200, spread: 70, origin: { y: 0.6 }, colors: ['#FACC15', '#EA580C', '#0D9488'] });
     }
-  }, [winner]);
+  }, [winner, room?.mode]);
 
   if (!room) return null;
 
@@ -219,7 +242,13 @@ export default function Display() {
       <AnimatePresence>
          {dikitAlert && (
             <motion.div initial={{ y: -200, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -200, opacity: 0 }} className="fixed top-24 left-1/2 -translate-x-1/2 z-[120] bg-[#0D9488] text-white p-8 rounded-[48px] shadow-[0_40px_100px_rgba(0,0,0,0.5)] border-8 border-white flex flex-col items-center gap-6 w-full max-w-2xl">
-               <div className="text-center"><div className="text-xs font-black uppercase tracking-[0.4em] opacity-80 mb-2">Sidequest Hit!</div><div className="text-6xl font-display italic tracking-tighter">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div></div>
+               <div className="text-center">
+                  <div className="text-xs font-black uppercase tracking-[0.4em] opacity-80 mb-2">{dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Hit!'}</div>
+                  <div className="text-6xl font-display italic tracking-tighter">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div>
+                  <div className="text-sm font-black uppercase tracking-[0.3em] opacity-60 mt-2 italic">
+                     Game resuming in <Countdown endsAt={room.dikitEndsAt} />
+                  </div>
+               </div>
                <div className="flex gap-8 overflow-x-auto w-full pb-4 px-4 scrollbar-hide justify-center">
                   {dikitAlert.map((alert: any, aIdx: number) => (
                      <div key={aIdx} className="bg-white/10 p-6 rounded-[32px] border-2 border-white/20 shrink-0"><div className="text-center text-sm font-black mb-4 uppercase tracking-widest">{alert.playerName}</div><div className="grid grid-cols-5 gap-1.5">{alert.card.map((row: any)=> row.map((num: any, idx: number) => { const called = num === 0 || room.calledNumbers.includes(num); return (<div key={idx} className={`w-10 h-10 flex items-center justify-center font-display text-xs rounded-xl border-2 ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md scale-105' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>{num === 0 ? 'FR' : num}</div>) }))}</div></div>

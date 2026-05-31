@@ -29,6 +29,7 @@ export interface Room {
   autoCallSpeed: number;
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
+  dikitEndsAt?: number;
   claims: any[];
   hidePattern: boolean;
   dikitWinners: any[];

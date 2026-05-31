@@ -33,6 +33,7 @@ interface Room {
   autoCallSpeed: number; // in seconds, 0 means manual
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
+  dikitEndsAt?: number;
   claims: any[];
   hidePattern: boolean;
   dikitWinners: any[];
@@ -519,9 +520,7 @@ io.on("connection", (socket: Socket) => {
       if (room && player && room.status === 'playing') {
         if (room.dikitWinners.some(w => w.playerId === player.id)) return; 
         
-        // If grace timer is already null/deleted but dikitWinners has items, the window closed.
-        if (room.dikitWinners.length > 0 && !dikitGraceTimers[code]) return;
-        
+        // If grace window is already active, just add the winner
         const card = player.activeCards[data.cardIndex];
         if (!isValidCard(card)) return;
         
@@ -537,9 +536,30 @@ io.on("connection", (socket: Socket) => {
         room.dikitWinners.push(dikitClaim);
         
         if (!dikitGraceTimers[code]) {
+          // FIRST DIKIT HIT - Pause game and start spectacle
+          const wasAutoCalling = !!autoCallTimers[code];
+          stopAutoCaller(code);
+          const originalStatus = room.status;
+          room.status = 'paused';
+          room.dikitEndsAt = Date.now() + 10_000;
+          io.to(code).emit("room_updated", room);
+
           dikitGraceTimers[code] = setTimeout(() => {
              delete dikitGraceTimers[code];
              io.to(code).emit("dikit_winners_announced", room.dikitWinners);
+             
+             // After 10 seconds total (grace + view time), resume game
+             setTimeout(() => {
+                const currentRoom = rooms[code];
+                if (currentRoom && currentRoom.status === 'paused') {
+                   currentRoom.status = 'playing';
+                   currentRoom.dikitEndsAt = undefined;
+                   io.to(code).emit("room_updated", currentRoom);
+                   if (wasAutoCalling && currentRoom.autoCallSpeed > 0) {
+                      startAutoCaller(code, io);
+                   }
+                }
+             }, 7000); // 3s grace + 7s extra view = 10s total pause
           }, 3000);
         }
       }

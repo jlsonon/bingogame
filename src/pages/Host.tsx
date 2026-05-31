@@ -7,6 +7,7 @@ import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin } from '../lib/bingo';
+import { SOUNDS, setVoiceBaseUrl } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
   const [now, setNow] = useState(Date.now());
@@ -66,7 +67,13 @@ export default function Host() {
   const [copyLabel, setCopyLabel] = useState('Copy');
   const [customName, setCustomName] = useState('Custom Pattern');
   const [customCells, setCustomCells] = useState<number[]>([12]);
-  
+  const [voiceUrl, setVoiceUrl] = useState(localStorage.getItem('bingo_voice_url') || '');
+
+  useEffect(() => {
+    localStorage.setItem('bingo_voice_url', voiceUrl);
+    setVoiceBaseUrl(voiceUrl);
+  }, [voiceUrl]);
+
   // Persistent Pattern Library
   const [patternLibrary, setPatternLibrary] = useState<BingoPattern[]>(() => {
      const saved = localStorage.getItem('bingo_pattern_library');
@@ -237,7 +244,36 @@ export default function Host() {
               <div className="flex justify-between items-center mb-8"><h2 className="text-3xl font-black uppercase tracking-tighter">Room Config</h2><button onClick={() => setShowSettings(false)} className="text-[#A19B91] hover:text-[#3D3A35]"><Plus size={24} className="rotate-45" /></button></div>
               <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar"><div className="grid grid-cols-2 gap-4"><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Round Name</label><input value={room.roundName} onChange={e => updateSettings({ roundName: e.target.value })} className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none" maxLength={40} /></div><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Prize Info</label><input value={room.prizeText} onChange={e => updateSettings({ prizeText: e.target.value })} placeholder="Optional prize" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]" maxLength={80} /></div></div><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Game Mode</label><div className="flex gap-2">{['Bingo', 'Blackout', 'Dikit'].map(m => (<button key={m} onClick={() => updateSettings({ mode: m })} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${room.mode === m ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#A19B91]'}`}>{m === 'Bingo' ? 'Standard' : m}</button>))}</div></div>
                  {room.mode === 'Bingo' && (<div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]"><div className="space-y-2"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Pattern Library</label><div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar border-2 border-[#FAF7F2] rounded-2xl p-2 bg-[#FAF7F2]/50"><div className="grid grid-cols-2 gap-2">{[...PRESET_PATTERNS, ...patternLibrary].map(pattern => { const selected = room.patterns.some(item => item.id === pattern.id); const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id); return (<div key={pattern.id} className="relative group"><button type="button" onClick={() => togglePattern(pattern)} className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}>{pattern.name}{selected && <div className="absolute top-1 right-1 w-2 h-2 bg-white rounded-full" />}</button>{!isPreset && (<button onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"><Plus size={8} className="rotate-45" strokeWidth={5} /></button>)}</div>); })}</div></div></div><div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4 shadow-inner"><div className="flex justify-between items-center"><span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Draw Custom</span><input value={customName} onChange={e => setCustomName(e.target.value)} className="bg-white px-3 py-1 rounded-lg border-2 border-[#E8E2D9] font-bold text-[10px] focus:border-[#0D9488] outline-none" maxLength={28} placeholder="Pattern Name" /></div><div className="flex justify-center"><PatternGrid cells={customCells} onToggle={cell => setCustomCells(prev => { if (cell === 12) return prev; return prev.includes(cell) ? prev.filter(item => item !== cell) : [...prev, cell]; })} /></div><button type="button" onClick={addCustomPattern} className="w-full bg-[#3D3A35] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest active:translate-y-1 shadow-md">Add to Round</button></div></div>)}
-                 <div className="pt-4 border-t-2 border-[#FAF7F2]"><div className="flex items-center justify-between bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex flex-col"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Mystery Mode</span><span className="text-[10px] font-bold text-[#A19B91] uppercase tracking-tighter">Hide winning pattern from screens</span></div><button onClick={() => updateSettings({ hidePattern: !room.hidePattern })} className={`w-14 h-8 rounded-full transition-all relative ${room.hidePattern ? 'bg-[#0D9488]' : 'bg-[#DED9D1]'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${room.hidePattern ? 'left-7' : 'left-1'}`} /></button></div></div></div><button onClick={() => setShowSettings(false)} className="mt-8 w-full bg-[#3D3A35] text-white py-4 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">Save & Close</button></div></div>)}
+                 <div className="pt-4 border-t-2 border-[#FAF7F2]">
+                    <div className="flex items-center justify-between bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]">
+                       <div className="flex flex-col">
+                          <span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Mystery Mode</span>
+                          <span className="text-[10px] font-bold text-[#A19B91] uppercase tracking-tighter">Hide winning pattern from screens</span>
+                       </div>
+                       <button
+                          onClick={() => updateSettings({ hidePattern: !room.hidePattern })}
+                          className={`w-14 h-8 rounded-full transition-all relative ${room.hidePattern ? 'bg-[#0D9488]' : 'bg-[#DED9D1]'}`}
+                       >
+                          <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${room.hidePattern ? 'left-7' : 'left-1'}`} />
+                       </button>
+                    </div>
+                 </div>
+
+                 <div className="pt-4 border-t-2 border-[#FAF7F2]">
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Custom Voice URL Template</label>
+                       <input
+                         value={voiceUrl}
+                         onChange={e => setVoiceUrl(e.target.value)}
+                         placeholder="https://site.com/voices/{filename}"
+                         className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-bold text-xs focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]"
+                       />
+                       <p className="text-[8px] text-[#A19B91] font-bold uppercase leading-tight mt-1 px-1">
+                          Use <span className="text-[#EA580C]">{'{filename}'}</span> for B12.mp3 or <span className="text-[#EA580C]">{'{number}'}</span> for 12.
+                       </p>
+                    </div>
+                 </div>
+                 </div><button onClick={() => setShowSettings(false)} className="mt-8 w-full bg-[#3D3A35] text-white py-4 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">Save & Close</button></div></div>)}
 
       {room.claims.length > 0 && !winner && (
         <div className="fixed inset-0 bg-[#3D3A35]/80 backdrop-blur-md flex justify-center items-center z-50 p-4"><div className="bg-white rounded-[48px] w-full max-w-xl overflow-hidden shadow-2xl flex flex-col border-[8px] border-[#EA580C]"><div className="bg-[#EA580C] text-white p-8 text-center relative"><div className="absolute top-4 right-6 bg-white/20 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest">Claim {room.verifiedWinners?.length + 1 || 1} of {(room.claims.length || 0) + (room.verifiedWinners?.length || 0)}</div><h2 className="text-5xl font-black uppercase tracking-tighter italic drop-shadow-md mb-2">Bingo Claim!</h2><p className="text-xl font-bold opacity-90">{room.claims[0].playerName} called Bingo</p></div><div className="p-8 overflow-y-auto flex flex-col items-center gap-8"><div className="bg-[#FAF7F2] p-8 rounded-[40px] border-4 border-[#E8E2D9] shadow-inner scale-110"><div className="grid grid-cols-5 gap-2">{['B','I','N','G','O'].map(l => <div key={l} className="text-center font-black text-[#A19B91] text-xl mb-2">{l}</div>)}{room.claims[0].card.map((row: any)=> row.map((num: any, idx: number) => { const called = num === 0 || room.calledNumbers.includes(num); return (<div key={idx} className={`w-14 h-14 flex items-center justify-center font-black text-xl rounded-xl border-2 transition-all ${num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-lg scale-105' : 'bg-white border-[#E8E2D9] text-[#DED9D1]'}`}>{num === 0 ? 'FR' : num}</div>) }))}</div></div><div className="w-full bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9] flex justify-between items-center px-8"><div className="flex flex-col"><span className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">Claimed Pattern</span><span className="text-2xl font-black text-[#EA580C] uppercase italic leading-none">{room.claims[0].pattern}</span></div><Trophy className="text-[#EA580C]" size={40} /></div></div><div className="p-8 bg-[#FAF7F2] border-t-4 border-[#E8E2D9] flex gap-4"><button onClick={() => verifyClaim(room.claims[0].id, false)} className="flex-1 py-5 bg-white border-4 border-[#E8E2D9] text-[#7A746B] rounded-[24px] font-black text-lg uppercase tracking-widest active:translate-y-1 transition-all">Reject</button><button onClick={() => verifyClaim(room.claims[0].id, true)} className="flex-1 py-5 bg-[#0D9488] text-white rounded-[24px] font-black text-2xl uppercase tracking-widest shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all">Verify & Win</button></div></div></div>)}

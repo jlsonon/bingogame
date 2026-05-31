@@ -7,6 +7,7 @@ import { generateRandomCard, checkValidWin, getBallLetter, checkDikitSidequest }
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Plus, Trash2, ArrowLeft, ArrowRight, Loader, LayoutGrid, Eye, History, Settings2, Trophy, CheckCircle2, Users, Ticket } from 'lucide-react';
+import { SOUNDS, playSound } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
   const [now, setNow] = useState(Date.now());
@@ -119,6 +120,11 @@ export default function Player() {
 
   useEffect(() => {
     if (winner) {
+      if (room?.mode === 'Blackout') {
+         playSound(SOUNDS.JACKPOT_WIN, 1.0);
+      } else {
+         playSound(SOUNDS.BINGO_WIN, 0.8);
+      }
       const iWon = winner.some((w: any) => w.playerId === me?.id);
       if (iWon) {
          confetti({ particleCount: 300, spread: 100, origin: { y: 0.5 } });
@@ -183,11 +189,12 @@ export default function Player() {
     }
     const nearWinIdx = cardStatus.findIndex(status => status.win.cellsAway === 1);
     if (nearWinIdx !== -1 && room?.status === 'playing') {
+       if (nearWinAlert === null) playSound(SOUNDS.NEAR_BINGO, 0.6);
        setNearWinAlert(`Card ${nearWinIdx + 1} is 1 away!`);
     } else {
        setNearWinAlert(null);
     }
-  }, [cardStatus, room?.status, winningCardIdx]);
+  }, [cardStatus, room?.status, winningCardIdx, nearWinAlert]);
 
   const handleClaim = () => {
     if (winningCardIdx !== -1 && room?.status === 'playing') {
@@ -198,6 +205,7 @@ export default function Player() {
 
   const handleDikitClaim = () => {
     if (dikitCardIdx !== -1 && room?.status === 'playing') {
+       playSound(SOUNDS.DIKIT_HIT, 1.0);
        setClaimedDikitIndices(prev => [...prev, dikitCardIdx]);
        claimDikit(dikitCardIdx, markedCells[dikitCardIdx] || []);
     }
@@ -441,7 +449,23 @@ export default function Player() {
       <AnimatePresence>
          {dikitAlert && (
             <motion.div initial={{ y: -100, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="fixed top-14 left-4 right-4 z-[55] bg-[#0D9488] text-white p-4 rounded-2xl shadow-2xl border-2 border-white flex flex-col gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-               <div className="flex items-center gap-4"><div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Trophy size={24} /></div><div className="flex-1 min-w-0"><div className="text-[10px] font-black uppercase tracking-widest opacity-80">{dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Hit!'}</div><div className="text-lg font-black truncate leading-tight">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div></div><button onClick={() => dismissDikit()} className="text-white/50 hover:text-white shrink-0"><Plus size={20} className="rotate-45" /></button></div>
+               <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Trophy size={24} /></div>
+                  <div className="flex-1 min-w-0">
+                     <div className="text-[10px] font-black uppercase tracking-widest opacity-80">
+                        {dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Hit!'}
+                     </div>
+                     <div className="text-lg font-black truncate leading-tight">
+                        {dikitAlert.map((w: any) => w.playerName).join(' & ')}
+                     </div>
+                     <div className="text-[9px] font-bold uppercase tracking-widest opacity-70 mt-0.5">
+                        Game resuming in <Countdown endsAt={room.dikitEndsAt} />
+                     </div>
+                  </div>
+                  <button onClick={() => dismissDikit()} className="text-white/50 hover:text-white shrink-0">
+                     <Plus size={20} className="rotate-45" />
+                  </button>
+               </div>
                <div className="flex gap-4 overflow-x-auto w-full pb-2 snap-x">
                   {dikitAlert.map((alert: any, aIdx: number) => (
                      <div key={aIdx} className="bg-white/10 p-4 rounded-2xl border border-white/20 shrink-0 snap-center"><div className="text-center text-xs font-bold mb-2">{alert.playerName}</div><div className="grid grid-cols-5 gap-1">{alert.card.map((row: any)=> row.map((num: any, idx: number) => { const called = num === 0 || room.calledNumbers.includes(num); return (<div key={idx} className={`w-6 h-6 flex items-center justify-center font-black text-[8px] rounded-md border ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>{num === 0 ? 'FR' : num}</div>)}))}</div></div>
