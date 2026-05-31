@@ -31,6 +31,7 @@ interface Room {
   roundName: string;
   roundNumber: number;
   autoCallSpeed: number; // in seconds, 0 means manual
+  voiceId: string;
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
   dikitEndsAt?: number;
@@ -259,6 +260,7 @@ io.on("connection", (socket: Socket) => {
         roundName: 'Round 1',
         roundNumber: 1,
         autoCallSpeed: 0,
+        voiceId: '24JGmqE2AvYy6abpAy3g',
         patterns: DEFAULT_BINGO_PATTERNS,
         claims: [],
         hidePattern: false,
@@ -400,6 +402,7 @@ io.on("connection", (socket: Socket) => {
         const settings = data.settings || {};
         if (['Bingo', 'Blackout', 'Dikit'].includes(settings.mode)) room.mode = settings.mode;
         if (typeof settings.autoCallSpeed === 'number' && settings.autoCallSpeed >= 0) room.autoCallSpeed = settings.autoCallSpeed;
+        if (typeof settings.voiceId === 'string') room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
         if (typeof settings.roundName === 'string') room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
         if (typeof settings.prizeText === 'string') room.prizeText = sanitizeText(settings.prizeText, '', 80);
         if (Array.isArray(settings.patterns)) room.patterns = sanitizePatterns(settings.patterns);

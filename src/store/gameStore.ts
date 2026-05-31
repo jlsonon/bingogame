@@ -27,6 +27,7 @@ export interface Room {
   roundName: string;
   roundNumber: number;
   autoCallSpeed: number;
+  voiceId?: string;
   patterns: BingoPattern[];
   nextRoundEndsAt?: number;
   dikitEndsAt?: number;

@@ -11,8 +11,8 @@ export const SOUNDS = {
 };
 
 // Map for external voice calls
-// You can use a URL template like: "https://your-server.com/voices/{number}.mp3"
 let VOICE_BASE_URL = ''; 
+const AUDIO_CACHE: Record<string, string> = {}; // text -> blobUrl
 
 export function setVoiceBaseUrl(url: string) {
   VOICE_BASE_URL = url;
@@ -28,15 +28,55 @@ export function playSound(url: string, volume = 0.5) {
   }
 }
 
-export function playVoiceBall(ball: number) {
+export async function playElevenLabs(text: string, voiceId: string, apiKey: string) {
+  if (AUDIO_CACHE[text]) {
+    playSound(AUDIO_CACHE[text], 1.0);
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.4, similarity_boost: 0.8 }
+      }),
+    });
+
+    if (!response.ok) throw new Error('ElevenLabs API error');
+    
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    AUDIO_CACHE[text] = url;
+    playSound(url, 1.0);
+  } catch (err) {
+    console.error('ElevenLabs TTS failed, check API key or balance:', err);
+    return false;
+  }
+}
+
+export function playVoiceBall(ball: number, voiceConfig?: { id?: string, key?: string }) {
+  const letter = ball <= 15 ? 'B' : ball <= 30 ? 'I' : ball <= 45 ? 'N' : ball <= 60 ? 'G' : 'O';
+  const text = `${letter}... ${ball}`;
+
+  // Priority 1: ElevenLabs
+  if (voiceConfig?.id && voiceConfig?.key) {
+    playElevenLabs(text, voiceConfig.id, voiceConfig.key);
+    return true;
+  }
+
+  // Priority 2: Custom URL Template
   if (VOICE_BASE_URL) {
-    // Logic for custom external MP3s: "https://site.com/voices/B12.mp3"
-    // We assume the filenames follow a standard format
-    const letter = ball <= 15 ? 'B' : ball <= 30 ? 'I' : ball <= 45 ? 'N' : ball <= 60 ? 'G' : 'O';
     const filename = `${letter}${ball}.mp3`;
     const fullUrl = VOICE_BASE_URL.replace('{filename}', filename).replace('{number}', String(ball));
     playSound(fullUrl, 1.0);
-    return true; // Voice triggered from external
+    return true;
   }
+  
   return false; // Fallback to SpeechSynthesis
 }

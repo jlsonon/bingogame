@@ -5,7 +5,7 @@ import { PatternVisualizer } from '../components/PatternVisualizer';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { getBallLetter } from '../lib/bingo';
-import { Trophy, Users, Ticket, PlayCircle, Monitor, Eye } from 'lucide-react';
+import { Trophy, Users, Ticket, PlayCircle, Monitor, Eye, Settings2 } from 'lucide-react';
 import { SOUNDS, playSound, playVoiceBall } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
@@ -30,11 +30,17 @@ export default function Display() {
   const connect = useGameStore(s => s.connect);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
   const dismissDikit = useGameStore(s => s.dismissDikit);
+const [lastBalls, setLastBalls] = useState<number[]>([]);
+const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
+const [audioEnabled, setAudioEnabled] = useState(false);
+const [elevenApiKey, setElevenApiKey] = useState(localStorage.getItem('bingo_eleven_key') || '');
+const [showAudioSettings, setShowSettings] = useState(false);
 
-  const [lastBalls, setLastBalls] = useState<number[]>([]);
-  const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  
+useEffect(() => {
+  localStorage.setItem('bingo_eleven_key', elevenApiKey);
+}, [elevenApiKey]);
+
+// UX Spectacle State
   const [showHypeIntro, setShowHypeIntro] = useState(false);
   const [hypeCountdown, setHypeCountdown] = useState(3);
   const [showPatternFlash, setShowPatternFlash] = useState(false);
@@ -91,7 +97,10 @@ export default function Display() {
     if (latestBall && audioEnabled) {
       playSound(SOUNDS.BALL_DRAW, 0.4);
       
-      const voiceTriggered = playVoiceBall(latestBall);
+      const voiceTriggered = playVoiceBall(latestBall, {
+         id: room?.voiceId,
+         key: elevenApiKey
+      });
       
       if (!voiceTriggered) {
         window.speechSynthesis.cancel();
@@ -152,11 +161,38 @@ export default function Display() {
          )}
       </AnimatePresence>
 
+      {/* Audio Unlock Overlay */}
       {!audioEnabled && (
-         <div className="fixed inset-0 z-[100] bg-[#3D3A35]/60 backdrop-blur-md flex items-center justify-center">
-            <button onClick={enableAudio} className="bg-[#EA580C] text-white px-12 py-8 rounded-[40px] font-display text-4xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center gap-4 border-4 border-white tracking-widest uppercase italic">
-               <Monitor size={64} />ENABLE ANNOUNCER
-            </button>
+         <div className="fixed inset-0 z-[100] bg-[#3D3A35]/60 backdrop-blur-md flex flex-col items-center justify-center p-6">
+            <div className="bg-white rounded-[48px] p-12 border-[8px] border-[#EA580C] shadow-2xl flex flex-col items-center gap-8 max-w-lg w-full text-center">
+               <button 
+                  onClick={enableAudio}
+                  className="bg-[#EA580C] text-white px-12 py-8 rounded-[40px] font-display text-4xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center gap-4 border-4 border-white tracking-widest uppercase italic w-full"
+               >
+                  <Monitor size={64} />
+                  ENABLE BINGO ANNOUNCER
+               </button>
+
+               <div className="w-full pt-8 border-t-2 border-[#FAF7F2] space-y-4">
+                  <div className="flex items-center justify-center gap-2 text-[#A19B91]">
+                     <Settings2 size={16} />
+                     <span className="text-xs font-black uppercase tracking-widest">Advanced Audio (Optional)</span>
+                  </div>
+                  <div className="space-y-1.5">
+                     <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest block text-left ml-2">ElevenLabs API Key</label>
+                     <input 
+                        type="password"
+                        placeholder="Paste your API Key here"
+                        value={elevenApiKey}
+                        onChange={e => setElevenApiKey(e.target.value)}
+                        className="w-full p-4 bg-[#FAF7F2] rounded-2xl border-2 border-[#E8E2D9] font-bold text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]"
+                     />
+                     <p className="text-[9px] text-[#A19B91] font-bold uppercase leading-tight mt-2 italic px-2">
+                        Get yours at <span className="text-[#0D9488]">elevenlabs.io</span>. Keys are saved locally on this machine only.
+                     </p>
+                  </div>
+               </div>
+            </div>
          </div>
       )}
 
