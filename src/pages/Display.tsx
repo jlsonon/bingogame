@@ -10,7 +10,17 @@ import { Trophy, Users, Ticket, PlayCircle, Monitor, Eye } from 'lucide-react';
 export default function Display() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { socket, room, latestBall, winner, dikitAlert, dismissDikit, connect, rejoinRoom } = useGameStore();
+  
+  // Atomic Selectors
+  const socket = useGameStore(s => s.socket);
+  const room = useGameStore(s => s.room);
+  const latestBall = useGameStore(s => s.latestBall);
+  const winner = useGameStore(s => s.winner);
+  const dikitAlert = useGameStore(s => s.dikitAlert);
+  const connect = useGameStore(s => s.connect);
+  const rejoinRoom = useGameStore(s => s.rejoinRoom);
+  const dismissDikit = useGameStore(s => s.dismissDikit);
+
   const [lastBalls, setLastBalls] = useState<number[]>([]);
   const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -46,9 +56,7 @@ export default function Display() {
   // Voice Trigger logic
   useEffect(() => {
     if (latestBall && audioEnabled) {
-      // Cancel any ongoing speech to avoid overlap/queueing
       window.speechSynthesis.cancel();
-
       const letter = getBallLetter(latestBall);
       const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
       if (maleVoice) utterance.voice = maleVoice;
@@ -60,7 +68,6 @@ export default function Display() {
 
   const enableAudio = () => {
      setAudioEnabled(true);
-     // Required to unlock audio on some browsers
      const silence = new SpeechSynthesisUtterance("");
      window.speechSynthesis.speak(silence);
   };
@@ -171,18 +178,22 @@ export default function Display() {
                     exit={{ scale: 1.2, opacity: 0, transition: { duration: 0.2 } }}
                     className="relative z-10 flex flex-col items-center"
                   >
-                    <div className="w-64 h-64 rounded-full bg-[#FACC15] border-[12px] border-white outline outline-[12px] outline-[#FACC15] shadow-2xl flex flex-col items-center justify-center text-[#854D0E]">
+                    <div className="w-64 h-64 rounded-full bg-[#FACC15] border-[12px] border-white outline outline-[12px] outline-[#FACC15] shadow-2xl flex flex-col items-center justify-center text-[#854D0E] relative">
+                      {/* Skeuomorphic Polish */}
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-black/20 via-transparent to-white/40 pointer-events-none" />
+                      <div className="absolute top-8 left-12 w-16 h-8 bg-white/30 rounded-[100%] blur-sm -rotate-45 pointer-events-none" />
+                      
                       <motion.span 
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="text-4xl font-black leading-none mb-2"
+                        className="text-4xl font-black leading-none mb-2 z-10"
                       >
                         {getBallLetter(latestBall)}
                       </motion.span>
                       <motion.span 
                         initial={{ scale: 0.5 }}
                         animate={{ scale: 1 }}
-                        className="text-[140px] font-black leading-none tracking-tighter"
+                        className="text-[140px] font-black leading-none tracking-tighter z-10"
                       >
                         {latestBall}
                       </motion.span>
@@ -288,9 +299,20 @@ export default function Display() {
           {/* Join Info */}
           <div className="bg-white rounded-[48px] p-8 border-4 border-[#E8E2D9] shadow-xl text-center flex flex-col items-center">
             <h3 className="text-xl font-black text-[#3D3A35] uppercase tracking-tight mb-6">Scan to Play</h3>
-            <div className="bg-[#FAF7F2] p-6 rounded-[32px] border-2 border-[#E8E2D9] mb-6">
+            <motion.div 
+               animate={{ 
+                 y: [0, -10, 0, 10, 0],
+                 x: [0, 5, 0, -5, 0]
+               }}
+               transition={{ 
+                 duration: 20, 
+                 repeat: Infinity,
+                 ease: "linear"
+               }}
+               className="bg-[#FAF7F2] p-6 rounded-[32px] border-2 border-[#E8E2D9] mb-6 shadow-inner"
+            >
               <img src={qrUrl} alt="Join QR Code" className="w-64 h-64 mix-blend-multiply" />
-            </div>
+            </motion.div>
             <p className="text-[#A19B91] font-bold text-sm uppercase tracking-widest mb-2">Or enter code on mobile</p>
             <div className="text-4xl font-black text-[#EA580C] tracking-[0.2em]">{room.id}</div>
           </div>

@@ -21,19 +21,52 @@ function Countdown({ endsAt }: { endsAt?: number }) {
 export default function Player() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { socket, room, me, updateMyCards, claimBingo, claimDikit, latestBall, winner, dismissWinner, claimAlert, dikitAlert, rejoinRoom, setNextRoundChoice, leaveRoom } = useGameStore();
+  
+  // Atomic Selectors for Performance
+  const socket = useGameStore(s => s.socket);
+  const room = useGameStore(s => s.room);
+  const me = useGameStore(s => s.me);
+  const latestBall = useGameStore(s => s.latestBall);
+  const winner = useGameStore(s => s.winner);
+  const claimAlert = useGameStore(s => s.claimAlert);
+  const dikitAlert = useGameStore(s => s.dikitAlert);
+  
+  const updateMyCards = useGameStore(s => s.updateMyCards);
+  const claimBingo = useGameStore(s => s.claimBingo);
+  const claimDikit = useGameStore(s => s.claimDikit);
+  const rejoinRoom = useGameStore(s => s.rejoinRoom);
+  const setNextRoundChoice = useGameStore(s => s.setNextRoundChoice);
+  const setPlayerReady = useGameStore(s => s.setPlayerReady);
+  const leaveRoom = useGameStore(s => s.leaveRoom);
+  const dismissWinner = useGameStore(s => s.dismissWinner);
+  const dismissDikit = useGameStore(s => s.dismissDikit);
 
   const [cards, setCards] = useState<number[][][]>([]);
-  const [markedCells, setMarkedCells] = useState<Record<number, number[]>>({}); // cardIndex -> marked cells
+  const [markedCells, setMarkedCells] = useState<Record<number, number[]>>({});
   const [currentCardIdx, setCurrentCardIdx] = useState(0);
   const [activeTab, setActiveTab] = useState<'cards' | 'pattern' | 'history' | 'stats'>('cards');
   const [autoMark, setAutoMark] = useState(localStorage.getItem('bingo_auto_mark') === 'true');
   const [showClaimConfirm, setShowClaimConfirm] = useState(false);
   
-  // For round transition checkbox logic
   const [roundChoices, setRoundChoices] = useState<Record<number, boolean>>({});
   const [nearWinAlert, setNearWinAlert] = useState<string | null>(null);
   const [claimedDikitIndices, setClaimedDikitIndices] = useState<number[]>([]);
+
+  // Screen Wake Lock API
+  useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+      }
+    };
+    requestWakeLock();
+    return () => { wakeLock?.release(); };
+  }, []);
 
   // Reset round-specific data when roundNumber changes
   useEffect(() => {
@@ -196,6 +229,17 @@ export default function Player() {
   return (
     <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans touch-manipulation text-[#3D3A35] select-none">
       
+      {/* Offline/Reconnecting Overlay */}
+      {!socket?.connected && (
+         <div className="fixed inset-0 z-[200] bg-[#3D3A35]/80 backdrop-blur-md flex items-center justify-center p-6 text-center">
+            <div className="bg-white rounded-[32px] p-8 border-4 border-[#EA580C] shadow-2xl max-w-xs">
+               <Loader className="animate-spin text-[#EA580C] mx-auto mb-4" size={48} />
+               <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Connection Lost</h2>
+               <p className="text-sm font-bold text-[#7A746B]">Hang tight! Reconnecting you to the Bingo Hall...</p>
+            </div>
+         </div>
+      )}
+
       {/* Dynamic Header */}
       <header className="bg-white border-b-2 border-[#E8E2D9] px-4 h-14 flex items-center justify-between sticky top-0 z-30 shrink-0 shadow-sm">
          <div className="flex items-center gap-2">
@@ -276,8 +320,8 @@ export default function Player() {
                      ))}
                      {/* Empty slots if < 4 cards and in a 2x2 layout */}
                      {cards.length === 3 && (
-                        <div className="w-full h-full bg-white/10 border-2 border-dashed border-[#E8E2D9] rounded-[24px] flex items-center justify-center">
-                           <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest">Empty Slot</span>
+                        <div className="w-full h-full bg-[#E8E2D9]/20 border-2 border-dashed border-[#A19B91] rounded-[24px] flex items-center justify-center">
+                           <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Empty Slot</span>
                         </div>
                      )}
                   </div>

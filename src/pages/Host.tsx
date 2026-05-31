@@ -41,7 +41,26 @@ function PatternGrid({ cells, onToggle }: { cells: number[], onToggle?: (cell: n
 export default function Host() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { socket, room, latestBall, startGame, pauseGame, resumeGame, resetGame, startNextRound, callNextBall, updateSettings, verifyClaim, winner, dismissWinner, dikitAlert, dismissDikit, me, rejoinRoom } = useGameStore();
+  
+  // Atomic Selectors
+  const socket = useGameStore(s => s.socket);
+  const room = useGameStore(s => s.room);
+  const me = useGameStore(s => s.me);
+  const latestBall = useGameStore(s => s.latestBall);
+  const winner = useGameStore(s => s.winner);
+  const dikitAlert = useGameStore(s => s.dikitAlert);
+  
+  const startGame = useGameStore(s => s.startGame);
+  const pauseGame = useGameStore(s => s.pauseGame);
+  const resumeGame = useGameStore(s => s.resumeGame);
+  const resetGame = useGameStore(s => s.resetGame);
+  const startNextRound = useGameStore(s => s.startNextRound);
+  const callNextBall = useGameStore(s => s.callNextBall);
+  const updateSettings = useGameStore(s => s.updateSettings);
+  const verifyClaim = useGameStore(s => s.verifyClaim);
+  const dismissWinner = useGameStore(s => s.dismissWinner);
+  const dismissDikit = useGameStore(s => s.dismissDikit);
+  const rejoinRoom = useGameStore(s => s.rejoinRoom);
 
   const [showSettings, setShowSettings] = useState(false);
   const [copyLabel, setCopyLabel] = useState('Copy');
@@ -139,7 +158,19 @@ export default function Host() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans text-[#3D3A35] overflow-hidden">
+    <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans text-[#3D3A35] overflow-hidden relative">
+      
+      {/* Offline Overlay for Host */}
+      {!socket?.connected && (
+         <div className="fixed inset-0 z-[100] bg-[#3D3A35]/80 backdrop-blur-md flex items-center justify-center p-6 text-center">
+            <div className="bg-white rounded-[32px] p-8 border-4 border-[#0D9488] shadow-2xl max-w-xs">
+               <div className="w-12 h-12 border-4 border-[#0D9488] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+               <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Restoring Link</h2>
+               <p className="text-sm font-bold text-[#7A746B]">Host connection dropped. Attempting to rejoin the booth...</p>
+            </div>
+         </div>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b-2 border-[#E8E2D9] h-16 px-6 flex items-center justify-between sticky top-0 z-20 shrink-0">
         <div className="flex items-center gap-6">
@@ -269,9 +300,13 @@ export default function Host() {
                          animate={{ scale: 1, y: 0, opacity: 1 }}
                          className="flex flex-col items-center"
                        >
-                          <div className="w-48 h-48 rounded-full bg-[#FACC15] border-[8px] border-white outline outline-8 outline-[#FACC15] shadow-xl flex flex-col items-center justify-center text-[#854D0E]">
-                            <span className="text-2xl font-black leading-none mb-1">{getBallLetter(latestBall)}</span>
-                            <span className="text-8xl font-black leading-none tracking-tighter">{latestBall}</span>
+                          <div className="w-48 h-48 rounded-full bg-[#FACC15] border-[8px] border-white outline outline-8 outline-[#FACC15] shadow-xl flex flex-col items-center justify-center text-[#854D0E] relative">
+                            {/* Skeuomorphic Polish */}
+                            <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-black/20 via-transparent to-white/40 pointer-events-none" />
+                            <div className="absolute top-6 left-8 w-12 h-6 bg-white/30 rounded-[100%] blur-sm -rotate-45 pointer-events-none" />
+                            
+                            <span className="text-2xl font-black leading-none mb-1 z-10">{getBallLetter(latestBall)}</span>
+                            <span className="text-8xl font-black leading-none tracking-tighter z-10">{latestBall}</span>
                           </div>
                        </motion.div>
                     ) : (

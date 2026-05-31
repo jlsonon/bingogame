@@ -62,11 +62,13 @@ function generateRoomCode(): string {
 }
 
 function initBalls(): number[] {
-  const balls = [];
-  for (let i = 1; i <= 75; i++) {
-    balls.push(i);
+  const balls = Array.from({ length: 75 }, (_, i) => i + 1);
+  // Fisher-Yates (Knuth) Shuffle
+  for (let i = balls.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [balls[i], balls[j]] = [balls[j], balls[i]];
   }
-  return balls.sort(() => Math.random() - 0.5);
+  return balls;
 }
 
 // Auto-caller timeouts
@@ -226,8 +228,18 @@ async function startServer() {
     res.json(activeRooms);
   });
 
-  io.on("connection", (socket: Socket) => {
+const rateLimits: Record<string, number> = {};
+
+io.on("connection", (socket: Socket) => {
     socket.on("create_room", (data: { sessionId?: string, nickname: string, avatarColor?: string }, callback) => {
+      const ip = socket.handshake.address;
+      const now = Date.now();
+      if (rateLimits[ip] && now - rateLimits[ip] < 5000) {
+        if (callback) callback({ success: false, message: "Too many room creations. Please wait." });
+        return;
+      }
+      rateLimits[ip] = now;
+
       let code = generateRoomCode();
       while (rooms[code]) {
         code = generateRoomCode();
