@@ -161,3 +161,19 @@ export function checkValidWin(
 
   return { valid: false, pattern: bestPattern, cellsAway: minAway };
 }
+
+export function getBestProgress(
+  cards: number[][][],
+  markedMap: Record<number, number[]>,
+  called: number[],
+  mode: GameMode | string,
+  patterns: BingoPattern[]
+): number {
+  if (cards.length === 0) return 25;
+  let min = 25;
+  cards.forEach((card, i) => {
+    const res = checkValidWin(card, markedMap[i] || [], called, mode, patterns);
+    if (res.cellsAway < min) min = res.cellsAway;
+  });
+  return min;
+}

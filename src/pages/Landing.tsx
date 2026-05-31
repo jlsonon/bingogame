@@ -65,11 +65,12 @@ export default function Landing() {
         className="w-full max-w-md bg-white rounded-[40px] shadow-[12px_12px_0px_rgba(61,58,53,0.1)] border-4 border-[#3D3A35] overflow-hidden relative z-10 p-6 md:p-8"
       >
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#EA580C] text-white shadow-lg transform rotate-[-10deg] mb-4">
-            <span className="text-3xl font-black">L</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-[20px] bg-[#EA580C] text-white shadow-[0_8px_0_#9A3412] transform rotate-[-8deg] mb-6 relative">
+            <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-white/30 rounded-[20px] pointer-events-none" />
+            <span className="text-3xl font-display italic relative z-10">L</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tight leading-none text-[#EA580C] mb-2 uppercase">LuckyBingo</h1>
-          <p className="text-[#A19B91] text-xs font-bold uppercase tracking-widest">Digital Bingo Hall</p>
+          <h1 className="text-5xl font-display tracking-tight leading-none text-[#3D3A35] mb-2 uppercase italic">LuckyBingo</h1>
+          <p className="text-[#A19B91] text-[10px] font-black uppercase tracking-[0.3em]">Professional Digital Bingo Hall</p>
         </div>
 
         <div className="space-y-6">
@@ -106,7 +107,7 @@ export default function Landing() {
                     placeholder="CODE"
                     value={joinCode}
                     onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError(''); }}
-                    className="w-1/3 px-4 py-4 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-black text-center text-2xl tracking-[0.2em] uppercase text-[#3D3A35]"
+                    className="w-1/3 px-4 py-4 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-display text-center text-3xl tracking-[0.2em] uppercase text-[#3D3A35]"
                     maxLength={4}
                   />
                   <div className="flex-1 flex flex-col gap-1.5">
@@ -116,7 +117,7 @@ export default function Landing() {
                            <button
                              key={num}
                              onClick={() => setCardCount(num)}
-                             className={`flex-1 rounded-xl font-black text-sm border-2 transition-all ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
+                             className={`flex-1 rounded-xl font-display text-xl border-2 transition-all ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
                            >
                              {num}
                            </button>
@@ -129,7 +130,7 @@ export default function Landing() {
                 id="join-btn"
                 onClick={handleJoin}
                 disabled={loading}
-                className="w-full bg-[#EA580C] text-white py-5 rounded-[24px] font-black text-xl transition-all flex items-center justify-center gap-3 shadow-[0_8px_0_#9A3412] active:translate-y-[8px] active:shadow-none touch-manipulation uppercase tracking-widest"
+                className="w-full bg-[#EA580C] text-white py-5 rounded-[24px] font-display text-2xl italic transition-all flex items-center justify-center gap-3 shadow-[0_8px_0_#9A3412] active:translate-y-[8px] active:shadow-none touch-manipulation uppercase tracking-widest"
               >
                 <PlayCircle size={28} fill="currentColor" />
                 Join Game

@@ -17,10 +17,10 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
   const isMarked = (num: number) => num === 0 || markedCells.includes(num);
 
   return (
-    <div className="@container bg-white p-[4cqw] rounded-[8cqw] border-[max(2px,0.8cqw)] border-[#3D3A35] shadow-[max(4px,1.5cqw)_max(4px,1.5cqw)_0px_rgba(61,58,53,0.1)] w-full h-full select-none touch-manipulation flex flex-col overflow-hidden">
+    <div className="@container bg-[#FCFAF5] p-[4cqw] rounded-[8cqw] border-[max(2px,0.8cqw)] border-[#3D3A35] shadow-[max(4px,1.5cqw)_max(4px,1.5cqw)_0px_rgba(61,58,53,0.1)] w-full h-full select-none touch-manipulation flex flex-col overflow-hidden paper-texture">
       <div className="grid grid-cols-5 gap-1 mb-[2cqw] text-center">
         {BINGO_HEADERS.map((letter, i) => (
-          <div key={i} className="font-sans font-black text-[6cqw] text-[#EA580C] drop-shadow-sm leading-none">
+          <div key={i} className="font-display text-[7cqw] text-[#EA580C] drop-shadow-sm leading-none pt-1">
             {letter}
           </div>
         ))}
@@ -34,6 +34,7 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
             
             const handleClick = () => {
               if (readOnly || num === 0) return;
+              if ('vibrate' in navigator) navigator.vibrate(40);
               if (onToggleCell) onToggleCell(num);
             };
 
@@ -42,7 +43,7 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
                 key={`${rIndex}-${cIndex}`}
                 onClick={handleClick}
                 className={cn(
-                  "aspect-square flex items-center justify-center rounded-[3cqw] font-black cursor-pointer transition-all duration-200 relative overflow-hidden text-[6cqw]",
+                  "aspect-square flex items-center justify-center rounded-[3cqw] font-display cursor-pointer transition-all duration-200 relative overflow-hidden text-[7cqw]",
                   num === 0 ? "bg-[#FACC15] border-[max(1px,0.5cqw)] border-white text-[#854D0E] shadow-sm uppercase tracking-tighter" :
                   marked && called ? "bg-[#0D9488] border-[max(1px,0.5cqw)] border-[#0D9488] text-white shadow-inner shadow-black/20 scale-[0.96]" :
                   marked && !called ? "bg-white border-[max(1px,0.5cqw)] border-[#EA580C] text-[#EA580C]" :
@@ -51,10 +52,15 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
                   readOnly && !marked && !called && "opacity-40 grayscale-[50%]"
                 )}
               >
+                {/* Stamped Ink Effect for Marked Numbers */}
+                {marked && called && num !== 0 && (
+                  <div className="absolute inset-0 opacity-20 pointer-events-none mix-blend-multiply bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+                )}
+
                 {num === 0 ? (
-                  <span className="text-[3cqw] uppercase tracking-tighter mix-blend-multiply opacity-90 font-black">Free</span>
+                  <span className="text-[3cqw] font-sans uppercase tracking-tighter mix-blend-multiply opacity-90 font-black">Free</span>
                 ) : (
-                  <span>{num}</span>
+                  <span className={cn(marked && called && "scale-110 drop-shadow-md")}>{num}</span>
                 )}
 
                 {/* Smart Highlight / Pulse for Latest Ball */}
