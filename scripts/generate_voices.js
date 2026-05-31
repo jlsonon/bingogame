@@ -1,14 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
+import dotenv from 'dotenv';
+
+// Load variables from .env file
+dotenv.config();
 
 /**
  * LUCKY BINGO - VOiCE GENERATOR
  * Run this script to generate all 75 Bingo ball calls using ElevenLabs.
  * 
  * USAGE:
- * 1. Install axios: npm install axios
- * 2. Run: ELEVEN_API_KEY=your_key VOICE_ID=your_id node scripts/generate_voices.js
+ * 1. Ensure .env file has ELEVEN_API_KEY
+ * 2. Run: node scripts/generate_voices.js
  */
 
 const API_KEY = process.env.ELEVEN_API_KEY;

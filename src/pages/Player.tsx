@@ -227,6 +227,8 @@ export default function Player() {
 
   if (!room || !me) return null;
 
+  const isSpectator = cards.length === 0;
+
   return (
     <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans touch-manipulation text-[#3D3A35] select-none">
       {/* Offline/Reconnecting Overlay */}
@@ -292,34 +294,52 @@ export default function Player() {
             )}
             {activeTab === 'cards' && (
                <motion.div key="cards" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col p-2 gap-2 min-h-0">
-                  <AnimatePresence>
-                     {nearWinAlert && (
-                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full bg-[#EA580C]/10 border-2 border-[#EA580C]/20 rounded-2xl py-1 text-center overflow-hidden shrink-0">
-                           <span className="text-[9px] font-black text-[#EA580C] uppercase tracking-[0.2em] flex items-center justify-center gap-2"><Trophy size={10} />{nearWinAlert}</span>
-                        </motion.div>
-                     )}
-                  </AnimatePresence>
-                  <div className={`flex-1 grid gap-2 min-h-0 place-items-center ${cards.length === 1 ? 'grid-cols-1 grid-rows-1' : cards.length === 2 ? 'grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1' : 'grid-cols-2 grid-rows-2'}`}>
-                     {cards.map((card, idx) => (
-                        <div key={idx} className="relative w-full h-full flex items-center justify-center min-h-0 overflow-hidden">
-                           <div className="w-full h-full max-w-[400px] max-h-[400px] aspect-square flex items-center justify-center">
-                              <BingoCard card={card} markedCells={markedCells[idx] || []} calledNumbers={room.calledNumbers || []} onToggleCell={(num) => toggleCell(idx, num)} readOnly={room.status !== 'playing'} highlightLatest={latestBall} />
-                           </div>
-                           {cardStatus[idx]?.win.valid && <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[24px] sm:rounded-[40px] pointer-events-none animate-pulse z-20" />}
+                  {isSpectator ? (
+                     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-6">
+                        <div className="w-24 h-24 bg-[#E8E2D9] rounded-[32px] flex items-center justify-center text-[#7A746B] shadow-inner mb-2">
+                           <Eye size={48} />
                         </div>
-                     ))}
-                     {cards.length === 3 && (
-                        <div className="w-full h-full bg-[#E8E2D9]/20 border-2 border-dashed border-[#7A746B] rounded-[24px] flex flex-col items-center justify-center p-4 text-center">
-                           <span className="text-[12px] font-black text-[#3D3A35] uppercase tracking-widest mb-1">Card 4 Empty</span>
-                           <span className="text-[8px] font-bold text-[#7A746B] uppercase leading-tight">Host can increase limits in settings</span>
+                        <h2 className="text-3xl font-display uppercase tracking-tight text-[#3D3A35]">Spectator Mode</h2>
+                        <p className="text-sm font-bold text-[#A19B91] uppercase tracking-widest leading-relaxed max-w-xs">
+                           You're watching the game live! You can follow the calls and pattern in the other tabs.
+                        </p>
+                        <div className="bg-white border-2 border-[#E8E2D9] rounded-2xl p-4 w-full max-w-[240px]">
+                           <div className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest mb-1 text-center">Numbers Called</div>
+                           <div className="text-3xl font-display text-[#EA580C]">{room.calledNumbers.length} / 75</div>
                         </div>
-                     )}
-                  </div>
-                  <div className="flex justify-center shrink-0 py-1">
-                     <button onClick={() => setAutoMark(!autoMark)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 font-black text-[9px] uppercase tracking-widest transition-all ${autoMark ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-sm' : 'bg-white border-[#E8E2D9] text-[#7A746B]'}`}>
-                        <CheckCircle2 size={12} fill={autoMark ? "currentColor" : "none"} />Auto-Marking {autoMark ? 'ON' : 'OFF'}
-                     </button>
-                  </div>
+                     </div>
+                  ) : (
+                     <>
+                        <AnimatePresence>
+                           {nearWinAlert && (
+                              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full bg-[#EA580C]/10 border-2 border-[#EA580C]/20 rounded-2xl py-1 text-center overflow-hidden shrink-0">
+                                 <span className="text-[9px] font-black text-[#EA580C] uppercase tracking-[0.2em] flex items-center justify-center gap-2"><Trophy size={10} />{nearWinAlert}</span>
+                              </motion.div>
+                           )}
+                        </AnimatePresence>
+                        <div className={`flex-1 grid gap-2 min-h-0 place-items-center ${cards.length === 1 ? 'grid-cols-1 grid-rows-1' : cards.length === 2 ? 'grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1' : 'grid-cols-2 grid-rows-2'}`}>
+                           {cards.map((card, idx) => (
+                              <div key={idx} className="relative w-full h-full flex items-center justify-center min-h-0 overflow-hidden">
+                                 <div className="w-full h-full max-w-[400px] max-h-[400px] aspect-square flex items-center justify-center">
+                                    <BingoCard card={card} markedCells={markedCells[idx] || []} calledNumbers={room.calledNumbers || []} onToggleCell={(num) => toggleCell(idx, num)} readOnly={room.status !== 'playing'} highlightLatest={latestBall} />
+                                 </div>
+                                 {cardStatus[idx]?.win.valid && <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[24px] sm:rounded-[40px] pointer-events-none animate-pulse z-20" />}
+                              </div>
+                           ))}
+                           {cards.length === 3 && (
+                              <div className="w-full h-full bg-[#E8E2D9]/20 border-2 border-dashed border-[#7A746B] rounded-[24px] flex flex-col items-center justify-center p-4 text-center">
+                                 <span className="text-[12px] font-black text-[#3D3A35] uppercase tracking-widest mb-1">Card 4 Empty</span>
+                                 <span className="text-[8px] font-bold text-[#7A746B] uppercase leading-tight">Host can increase limits in settings</span>
+                              </div>
+                           )}
+                        </div>
+                        <div className="flex justify-center shrink-0 py-1">
+                           <button onClick={() => setAutoMark(!autoMark)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 font-black text-[9px] uppercase tracking-widest transition-all ${autoMark ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-sm' : 'bg-white border-[#E8E2D9] text-[#7A746B]'}`}>
+                              <CheckCircle2 size={12} fill={autoMark ? "currentColor" : "none"} />Auto-Marking {autoMark ? 'ON' : 'OFF'}
+                           </button>
+                        </div>
+                     </>
+                  )}
                </motion.div>
             )}
             {activeTab === 'pattern' && (

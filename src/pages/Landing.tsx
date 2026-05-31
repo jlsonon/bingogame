@@ -113,16 +113,19 @@ export default function Landing() {
                   <div className="flex-1 flex flex-col gap-1.5">
                      <label className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest ml-1">Buy Cards</label>
                      <div className="flex gap-1.5 h-full">
-                        {[1, 2, 3, 4].map(num => (
+                        {[0, 1, 2, 3, 4].map(num => (
                            <button
                              key={num}
                              onClick={() => setCardCount(num)}
                              className={`flex-1 rounded-xl font-display text-xl border-2 transition-all ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
                            >
-                             {num}
+                             {num === 0 ? '👀' : num}
                            </button>
                         ))}
                      </div>
+                     <span className="text-[8px] font-black text-[#A19B91] uppercase tracking-widest text-center mt-1">
+                        {cardCount === 0 ? 'Spectator Mode (No Cards)' : 'Select card count'}
+                     </span>
                   </div>
               </div>
 

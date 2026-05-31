@@ -275,6 +275,24 @@ useEffect(() => {
         </div>
       </main>
 
+      {/* Sponsor Banner - Professional Event Look */}
+      <footer className="h-16 bg-white border-t-4 border-[#E8E2D9] px-12 flex items-center justify-center relative overflow-hidden shrink-0">
+         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#EA580C]/5 to-transparent opacity-50" />
+         <motion.div 
+            animate={{ x: [400, -400] }}
+            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+            className="flex items-center gap-4 text-[#A19B91] font-black text-xs uppercase tracking-[0.4em] whitespace-nowrap"
+         >
+            <span>Powered by Lucky Bingo</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+            <span>Community Event Night</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+            <span>Good Luck to All Players!</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+            <span>Check Your Cards!</span>
+         </motion.div>
+      </footer>
+
       <AnimatePresence>
          {dikitAlert && (
             <motion.div initial={{ y: -200, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -200, opacity: 0 }} className="fixed top-24 left-1/2 -translate-x-1/2 z-[120] bg-[#0D9488] text-white p-8 rounded-[48px] shadow-[0_40px_100px_rgba(0,0,0,0.5)] border-8 border-white flex flex-col items-center gap-6 w-full max-w-2xl">

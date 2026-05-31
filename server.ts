@@ -5,6 +5,28 @@ import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import { checkValidWin, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
+import { z } from "zod";
+
+const SettingsSchema = z.object({
+  mode: z.enum(['Bingo', 'Blackout', 'Dikit']).optional(),
+  autoCallSpeed: z.number().min(0).optional(),
+  voiceId: z.string().max(64).optional(),
+  roundName: z.string().max(40).optional(),
+  prizeText: z.string().max(80).optional(),
+  patterns: z.array(z.any()).optional(),
+  hidePattern: z.boolean().optional()
+});
+
+const UpdateCardsSchema = z.object({
+  code: z.string().length(4),
+  cards: z.array(z.array(z.array(z.number().int().min(0).max(75)))).max(4)
+});
+
+const JoinRoomSchema = z.object({
+  code: z.string().length(4),
+  nickname: z.string().min(1).max(24),
+  avatarColor: z.string().startsWith('#').max(7).optional()
+});
 
 interface Player {
   id: string;
@@ -366,10 +388,13 @@ io.on("connection", (socket: Socket) => {
     });
 
     socket.on("update_cards", (data: { code: string, cards: number[][][] }) => {
+      const parsed = UpdateCardsSchema.safeParse(data);
+      if (!parsed.success) return;
+
       const code = normalizeCode(data.code);
       const room = rooms[code];
       const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
-      if (room && player && isValidCardSet(data.cards)) {
+      if (room && player) {
         if (!['waiting', 'next_round'].includes(room.status)) return;
         player.activeCards = data.cards;
         
@@ -395,17 +420,20 @@ io.on("connection", (socket: Socket) => {
     });
 
     socket.on("update_settings", (data: { code: string, settings: any }) => {
+      const parsed = SettingsSchema.safeParse(data.settings);
+      if (!parsed.success) return;
+
       const code = normalizeCode(data.code);
       const room = rooms[code];
       const host = room?.players[room.hostId];
       if (room && host?.socketId === socket.id) {
         const settings = data.settings || {};
-        if (['Bingo', 'Blackout', 'Dikit'].includes(settings.mode)) room.mode = settings.mode;
-        if (typeof settings.autoCallSpeed === 'number' && settings.autoCallSpeed >= 0) room.autoCallSpeed = settings.autoCallSpeed;
-        if (typeof settings.voiceId === 'string') room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
-        if (typeof settings.roundName === 'string') room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
-        if (typeof settings.prizeText === 'string') room.prizeText = sanitizeText(settings.prizeText, '', 80);
-        if (Array.isArray(settings.patterns)) room.patterns = sanitizePatterns(settings.patterns);
+        if (settings.mode) room.mode = settings.mode;
+        if (typeof settings.autoCallSpeed === 'number') room.autoCallSpeed = settings.autoCallSpeed;
+        if (settings.voiceId) room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
+        if (settings.roundName) room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
+        if (settings.prizeText) room.prizeText = sanitizeText(settings.prizeText, '', 80);
+        if (settings.patterns) room.patterns = sanitizePatterns(settings.patterns);
         if (typeof settings.hidePattern === 'boolean') room.hidePattern = settings.hidePattern;
         io.to(code).emit("room_updated", room);
       }
