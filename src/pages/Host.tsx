@@ -115,29 +115,50 @@ export default function Host() {
     }
   }, [winner]);
 
-  // Keyboard shortcuts for Claims
-  useEffect(() => {
-    const handleClaimKeys = (e: KeyboardEvent) => {
-      if (room?.claims?.length > 0 && !winner) {
-        if (e.key === 'Enter') verifyClaim(room.claims[0].id, true);
-        if (e.key === 'Escape') verifyClaim(room.claims[0].id, false);
-      }
-    };
-    window.addEventListener('keydown', handleClaimKeys);
-    return () => window.removeEventListener('keydown', handleClaimKeys);
-  }, [room?.claims, winner, verifyClaim]);
-
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== 'Space' || room?.status !== 'playing' || room.autoCallSpeed !== 0) return;
       const target = event.target as HTMLElement | null;
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return;
-      event.preventDefault();
-      callNextBall();
+      
+      // Host claims verification
+      if (room?.claims?.length > 0 && !winner) {
+        if (event.code === 'Enter') verifyClaim(room.claims[0].id, true);
+        if (event.code === 'Escape') verifyClaim(room.claims[0].id, false);
+      }
+
+      // Special Host Hotkeys
+      if (event.code === 'KeyM') {
+         updateSettings({ ambienceEnabled: !room?.ambienceEnabled });
+      }
+      if (event.code === 'KeyP') {
+         updateSettings({ hidePattern: !room?.hidePattern });
+      }
+      if (event.code === 'KeyR' && latestBall) {
+         // Re-read last ball
+         const voiceUrlParam = localStorage.getItem('bingo_voice_url') || '';
+         setVoiceBaseUrl(voiceUrlParam);
+         import('../lib/sounds').then(({ playVoiceBall }) => {
+            const played = playVoiceBall(latestBall, room?.voiceMode || 'robotic', voiceUrlParam);
+            if (!played && 'speechSynthesis' in window) {
+               window.speechSynthesis.cancel();
+               const msg = new SpeechSynthesisUtterance(`${getBallLetter(latestBall)}... ${latestBall}`);
+               msg.rate = 0.85;
+               window.speechSynthesis.speak(msg);
+            }
+         });
+      }
+
+      // Space to Call Ball (if playing and manual)
+      if (event.code === 'Space') {
+         if (room?.status === 'playing' && room.autoCallSpeed === 0) {
+            event.preventDefault();
+            callNextBall();
+         }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [room?.status, room?.autoCallSpeed, callNextBall]);
+  }, [room, latestBall, callNextBall, updateSettings, verifyClaim, winner]);
 
   if (!room) return null;
 
@@ -203,6 +224,12 @@ export default function Host() {
           <div className="hidden md:flex items-center gap-1">
              <button onClick={handleCopy} className="p-2 text-[#A19B91] hover:text-[#3D3A35] transition-colors" title={copyLabel}><Copy size={18} /></button>
              <button onClick={openDisplay} className="flex items-center gap-2 px-3 py-1.5 bg-[#0D9488]/10 text-[#0D9488] rounded-lg text-xs font-black uppercase tracking-widest hover:bg-[#0D9488]/20 transition-all"><Monitor size={16} />TV Mode</button>
+             <button 
+               onClick={() => window.open(`${window.location.origin}/host/${room.id}/grid`, '_blank')} 
+               className="flex items-center gap-2 px-3 py-1.5 bg-[#EA580C]/10 text-[#EA580C] rounded-lg text-xs font-black uppercase tracking-widest hover:bg-[#EA580C]/20 transition-all"
+             >
+               <LayoutGrid size={16} />God View
+             </button>
           </div>
         </div>
         <div className="flex items-center gap-6">
@@ -245,8 +272,80 @@ export default function Host() {
 
         <section className="bg-white border-l-2 border-[#E8E2D9] flex flex-col overflow-hidden">
            <div className="p-6 border-b-2 border-[#FAF7F2] bg-[#FAF7F2]/30"><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Session Stats</h3><div className="grid grid-cols-2 gap-4"><div className="bg-white p-4 rounded-2xl border-2 border-[#E8E2D9] shadow-sm"><Ticket size={20} className="text-[#EA580C] mb-2" /><div className="text-2xl font-display tabular-nums">{room.stats.totalCardsSold}</div><div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Cards Sold</div></div><div className="bg-white p-4 rounded-2xl border-2 border-[#E8E2D9] shadow-sm"><Users size={20} className="text-[#0D9488] mb-2" /><div className="text-2xl font-display tabular-nums">{Object.values(room.players).length}</div><div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Players</div></div></div></div>
-           <div className="flex-1 p-6 overflow-y-auto"><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Connected Players</h3><div className="space-y-2">{Object.values(room.players).map(p => { let bestAway = 25; p.activeCards.forEach(card => { const res = checkValidWin(card, [], room.calledNumbers, room.mode, room.patterns); if (res.cellsAway < bestAway) bestAway = res.cellsAway; }); const nearWin = bestAway <= 3 && p.activeCards.length > 0; return (<div key={p.id} className={`flex items-center gap-3 bg-[#FAF7F2] border-2 p-3 rounded-2xl shadow-sm transition-all ${nearWin ? 'border-[#FACC15] bg-[#FACC15]/5' : 'border-white'}`}><div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-display text-xs shadow-inner" style={{ backgroundColor: p.avatarColor || '#ccc' }}>{p.nickname.substring(0,2).toUpperCase()}</div><div className="flex-1 min-w-0"><div className="font-black text-sm text-[#3D3A35] truncate flex items-center justify-between"><span className="truncate">{p.nickname}</span>{p.activeCards.length > 0 && room.status === 'playing' && (<div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter ${nearWin ? 'bg-[#FACC15] text-[#854D0E] animate-pulse' : 'bg-[#E8E2D9] text-[#7A746B]'}`}>{bestAway} Left</div>)}</div><div className="text-[10px] text-[#A19B91] font-bold uppercase tracking-wider flex justify-between"><span>{p.activeCards.length} cards</span>{room.status === 'next_round' && (<span className={p.isReady ? 'text-[#0D9488]' : 'text-[#EA580C]'}>{p.isReady ? 'READY' : 'CHOOSING'}</span>)}</div></div></div>); })}{Object.values(room.players).length === 0 && (<div className="text-center py-8 text-[#DED9D1] font-bold italic text-sm">No players yet</div>)}</div></div>
-           <div className="p-6 border-t-2 border-[#FAF7F2] bg-[#FAF7F2]/30 max-h-48 overflow-y-auto"><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-3">Hall of Fame</h3><div className="space-y-2">{room.stats.winners.slice(-5).reverse().map((w, i) => (<div key={i} className="flex items-center justify-between text-xs"><div className="font-bold flex items-center gap-2"><Trophy size={12} className="text-[#FACC15]" />{w.name}</div><div className="text-[10px] text-[#A19B91] font-black uppercase tracking-tighter">{w.pattern}</div></div>))}{room.stats.winners.length === 0 && (<div className="text-[10px] text-[#DED9D1] font-bold italic">Round results will appear here</div>)}</div></div>
+           <div className="flex-1 p-6 overflow-y-auto bg-[#FAF7F2]">
+             <div className="flex justify-between items-center mb-4">
+                <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">God View (Live Boards)</h3>
+                <div className="text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full uppercase">Real-time</div>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               {Object.values(room.players).map(p => { 
+                 if (!p.connected || p.activeCards.length === 0) return null;
+                 return p.activeCards.map((card, cardIdx) => {
+                   const marked = p.markedCells[cardIdx] || [];
+                   const res = checkValidWin(card, marked, room.calledNumbers, room.mode, room.patterns);
+                   const nearWin = res.cellsAway <= 3;
+                   
+                   return (
+                     <div key={`${p.id}-${cardIdx}`} className={`flex flex-col bg-white border-2 p-3 rounded-2xl shadow-sm transition-all ${nearWin ? 'border-[#EA580C] shadow-[0_0_15px_rgba(234,88,12,0.3)]' : 'border-[#E8E2D9]'}`}>
+                        <div className="flex justify-between items-center mb-2">
+                           <div className="flex items-center gap-2 truncate">
+                              <div className="w-6 h-6 rounded-full flex items-center justify-center text-white font-display text-[8px] shadow-inner shrink-0" style={{ backgroundColor: p.avatarColor || '#ccc' }}>
+                                 {p.nickname.substring(0,2).toUpperCase()}
+                              </div>
+                              <span className="font-black text-xs text-[#3D3A35] truncate">{p.nickname}</span>
+                           </div>
+                           <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter shrink-0 ${nearWin ? 'bg-[#EA580C] text-white animate-pulse' : 'bg-[#E8E2D9] text-[#7A746B]'}`}>
+                              {res.cellsAway} Left
+                           </div>
+                        </div>
+                        <div className="grid grid-cols-5 gap-0.5 pointer-events-none">
+                           {card.map((row: any)=> row.map((num: any, idx: number) => { 
+                              const called = num === 0 || room.calledNumbers.includes(num);
+                              const isMarked = num === 0 || marked.includes(num);
+                              
+                              return (
+                                 <div key={idx} className={`aspect-square flex items-center justify-center font-black text-[8px] rounded-[4px] border ${
+                                    num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : 
+                                    (isMarked && called) ? 'bg-[#0D9488] text-white border-[#0D9488]' : 
+                                    (!isMarked && called) ? 'bg-[#0D9488]/20 border-[#0D9488]/30 text-[#3D3A35]/50' :
+                                    (isMarked && !called) ? 'bg-white border-[#EA580C] text-[#EA580C]' :
+                                    'bg-[#FAF7F2] border-[#E8E2D9] text-[#DED9D1]'
+                                 }`}>
+                                    {num === 0 ? 'FR' : num}
+                                 </div>
+                              ) 
+                           }))}
+                        </div>
+                     </div>
+                   );
+                 });
+               })}
+               {Object.values(room.players).filter(p => p.connected && p.activeCards.length > 0).length === 0 && (
+                 <div className="col-span-full text-center py-8 text-[#DED9D1] font-bold italic text-sm">Waiting for players to get cards</div>
+               )}
+             </div>
+           </div>
+           <div className="p-6 border-t-2 border-[#FAF7F2] bg-[#FAF7F2]/30 max-h-48 overflow-y-auto">
+             <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-3">Hall of Fame</h3>
+             <div className="space-y-2">
+               {room.stats.winners.slice(-10).reverse().map((w, i) => {
+                 const isEarlyBird = room.stats.winners[0] === w;
+                 const wins = room.stats.winners.filter(sw => sw.name === w.name).length;
+
+                 return (
+                   <div key={i} className="flex items-center justify-between text-xs">
+                     <div className="font-bold flex items-center gap-2 truncate max-w-[60%]">
+                        <Trophy size={12} className={isEarlyBird ? "text-[#0D9488]" : "text-[#FACC15]"} />
+                        <span className="truncate">{w.name}</span>
+                        {wins > 1 && <span className="text-[8px] bg-[#EA580C] text-white px-1 rounded-sm">{wins}</span>}
+                     </div>
+                     <div className="text-[10px] text-[#A19B91] font-black uppercase tracking-tighter shrink-0">{w.pattern}</div>
+                   </div>
+                 );
+               })}
+               {room.stats.winners.length === 0 && (<div className="text-[10px] text-[#DED9D1] font-bold italic">Round results will appear here</div>)}
+             </div>
+           </div>
         </section>
       </main>
 
@@ -256,7 +355,13 @@ export default function Host() {
               <div className="flex justify-between items-center mb-8"><h2 className="text-3xl font-black uppercase tracking-tighter">Room Config</h2><button onClick={() => setShowSettings(false)} className="text-[#A19B91] hover:text-[#3D3A35]"><Plus size={24} className="rotate-45" /></button></div>
               <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar"><div className="grid grid-cols-2 gap-4"><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Round Name</label><input value={room.roundName} onChange={e => updateSettings({ roundName: e.target.value })} className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none" maxLength={40} /></div><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Prize Info</label><input value={room.prizeText} onChange={e => updateSettings({ prizeText: e.target.value })} placeholder="Optional prize" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]" maxLength={80} /></div></div><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Game Mode</label><div className="flex gap-2">{['Bingo', 'Blackout', 'Dikit'].map(m => (<button key={m} onClick={() => updateSettings({ mode: m })} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${room.mode === m ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#A19B91]'}`}>{m === 'Bingo' ? 'Standard' : m}</button>))}</div></div>
                  {room.mode === 'Bingo' && (<div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]"><div className="space-y-2"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Pattern Library</label><div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar border-2 border-[#FAF7F2] rounded-2xl p-2 bg-[#FAF7F2]/50"><div className="grid grid-cols-2 gap-2">{[...PRESET_PATTERNS, ...globalPatterns].map(pattern => { const selected = room.patterns.some(item => item.id === pattern.id); const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id); return (<div key={pattern.id} className="relative group"><button type="button" onClick={() => togglePattern(pattern)} className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}>{pattern.name}{selected && <div className="absolute top-1 right-1 w-2 h-2 bg-white rounded-full" />}</button>{!isPreset && (<button onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"><Plus size={8} className="rotate-45" strokeWidth={5} /></button>)}</div>); })}</div></div></div><div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4 shadow-inner"><div className="flex justify-between items-center"><span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Draw Custom</span><input value={customName} onChange={e => setCustomName(e.target.value)} className="bg-white px-3 py-1 rounded-lg border-2 border-[#E8E2D9] font-bold text-[10px] focus:border-[#0D9488] outline-none" maxLength={28} placeholder="Pattern Name" /></div><div className="flex justify-center"><PatternGrid cells={customCells} onToggle={cell => setCustomCells(prev => { if (cell === 12) return prev; return prev.includes(cell) ? prev.filter(item => item !== cell) : [...prev, cell]; })} /></div><button type="button" onClick={addCustomPattern} className="w-full bg-[#3D3A35] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest active:translate-y-1 shadow-md">Add to Round</button></div></div>)}
-                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Hall Ambience</span><button onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#A19B91] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? '🔊 Active' : '🔇 Muted'}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Voice Engine</span><select value={room.voiceMode} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 bg-white rounded-xl text-[10px] font-black uppercase border-2 border-[#DED9D1] outline-none"><option value="robotic">🤖 Robotic</option><option value="custom">👤 Custom / Local</option></select></div></div>
+                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Hall Ambience</span><button onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#A19B91] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? '🔊 Active' : '🔇 Muted'}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Voice Engine</span><select value={room.voiceMode} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 bg-white rounded-xl text-[10px] font-black uppercase border-2 border-[#DED9D1] outline-none">
+  <option value="robotic">🤖 Robotic</option>
+  <option value="custom">👤 Custom / Local</option>
+  <option value="ai_sarcastic">😈 Sarcastic AI</option>
+  <option value="ai_vegas">🎲 Vegas AI</option>
+  <option value="ai_lounge">🍸 Lounge AI</option>
+</select></div></div>
                  <div className="pt-4 border-t-2 border-[#FAF7F2]"><div className="flex items-center justify-between bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex flex-col"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Mystery Mode</span><span className="text-[10px] font-bold text-[#A19B91] uppercase tracking-tighter">Hide winning pattern from screens</span></div><button onClick={() => updateSettings({ hidePattern: !room.hidePattern })} className={`w-14 h-8 rounded-full transition-all relative ${room.hidePattern ? 'bg-[#0D9488]' : 'bg-[#DED9D1]'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${room.hidePattern ? 'left-7' : 'left-1'}`} /></button></div></div>
                  {room.voiceMode === 'custom' && (<div className="pt-4 border-t-2 border-[#FAF7F2]"><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Custom Voice URL Template</label><input value={voiceUrl} onChange={e => setVoiceUrl(e.target.value)} placeholder="https://site.com/voices/{filename}" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-bold text-xs focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]" /><p className="text-[8px] text-[#A19B91] font-bold uppercase leading-tight mt-1 px-1">Use <span className="text-[#EA580C]">{'{filename}'}</span> for B12.mp3 or <span className="text-[#EA580C]">{'{number}'}</span> for 12.</p></div></div>)}
               </div><button onClick={() => setShowSettings(false)} className="mt-8 w-full bg-[#3D3A35] text-white py-4 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">Save & Close</button></div></div>)}

@@ -39,6 +39,7 @@ interface Player {
   isHost: boolean;
   connected: boolean;
   activeCards: number[][][]; // Array of cards, each card is 5x5 array of numbers
+  markedCells: Record<number, number[]>; // Track marked cells on server for recovery
   hasDikit: boolean;
   nextRoundChoice?: 'keep' | 'change';
   isReady: boolean;
@@ -56,7 +57,7 @@ interface Room {
   roundName: string;
   roundNumber: number;
   autoCallSpeed: number; // in seconds, 0 means manual
-  voiceMode: 'robotic' | 'custom';
+  voiceMode: 'robotic' | 'custom' | 'ai_sarcastic' | 'ai_vegas' | 'ai_lounge';
   ambienceEnabled: boolean;
   voiceId: string;
   patterns: BingoPattern[];
@@ -66,12 +67,11 @@ interface Room {
   hidePattern: boolean;
   dikitWinners: any[];
   verifiedWinners: any[];
-  // New V2 Statistics
   stats: {
     totalCardsSold: number;
     totalPlayersJoined: number;
     gamesPlayed: number;
-    winners: { name: string, pattern: string, round: number }[];
+    winners: { name: string, pattern: string, round: number, time: number }[];
     startTime: number;
   };
 }
@@ -170,6 +170,12 @@ function prepareNextRound(code: string, io: Server, autoStart = false) {
   Object.values(room.players).forEach(player => {
     player.nextRoundChoice = 'keep';
     player.isReady = false;
+    // We don't reset markedCells here because the client might choose to keep their cards.
+    // The client will send an update_cards/update_marked_cells if they change them.
+    // Actually, on new round, even if they keep cards, the marks are reset.
+    const resetMarked: Record<number, number[]> = {};
+    player.activeCards.forEach((_, i) => { resetMarked[i] = [0]; });
+    player.markedCells = resetMarked;
   });
   if (nextRoundTimers[code]) {
     clearTimeout(nextRoundTimers[code]);
@@ -287,6 +293,26 @@ async function startServer() {
 
 const rateLimits: Record<string, number> = {};
 
+// Helper to check near wins across the room when a ball is called
+function checkRoomForNearWins(code: string, io: Server, room: Room) {
+  if (room.mode !== 'Blackout') return; // For now, only spotlight near wins on Blackout mode
+  
+  let hasNearWin = false;
+  Object.values(room.players).forEach(player => {
+    player.activeCards.forEach((card, idx) => {
+      const marked = player.markedCells[idx] || [];
+      const res = checkValidWin(card, marked, room.calledNumbers, room.mode, room.patterns);
+      if (res.cellsAway === 1) {
+        hasNearWin = true;
+      }
+    });
+  });
+
+  if (hasNearWin) {
+    io.to(code).emit("near_win_alert");
+  }
+}
+
 io.on("connection", (socket: Socket) => {
   // --- GLOBAL PATTERN EVENTS ---
   socket.on("get_global_patterns", (callback) => {
@@ -363,6 +389,7 @@ io.on("connection", (socket: Socket) => {
         isHost: true,
         connected: true,
         activeCards: [],
+        markedCells: {},
         hasDikit: false,
         nextRoundChoice: 'keep',
         isReady: false
@@ -396,6 +423,7 @@ io.on("connection", (socket: Socket) => {
         isHost: false,
         connected: true,
         activeCards: [],
+        markedCells: {},
         hasDikit: false,
         nextRoundChoice: 'keep',
         isReady: false
@@ -406,7 +434,8 @@ io.on("connection", (socket: Socket) => {
         ...newPlayer,
         isHost: room.players[sessionId]?.isHost || false,
         nextRoundChoice: room.players[sessionId]?.nextRoundChoice || 'keep',
-        activeCards: room.players[sessionId]?.activeCards || []
+        activeCards: room.players[sessionId]?.activeCards || [],
+        markedCells: room.players[sessionId]?.markedCells || {}
       };
       socket.join(code);
       io.to(code).emit("room_updated", room);
@@ -463,6 +492,25 @@ io.on("connection", (socket: Socket) => {
       }
     });
 
+    socket.on("update_marked_cells", (data: { code: string, markedCells: Record<number, number[]> }) => {
+      const code = normalizeCode(data.code);
+      const room = rooms[code];
+      const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
+      if (room && player) {
+        player.markedCells = data.markedCells;
+        // Don't emit to whole room to save bandwidth, just update server state.
+        // The host will get this naturally on next room_updated broadcast.
+      }
+    });
+
+    socket.on("send_emote", (data: { code: string, emoji: string }) => {
+       const code = normalizeCode(data.code);
+       const room = rooms[code];
+       if (room) {
+          io.to(code).emit("emote_received", { emoji: data.emoji, id: randomUUID() });
+       }
+    });
+
     socket.on("start_game", (data: { code: string }) => {
       const code = normalizeCode(data.code);
       const room = rooms[code];
@@ -506,6 +554,7 @@ io.on("connection", (socket: Socket) => {
         room.calledNumbers.push(ball);
         io.to(code).emit("ball_called", { ball, room });
         io.to(code).emit("room_updated", room);
+        checkRoomForNearWins(code, io, room);
       } else if (room && room.remainingBalls.length === 0) {
         stopAutoCaller(code);
       }
@@ -563,6 +612,10 @@ io.on("connection", (socket: Socket) => {
          Object.values(room.players).forEach(player => {
            player.nextRoundChoice = 'keep';
            player.isReady = false;
+           // Reset markings
+           const resetMarked: Record<number, number[]> = {};
+           player.activeCards.forEach((_, i) => { resetMarked[i] = [0]; });
+           player.markedCells = resetMarked;
          });
          stopAutoCaller(code);
          io.to(code).emit("room_updated", room);
@@ -677,7 +730,8 @@ io.on("connection", (socket: Socket) => {
                 room.stats.winners.push({
                    name: claim.playerName,
                    pattern: claim.pattern,
-                   round: room.roundNumber
+                   round: room.roundNumber,
+                   time: Date.now()
                 });
              } else {
                 io.to(code).emit("claim_rejected", claim);

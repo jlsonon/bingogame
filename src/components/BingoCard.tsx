@@ -16,16 +16,65 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
   const isCalled = (num: number) => num === 0 || calledNumbers.includes(num);
   const isMarked = (num: number) => num === 0 || markedCells.includes(num);
 
+  // Find all Dikit pairs (horizontal adjacent, both marked and called, excluding free space)
+  const dikitPairs: { r: number, c: number }[] = [];
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 4; c++) {
+      const num1 = card[r][c];
+      const num2 = card[r][c + 1];
+      if (num1 !== 0 && num2 !== 0 && isMarked(num1) && isCalled(num1) && isMarked(num2) && isCalled(num2)) {
+        dikitPairs.push({ r, c });
+      }
+    }
+  }
+
   return (
-    <div className="@container bg-[#FCFAF5] p-[4cqw] rounded-[8cqw] border-[max(2px,0.8cqw)] border-[#3D3A35] shadow-[max(4px,1.5cqw)_max(4px,1.5cqw)_0px_rgba(61,58,53,0.1)] w-full h-full select-none touch-manipulation flex flex-col overflow-hidden paper-texture">
-      <div className="grid grid-cols-5 gap-1 mb-[2cqw] text-center">
+    <div className="@container bg-[#FCFAF5] p-[4cqw] rounded-[8cqw] border-[max(2px,0.8cqw)] border-[#3D3A35] shadow-[max(4px,1.5cqw)_max(4px,1.5cqw)_0px_rgba(61,58,53,0.1)] w-full h-full select-none touch-manipulation flex flex-col overflow-hidden paper-texture relative">
+      {/* Dikit Connections Overlay */}
+      {dikitPairs.length > 0 && (
+        <svg className="absolute inset-0 pointer-events-none z-10" style={{ width: '100%', height: '100%' }}>
+          <defs>
+            <filter id="dikitGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+          {dikitPairs.map((pair, idx) => {
+            // Calculate center points of the cells
+            // Header is ~10% height plus margin. Grid is remaining.
+            // These are approximate percentages that work well with the CSS grid layout.
+            const cellWidth = 100 / 5;
+            const startX = `${(pair.c + 0.5) * cellWidth}%`;
+            const endX = `${(pair.c + 1.5) * cellWidth}%`;
+            // Grid area starts below header
+            const headerHeight = 15; // approximate %
+            const gridHeight = 85; // approximate %
+            const y = `${headerHeight + ((pair.r + 0.5) * (gridHeight / 5))}%`;
+
+            return (
+              <motion.line
+                key={idx}
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 0.8 }}
+                x1={startX} y1={y} x2={endX} y2={y}
+                stroke="#FACC15"
+                strokeWidth="max(6px, 2cqw)"
+                strokeLinecap="round"
+                filter="url(#dikitGlow)"
+              />
+            );
+          })}
+        </svg>
+      )}
+
+      <div className="grid grid-cols-5 gap-1 mb-[2cqw] text-center relative z-20">
         {BINGO_HEADERS.map((letter, i) => (
           <div key={i} className="font-display text-[7cqw] text-[#EA580C] drop-shadow-sm leading-none pt-1">
             {letter}
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-5 gap-[1.5cqw] flex-1 min-h-0">
+      <div className="grid grid-cols-5 gap-[1.5cqw] flex-1 min-h-0 relative z-20">
         {card.map((row, rIndex) => (
           row.map((num, cIndex) => {
             const called = isCalled(num);

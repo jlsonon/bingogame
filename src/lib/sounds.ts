@@ -7,6 +7,7 @@ export const SOUNDS = {
   BINGO_WIN: 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3',
   DIKIT_HIT: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
   JACKPOT_WIN: 'https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3',
+  DRUMROLL: 'https://www.soundjay.com/misc/sounds/drum-roll-01.mp3',
   CLICK: 'https://assets.mixkit.co/active_storage/sfx/2568/2571-preview.mp3', // Generic click
 };
 
@@ -60,7 +61,7 @@ export async function playElevenLabs(text: string, voiceId: string, apiKey: stri
   }
 }
 
-export function playVoiceBall(ball: number, mode: 'robotic' | 'custom', customUrlTemplate?: string) {
+export function playVoiceBall(ball: number, mode: string, customUrlTemplate?: string) {
   const letter = ball <= 15 ? 'B' : ball <= 30 ? 'I' : ball <= 45 ? 'N' : ball <= 60 ? 'G' : 'O';
   const text = `${letter}... ${ball}`;
   const filename = `${letter}${ball}.mp3`;
@@ -76,6 +77,42 @@ export function playVoiceBall(ball: number, mode: 'robotic' | 'custom', customUr
     return true;
   }
   
-  // Priority 2: Robotic Mode (Standard Browser)
-  return false; // Tells the component to use SpeechSynthesis fallback
+  // Priority 2: AI Personas
+  if (mode.startsWith('ai_')) {
+     const scripts: Record<string, string[]> = {
+        ai_sarcastic: [
+           `Pay attention! It's ${letter} ${ball}. Not that most of you are close anyway.`,
+           `${letter} ${ball}. Finally! Was that so hard to find?`,
+           `Look who's awake! ${letter} ${ball} is called.`,
+           `Oh look, another number you don't have. ${letter} ${ball}.`
+        ],
+        ai_vegas: [
+           `Place your bets! We've got ${letter} ${ball}!`,
+           `The dice are hot! Next up is ${letter} ${ball}!`,
+           `Winner winner chicken dinner! It's ${letter} ${ball}!`,
+           `High rollers, take note: ${letter} ${ball}!`
+        ],
+        ai_lounge: [
+           `Relax and enjoy the vibe. The number is ${letter} ${ball}.`,
+           `Smooth calls only. We have ${letter} ${ball}.`,
+           `Take a sip, check your card. ${letter} ${ball}.`,
+           `In the pocket. ${letter} ${ball}.`
+        ]
+     };
+     
+     const personaLines = scripts[mode] || [`${letter}... ${ball}`];
+     const line = personaLines[Math.floor(Math.random() * personaLines.length)];
+     
+     if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(line);
+        // We'll use the voice set in the component
+        utterance.rate = mode === 'ai_vegas' ? 1.1 : mode === 'ai_lounge' ? 0.7 : 0.9;
+        window.speechSynthesis.speak(utterance);
+        return true;
+     }
+  }
+
+  // Priority 3: Robotic Mode (Standard Browser)
+  return false; // Tells the component to use default SpeechSynthesis
 }

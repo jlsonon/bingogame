@@ -3,9 +3,9 @@
   "short_name": "LuckyBingo",
   "description": "Multiplayer real-time bingo for mobile",
   "start_url": "/",
-  "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#4f46e5",
+  "display": "fullscreen",
+  "background_color": "#FAF7F2",
+  "theme_color": "#3D3A35",
   "orientation": "portrait-primary",
   "icons": [
     {

@@ -95,12 +95,16 @@ export default function Player() {
 
     if (cards.length === 0 && me.activeCards.length > 0) {
        setCards(me.activeCards);
-       const initialMarked: Record<number, number[]> = {};
-       me.activeCards.forEach((card, i) => {
-         const calledOnCard = card.flat().filter(num => num !== 0 && room.calledNumbers.includes(num));
-         initialMarked[i] = [0, ...calledOnCard];
-       });
-       setMarkedCells(initialMarked);
+       if (me.markedCells && Object.keys(me.markedCells).length > 0) {
+         setMarkedCells(me.markedCells);
+       } else {
+         const initialMarked: Record<number, number[]> = {};
+         me.activeCards.forEach((card, i) => {
+           const calledOnCard = card.flat().filter(num => num !== 0 && room.calledNumbers.includes(num));
+           initialMarked[i] = [0, ...calledOnCard];
+         });
+         setMarkedCells(initialMarked);
+       }
     } else if (cards.length === 0) {
        const initialCount = parseInt(localStorage.getItem('bingo_initial_cards') || '1');
        const newCards = Array.from({ length: initialCount }, () => generateRandomCard());
@@ -139,8 +143,20 @@ export default function Player() {
   }, [autoMark]);
 
   useEffect(() => {
+     if (Object.keys(markedCells).length > 0) {
+        updateMarkedCells(markedCells);
+     }
+  }, [markedCells]);
+
+  useEffect(() => {
     if (!latestBall) return;
-    if ('vibrate' in navigator) navigator.vibrate(80);
+    
+    // Check if the ball is on any of the player's cards
+    const isOnCard = cards.some(card => card.flat().includes(latestBall));
+    if (isOnCard && 'vibrate' in navigator) {
+       navigator.vibrate([30]); // Short & Sharp
+    }
+    
     if (!autoMark) return;
 
     setMarkedCells(prev => {
@@ -185,11 +201,14 @@ export default function Player() {
 
   useEffect(() => {
     if (winningCardIdx !== -1 && room?.status === 'playing') {
-      if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+      if ('vibrate' in navigator) navigator.vibrate([100, 50, 100, 50, 200]); // Long Heartbeat
     }
     const nearWinIdx = cardStatus.findIndex(status => status.win.cellsAway === 1);
     if (nearWinIdx !== -1 && room?.status === 'playing') {
-       if (nearWinAlert === null) playSound(SOUNDS.NEAR_BINGO, 0.6);
+       if (nearWinAlert === null) {
+         playSound(SOUNDS.NEAR_BINGO, 0.6);
+         if ('vibrate' in navigator) navigator.vibrate([50, 100, 50]); // Double Pulse
+       }
        setNearWinAlert(`Card ${nearWinIdx + 1} is 1 away!`);
     } else {
        setNearWinAlert(null);
@@ -317,21 +336,32 @@ export default function Player() {
                               </motion.div>
                            )}
                         </AnimatePresence>
-                        <div className={`flex-1 grid gap-2 min-h-0 place-items-center ${cards.length === 1 ? 'grid-cols-1 grid-rows-1' : cards.length === 2 ? 'grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1' : 'grid-cols-2 grid-rows-2'}`}>
-                           {cards.map((card, idx) => (
-                              <div key={idx} className="relative w-full h-full flex items-center justify-center min-h-0 overflow-hidden">
-                                 <div className="w-full h-full max-w-[400px] max-h-[400px] aspect-square flex items-center justify-center">
-                                    <BingoCard card={card} markedCells={markedCells[idx] || []} calledNumbers={room.calledNumbers || []} onToggleCell={(num) => toggleCell(idx, num)} readOnly={room.status !== 'playing'} highlightLatest={latestBall} />
+                        <div className="flex-1 w-full relative min-h-0">
+                           <div className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-4">
+                              {cards.map((card, idx) => {
+                                 const isNearWin = cardStatus[idx]?.win.cellsAway === 1;
+                                 return (
+                                    <div key={idx} className="w-[85vw] max-w-[400px] shrink-0 snap-center px-2 h-full flex flex-col justify-center relative">
+                                       <div className="w-full aspect-square relative">
+                                          <BingoCard card={card} markedCells={markedCells[idx] || []} calledNumbers={room.calledNumbers || []} onToggleCell={(num) => toggleCell(idx, num)} readOnly={room.status !== 'playing'} highlightLatest={latestBall} />
+                                          {cardStatus[idx]?.win.valid && <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />}
+                                       </div>
+                                       <div className="text-center mt-2">
+                                          <span className="text-[10px] font-black uppercase tracking-widest text-[#A19B91]">Card {idx + 1}</span>
+                                          {isNearWin && <span className="ml-2 bg-[#FACC15] text-[#854D0E] text-[8px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">1 Away</span>}
+                                       </div>
+                                    </div>
+                                 );
+                              })}
+                              {cards.length < 4 && (
+                                 <div className="w-[85vw] max-w-[400px] shrink-0 snap-center px-2 h-full flex items-center justify-center">
+                                    <div className="w-full aspect-square bg-[#E8E2D9]/20 border-2 border-dashed border-[#7A746B] rounded-[8cqw] flex flex-col items-center justify-center p-4 text-center">
+                                       <span className="text-[12px] font-black text-[#3D3A35] uppercase tracking-widest mb-1">Card {cards.length + 1} Empty</span>
+                                       <span className="text-[8px] font-bold text-[#7A746B] uppercase leading-tight">Host can increase limits in settings</span>
+                                    </div>
                                  </div>
-                                 {cardStatus[idx]?.win.valid && <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[24px] sm:rounded-[40px] pointer-events-none animate-pulse z-20" />}
-                              </div>
-                           ))}
-                           {cards.length === 3 && (
-                              <div className="w-full h-full bg-[#E8E2D9]/20 border-2 border-dashed border-[#7A746B] rounded-[24px] flex flex-col items-center justify-center p-4 text-center">
-                                 <span className="text-[12px] font-black text-[#3D3A35] uppercase tracking-widest mb-1">Card 4 Empty</span>
-                                 <span className="text-[8px] font-bold text-[#7A746B] uppercase leading-tight">Host can increase limits in settings</span>
-                              </div>
-                           )}
+                              )}
+                           </div>
                         </div>
                         <div className="flex justify-center shrink-0 py-1">
                            <button onClick={() => setAutoMark(!autoMark)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 font-black text-[9px] uppercase tracking-widest transition-all ${autoMark ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-sm' : 'bg-white border-[#E8E2D9] text-[#7A746B]'}`}>
@@ -453,7 +483,26 @@ export default function Player() {
          </AnimatePresence>
       </main>
 
-      <nav className="h-16 bg-white border-t-2 border-[#E8E2D9] grid grid-cols-4 gap-1 px-2 shrink-0 z-30 pb-safe">
+      <AnimatePresence>
+         {room.status === 'playing' && (
+            <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="absolute bottom-20 right-4 z-40 flex flex-col gap-2">
+               {['🔥', '🎉', '😢'].map(emoji => (
+                  <button 
+                    key={emoji}
+                    onClick={() => {
+                       if ('vibrate' in navigator) navigator.vibrate(20);
+                       socket?.emit('send_emote', { code: room.id, emoji });
+                    }}
+                    className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-white flex items-center justify-center text-2xl active:scale-90 transition-all hover:bg-white"
+                  >
+                     {emoji}
+                  </button>
+               ))}
+            </motion.div>
+         )}
+      </AnimatePresence>
+
+      <nav className="h-16 bg-white border-t-2 border-[#E8E2D9] grid grid-cols-4 gap-1 px-2 shrink-0 z-30 pb-safe relative">
          {[{ id: 'cards', icon: LayoutGrid, label: 'Cards' },{ id: 'pattern', icon: Eye, label: 'Pattern' },{ id: 'history', icon: History, label: 'Calls' },{ id: 'stats', icon: Trophy, label: 'Stats' },].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex flex-col items-center justify-center gap-1 transition-all ${activeTab === tab.id ? 'text-[#EA580C] scale-110' : 'text-[#A19B91]'}`}>
                <tab.icon size={20} strokeWidth={activeTab === tab.id ? 3 : 2} /><span className="text-[9px] font-black uppercase tracking-tighter">{tab.label}</span>
