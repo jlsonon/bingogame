@@ -288,33 +288,31 @@ async function startServer() {
 const rateLimits: Record<string, number> = {};
 
 io.on("connection", (socket: Socket) => {
-    socket.on("create_room", (data: { sessionId?: string, nickname: string, avatarColor?: string }, callback) => {
-      // ... existing logic ...
-    });
+  // --- GLOBAL PATTERN EVENTS ---
+  socket.on("get_global_patterns", (callback) => {
+    if (callback) callback(globalPatternLibrary);
+  });
 
-    // --- GLOBAL PATTERN EVENTS ---
-    socket.on("get_global_patterns", (callback) => {
-      if (callback) callback(globalPatternLibrary);
-    });
+  socket.on("save_global_pattern", (pattern: BingoPattern) => {
+    const index = globalPatternLibrary.findIndex(p => p.id === pattern.id);
+    if (index !== -1) {
+      globalPatternLibrary[index] = pattern;
+    } else {
+      globalPatternLibrary.push(pattern);
+    }
+    saveGlobalPatterns();
+    io.emit("global_patterns_updated", globalPatternLibrary);
+  });
 
-    socket.on("save_global_pattern", (pattern: BingoPattern) => {
-      const index = globalPatternLibrary.findIndex(p => p.id === pattern.id);
-      if (index !== -1) {
-        globalPatternLibrary[index] = pattern;
-      } else {
-        globalPatternLibrary.push(pattern);
-      }
-      saveGlobalPatterns();
-      io.emit("global_patterns_updated", globalPatternLibrary);
-    });
+  socket.on("delete_global_pattern", (id: string) => {
+    globalPatternLibrary = globalPatternLibrary.filter(p => p.id !== id);
+    saveGlobalPatterns();
+    io.emit("global_patterns_updated", globalPatternLibrary);
+  });
+  // ----------------------------
 
-    socket.on("delete_global_pattern", (id: string) => {
-      globalPatternLibrary = globalPatternLibrary.filter(p => p.id !== id);
-      saveGlobalPatterns();
-      io.emit("global_patterns_updated", globalPatternLibrary);
-    });
-    // ----------------------------
-      const ip = socket.handshake.address;
+  socket.on("create_room", (data: { sessionId?: string, nickname: string, avatarColor?: string }, callback) => {
+    const ip = socket.handshake.address;
       const now = Date.now();
       if (rateLimits[ip] && now - rateLimits[ip] < 5000) {
         if (callback) callback({ success: false, message: "Too many room creations. Please wait." });
