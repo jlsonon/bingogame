@@ -172,9 +172,9 @@ export default function Player() {
   const cardStatus = useMemo(() => {
     if (!room || cards.length === 0) return [];
     return cards.map((card, index) => {
-      const win = checkValidWin(card, markedCells[index] || [], room.calledNumbers || [], room.mode, room.patterns || []);
-      const dikit = checkDikitSidequest(card, markedCells[index] || []);
-      const hasLatest = latestBall ? card.flat().includes(latestBall) : false;
+      const win = checkValidWin(card, markedCells[index] || [], room.calledNumbers || [], room.mode, room.patterns);
+      const dikit = checkDikitSidequest(card, markedCells[index] || [], room.calledNumbers || []);
+      const hasLatest = latestBall ? (markedCells[index] || []).includes(latestBall) : false;
       const markedCount = (markedCells[index] || []).filter(num => num !== 0).length;
       return { win, dikit, hasLatest, markedCount };
     });
@@ -393,6 +393,27 @@ export default function Player() {
                         <div className="text-4xl font-display tabular-nums relative z-10">{room.stats?.totalCardsSold || 0}</div>
                         <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider relative z-10">Cards Sold</div>
                      </div>
+                  </div>
+                  <div className="bg-white p-5 rounded-[32px] border-2 border-[#E8E2D9] shadow-sm relative overflow-hidden">
+                     <div className="absolute inset-0 bg-gradient-to-br from-white to-[#FAF7F2] pointer-events-none" />
+                     <div className="flex items-center justify-between relative z-10">
+                        <LayoutGrid size={20} className="text-[#EA580C] mb-2" />
+                        <button 
+                           onClick={() => {
+                              const newCards = Array.from({ length: cards.length }, () => generateRandomCard());
+                              const emptyMarked: Record<number, number[]> = {};
+                              newCards.forEach((_, i) => { emptyMarked[i] = [0]; });
+                              setMarkedCells(emptyMarked);
+                              setCards(newCards);
+                              playSound(SOUNDS.BALL_HIT, 0.5);
+                           }}
+                           className="px-3 py-1 bg-[#EA580C] text-white text-[10px] font-black uppercase rounded-lg shadow-md active:scale-95 transition-all"
+                        >
+                           Change Cards
+                        </button>
+                     </div>
+                     <div className="text-4xl font-display tabular-nums relative z-10">{cards.length}</div>
+                     <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider relative z-10">My Cards</div>
                   </div>
                   <div className="bg-white p-6 rounded-[40px] border-4 border-[#E8E2D9] shadow-inner relative overflow-hidden">
                      <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/asfalt-dark.png')] pointer-events-none" />

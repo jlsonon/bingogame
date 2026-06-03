@@ -1,10 +1,11 @@
 import express from "express";
 import { createServer } from "http";
 import path from "path";
+import fs from "fs";
 import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
 import { createServer as createViteServer } from "vite";
-import { checkValidWin, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
+import { checkValidWin, checkDikitSidequest, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
 import { z } from "zod";
 
 const SettingsSchema = z.object({
@@ -79,6 +80,34 @@ const rooms: Record<string, Room> = {};
 const roomCleanupTimers: Record<string, NodeJS.Timeout> = {};
 const nextRoundTimers: Record<string, NodeJS.Timeout> = {};
 const dikitGraceTimers: Record<string, NodeJS.Timeout> = {};
+
+// --- GLOBAL PATTERN PERSISTENCE ---
+const PATTERNS_FILE = path.join(process.cwd(), "patterns.json");
+let globalPatternLibrary: BingoPattern[] = [];
+
+function loadGlobalPatterns() {
+  try {
+    if (fs.existsSync(PATTERNS_FILE)) {
+      const data = fs.readFileSync(PATTERNS_FILE, "utf-8");
+      globalPatternLibrary = JSON.parse(data);
+      console.log(`Loaded ${globalPatternLibrary.length} patterns from server storage.`);
+    }
+  } catch (err) {
+    console.error("Failed to load global patterns:", err);
+    globalPatternLibrary = [];
+  }
+}
+
+function saveGlobalPatterns() {
+  try {
+    fs.writeFileSync(PATTERNS_FILE, JSON.stringify(globalPatternLibrary, null, 2));
+  } catch (err) {
+    console.error("Failed to save global patterns:", err);
+  }
+}
+
+loadGlobalPatterns();
+// ----------------------------------
 
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -260,6 +289,31 @@ const rateLimits: Record<string, number> = {};
 
 io.on("connection", (socket: Socket) => {
     socket.on("create_room", (data: { sessionId?: string, nickname: string, avatarColor?: string }, callback) => {
+      // ... existing logic ...
+    });
+
+    // --- GLOBAL PATTERN EVENTS ---
+    socket.on("get_global_patterns", (callback) => {
+      if (callback) callback(globalPatternLibrary);
+    });
+
+    socket.on("save_global_pattern", (pattern: BingoPattern) => {
+      const index = globalPatternLibrary.findIndex(p => p.id === pattern.id);
+      if (index !== -1) {
+        globalPatternLibrary[index] = pattern;
+      } else {
+        globalPatternLibrary.push(pattern);
+      }
+      saveGlobalPatterns();
+      io.emit("global_patterns_updated", globalPatternLibrary);
+    });
+
+    socket.on("delete_global_pattern", (id: string) => {
+      globalPatternLibrary = globalPatternLibrary.filter(p => p.id !== id);
+      saveGlobalPatterns();
+      io.emit("global_patterns_updated", globalPatternLibrary);
+    });
+    // ----------------------------
       const ip = socket.handshake.address;
       const now = Date.now();
       if (rateLimits[ip] && now - rateLimits[ip] < 5000) {
@@ -559,9 +613,16 @@ io.on("connection", (socket: Socket) => {
       if (room && player && room.status === 'playing') {
         if (room.dikitWinners.some(w => w.playerId === player.id)) return; 
         
-        // If grace window is already active, just add the winner
         const card = player.activeCards[data.cardIndex];
+        const markedCells = Array.isArray(data.markedCells) ? data.markedCells.filter(Number.isInteger) : [];
         if (!isValidCard(card)) return;
+
+        // VALIDATE DIKIT ON SERVER
+        const isDikitValid = checkDikitSidequest(card, markedCells, room.calledNumbers);
+        if (!isDikitValid) {
+           socket.emit("claim_rejected", { message: "Invalid Dikit claim" });
+           return;
+        }
         
         const dikitClaim = {
           id: randomUUID(),

@@ -74,14 +74,15 @@ function patternCellsFor(pattern: BingoPattern): number[][] {
   return [pattern.cells];
 }
 
-export function checkDikitSidequest(card: number[][], marked: number[]): boolean {
+export function checkDikitSidequest(card: number[][], marked: number[], called: number[]): boolean {
   const isMarkedNumber = (index: number) => {
     const r = Math.floor(index / 5);
     const c = index % 5;
     const val = card[r]?.[c];
     // EXCLUDE index 12 (Free Space) and value 0
     if (index === 12 || val === 0) return false;
-    return marked.includes(val);
+    // Must be marked BY PLAYER AND called BY SERVER
+    return marked.includes(val) && called.includes(val);
   };
 
   for (let r = 0; r < 5; r++) {
@@ -116,9 +117,14 @@ export function checkValidWin(
     let maxAdj = 0;
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 4; c++) {
+        const idx1 = r * 5 + c;
+        const idx2 = r * 5 + c + 1;
+        // IGNORE Free space (index 12)
+        if (idx1 === 12 || idx2 === 12) continue;
+        
         let count = 0;
-        if (isMarkedIndex(r * 5 + c)) count++;
-        if (isMarkedIndex(r * 5 + c + 1)) count++;
+        if (isMarkedIndex(idx1)) count++;
+        if (isMarkedIndex(idx2)) count++;
         maxAdj = Math.max(maxAdj, count);
       }
     }

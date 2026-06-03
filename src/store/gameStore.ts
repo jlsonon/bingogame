@@ -82,6 +82,9 @@ interface GameState {
   claimAlert: any | null;
   dikitAlert: any[] | null;
   winner: any[] | null;
+  globalPatterns: BingoPattern[];
+  saveGlobalPattern: (pattern: BingoPattern) => void;
+  deleteGlobalPattern: (id: string) => void;
   dismissWinner: () => void;
   dismissDikit: () => void;
 }
@@ -108,6 +111,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   claimAlert: null,
   dikitAlert: null,
   winner: null,
+  globalPatterns: [],
 
   setProfile: (nickname, avatarColor) => {
     localStorage.setItem('bingo_nickname', nickname);
@@ -161,7 +165,25 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({ claimAlert: null });
     });
 
+    newSocket.on("global_patterns_updated", (patterns: BingoPattern[]) => {
+      set({ globalPatterns: patterns });
+    });
+
+    newSocket.emit("get_global_patterns", (patterns: BingoPattern[]) => {
+      set({ globalPatterns: patterns });
+    });
+
     set({ socket: newSocket });
+  },
+
+  saveGlobalPattern: (pattern: BingoPattern) => {
+    const { socket } = get();
+    if (socket) socket.emit("save_global_pattern", pattern);
+  },
+
+  deleteGlobalPattern: (id: string) => {
+    const { socket } = get();
+    if (socket) socket.emit("delete_global_pattern", id);
   },
 
   createRoom: () => {
