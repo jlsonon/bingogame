@@ -9,16 +9,49 @@ export interface Player {
   avatarColor?: string;
   isHost: boolean;
   connected: boolean;
-  activeCards: number[][][]; // Array of cards, each card is 5x5 array of numbers
+  activeCards: number[][][];
+  markedCells: Record<number, number[]>;
   hasDikit: boolean;
   nextRoundChoice?: 'keep' | 'change';
   isReady: boolean;
+}
+
+export interface Room {
+  id: string;
+  mode: GameMode;
+  status: 'waiting' | 'playing' | 'paused' | 'finished' | 'next_round';
+  remainingBalls: number[];
+  calledNumbers: number[];
+  players: Record<string, Player>;
+  hostId: string;
+  prizeText: string;
+  roundName: string;
+  roundNumber: number;
+  autoCallSpeed: number;
+  voiceMode: 'robotic' | 'custom' | 'ai_sarcastic' | 'ai_vegas' | 'ai_lounge';
+  ambienceEnabled: boolean;
+  voiceId?: string;
+  patterns: BingoPattern[];
+  nextRoundEndsAt?: number;
+  dikitEndsAt?: number;
+  claims: any[];
+  hidePattern: boolean;
+  dikitWinners: any[];
+  verifiedWinners: any[];
+  stats: {
+    totalCardsSold: number;
+    totalPlayersJoined: number;
+    gamesPlayed: number;
+    winners: { name: string, pattern: string, round: number, time: number }[];
+    startTime: number;
+  };
 }
 
 export interface Emote {
   id: string;
   emoji: string;
 }
+
 
 interface GameState {
   socket: Socket | null;
@@ -48,6 +81,7 @@ interface GameState {
   updateMarkedCells: (markedCells: Record<number, number[]>) => void;
   claimBingo: (cardIndex: number, markedCells: number[]) => void;
   claimDikit: (cardIndex: number, markedCells: number[]) => void;
+  sendEmote: (emoji: string) => void;
   setNextRoundChoice: (choice: 'keep' | 'change') => void;
   setPlayerReady: () => void;
   leaveRoom: () => void;
@@ -57,9 +91,10 @@ interface GameState {
   claimAlert: any | null;
   dikitAlert: any[] | null;
   winner: any[] | null;
-  globalPatterns: BingoPattern[];
   emotes: Emote[];
-  nearWinAlert: boolean;
+  nearWinAlert: { playerName: string, patternName: string } | null;
+  globalPatterns: BingoPattern[];
+  hallOfFame: any[];
   saveGlobalPattern: (pattern: BingoPattern) => void;
   deleteGlobalPattern: (id: string) => void;
   dismissWinner: () => void;
@@ -90,7 +125,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   winner: null,
   globalPatterns: [],
   emotes: [],
-  nearWinAlert: false,
+  nearWinAlert: null,
+  hallOfFame: [],
 
   setProfile: (nickname, avatarColor) => {
     localStorage.setItem('bingo_nickname', nickname);
@@ -116,13 +152,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         winner: room.status === 'waiting' ? null : get().winner,
         claimAlert: roundChanged ? null : get().claimAlert,
         dikitAlert: roundChanged ? null : get().dikitAlert,
-        nearWinAlert: roundChanged ? false : get().nearWinAlert
+        nearWinAlert: roundChanged ? null : get().nearWinAlert
       });
     });
 
     newSocket.on("ball_called", (data: { ball: number, room: Room }) => {
       // Could play sound here
-      set({ latestBall: data.ball, nearWinAlert: false });
+      set({ latestBall: data.ball, nearWinAlert: null });
     });
 
     newSocket.on("emote_received", (emote: Emote) => {
@@ -132,8 +168,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       }, 4000);
     });
 
-    newSocket.on("near_win_alert", () => {
-      set({ nearWinAlert: true });
+    newSocket.on("near_win_alert", (data: { playerName: string, patternName: string }) => {
+      set({ nearWinAlert: data });
     });
 
     newSocket.on("bingo_claim_alert", (claim: any) => {
@@ -162,6 +198,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     newSocket.emit("get_global_patterns", (patterns: BingoPattern[]) => {
       set({ globalPatterns: patterns });
+    });
+
+    newSocket.emit("get_hall_of_fame", (hof: any[]) => {
+      set({ hallOfFame: hof });
     });
 
     set({ socket: newSocket });
@@ -306,6 +346,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   claimDikit: (cardIndex: number, markedCells: number[]) => {
     const { socket, room } = get();
     if (socket && room) socket.emit("claim_dikit", { code: room.id, cardIndex, markedCells });
+  },
+
+  sendEmote: (emoji: string) => {
+    const { socket, room } = get();
+    if (socket && room) socket.emit("send_emote", { code: room.id, emoji });
   },
 
   setNextRoundChoice: (choice: 'keep' | 'change') => {

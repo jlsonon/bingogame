@@ -33,13 +33,16 @@ export default function Player() {
   const dikitAlert = useGameStore(s => s.dikitAlert);
   
   const updateMyCards = useGameStore(s => s.updateMyCards);
+  const updateMarkedCells = useGameStore(s => s.updateMarkedCells);
   const claimBingo = useGameStore(s => s.claimBingo);
   const claimDikit = useGameStore(s => s.claimDikit);
+  const sendEmote = useGameStore(s => s.sendEmote);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
   const setNextRoundChoice = useGameStore(s => s.setNextRoundChoice);
   const setPlayerReady = useGameStore(s => s.setPlayerReady);
   const leaveRoom = useGameStore(s => s.leaveRoom);
   const dismissWinner = useGameStore(s => s.dismissWinner);
+  const hallOfFame = useGameStore(s => s.hallOfFame);
   const dismissDikit = useGameStore(s => s.dismissDikit);
 
   const [cards, setCards] = useState<number[][][]>([]);
@@ -435,7 +438,7 @@ export default function Player() {
                               newCards.forEach((_, i) => { emptyMarked[i] = [0]; });
                               setMarkedCells(emptyMarked);
                               setCards(newCards);
-                              playSound(SOUNDS.BALL_HIT, 0.5);
+                              playSound(SOUNDS.BALL_DRAW, 0.5);
                            }}
                            className="px-3 py-1 bg-[#EA580C] text-white text-[10px] font-black uppercase rounded-lg shadow-md active:scale-95 transition-all"
                         >
@@ -452,17 +455,19 @@ export default function Player() {
                         <h4 className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Hall of Fame</h4>
                      </div>
                      <div className="space-y-4 relative z-10">
-                        {room.stats?.winners?.slice(-5).reverse().map((w, i) => (
+                        {hallOfFame.slice(-10).reverse().map((w, i) => (
                            <div key={i} className="flex items-center justify-between p-4 bg-[#FAF7F2] border-2 border-white rounded-[24px] shadow-sm paper-texture overflow-hidden relative">
                               <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent pointer-events-none" />
                               <div className="relative z-10">
                                  <div className="text-sm font-black text-[#3D3A35] uppercase italic">{w.name}</div>
                                  <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-tight">{w.pattern}</div>
                               </div>
-                              <div className="text-[10px] font-black text-[#EA580C] bg-[#EA580C]/10 px-3 py-1 rounded-full border border-[#EA580C]/20 relative z-10">RD {w.round}</div>
+                              <div className="text-[10px] font-black text-[#EA580C] bg-[#EA580C]/10 px-3 py-1 rounded-full border border-[#EA580C]/20 relative z-10">
+                                 {new Date(w.time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                              </div>
                            </div>
                         ))}
-                        {(room.stats?.winners?.length || 0) === 0 && <div className="text-center py-6 text-[#DED9D1] font-bold italic text-xs">Waiting for the first winner!</div>}
+                        {hallOfFame.length === 0 && <div className="text-center py-6 text-[#DED9D1] font-bold italic text-xs">Waiting for the first all-time winner!</div>}
                      </div>
                   </div>
                   <button onClick={() => { leaveRoom(); navigate('/'); }} className="w-full py-4 mt-2 bg-red-50 text-red-500 border-2 border-red-200 rounded-[24px] font-black text-sm uppercase tracking-widest active:scale-95 transition-all shadow-sm">Leave Room</button>
@@ -486,12 +491,12 @@ export default function Player() {
       <AnimatePresence>
          {room.status === 'playing' && (
             <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="absolute bottom-20 right-4 z-40 flex flex-col gap-2">
-               {['🔥', '🎉', '😢'].map(emoji => (
-                  <button 
+               {['🔥', '🎉', '😂', '🙌', '💎'].map(emoji => (
+                  <button
                     key={emoji}
                     onClick={() => {
                        if ('vibrate' in navigator) navigator.vibrate(20);
-                       socket?.emit('send_emote', { code: room.id, emoji });
+                       sendEmote(emoji);
                     }}
                     className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-white flex items-center justify-center text-2xl active:scale-90 transition-all hover:bg-white"
                   >
