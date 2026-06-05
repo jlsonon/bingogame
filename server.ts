@@ -81,9 +81,17 @@ const roomCleanupTimers: Record<string, NodeJS.Timeout> = {};
 const nextRoundTimers: Record<string, NodeJS.Timeout> = {};
 const dikitGraceTimers: Record<string, NodeJS.Timeout> = {};
 
+// --- SESSION LOCKING ---
+const sessionSockets: Record<string, string> = {}; // sessionId -> socketId
+// -----------------------
+
 // --- GLOBAL PATTERN PERSISTENCE ---
 const PATTERNS_FILE = path.join(process.cwd(), "patterns.json");
 let globalPatternLibrary: BingoPattern[] = [];
+
+// --- HALL OF FAME PERSISTENCE ---
+const HOF_FILE = path.join(process.cwd(), "hallOfFame.json");
+let globalHallOfFame: any[] = [];
 
 function loadGlobalPatterns() {
   try {
@@ -106,7 +114,41 @@ function saveGlobalPatterns() {
   }
 }
 
+function loadHOF() {
+  try {
+    if (fs.existsSync(HOF_FILE)) {
+      const data = fs.readFileSync(HOF_FILE, "utf-8");
+      globalHallOfFame = JSON.parse(data);
+      console.log(`Loaded ${globalHallOfFame.length} HOF entries.`);
+    }
+  } catch (err) {
+    console.error("Failed to load HOF:", err);
+    globalHallOfFame = [];
+  }
+}
+
+function saveHOF() {
+  try {
+    fs.writeFileSync(HOF_FILE, JSON.stringify(globalHallOfFame, null, 2));
+  } catch (err) {
+    console.error("Failed to save HOF:", err);
+  }
+}
+
+function registerSessionSocket(io: Server, sessionId: string, socketId: string) {
+  const oldSocketId = sessionSockets[sessionId];
+  if (oldSocketId && oldSocketId !== socketId) {
+    const oldSocket = io.sockets.sockets.get(oldSocketId);
+    if (oldSocket) {
+       oldSocket.emit("force_disconnect", { message: "Joined from another tab" });
+       oldSocket.disconnect(true);
+    }
+  }
+  sessionSockets[sessionId] = socketId;
+}
+
 loadGlobalPatterns();
+loadHOF();
 // ----------------------------------
 
 function generateRoomCode(): string {
@@ -295,21 +337,23 @@ const rateLimits: Record<string, number> = {};
 
 // Helper to check near wins across the room when a ball is called
 function checkRoomForNearWins(code: string, io: Server, room: Room) {
-  if (room.mode !== 'Blackout') return; // For now, only spotlight near wins on Blackout mode
-  
-  let hasNearWin = false;
+  let nearWinData: { playerName: string, patternName: string } | null = null;
+
   Object.values(room.players).forEach(player => {
     player.activeCards.forEach((card, idx) => {
       const marked = player.markedCells[idx] || [];
       const res = checkValidWin(card, marked, room.calledNumbers, room.mode, room.patterns);
       if (res.cellsAway === 1) {
-        hasNearWin = true;
+        nearWinData = { 
+           playerName: player.nickname, 
+           patternName: res.pattern || room.mode 
+        };
       }
     });
   });
 
-  if (hasNearWin) {
-    io.to(code).emit("near_win_alert");
+  if (nearWinData) {
+    io.to(code).emit("near_win_alert", nearWinData);
   }
 }
 
@@ -317,6 +361,10 @@ io.on("connection", (socket: Socket) => {
   // --- GLOBAL PATTERN EVENTS ---
   socket.on("get_global_patterns", (callback) => {
     if (callback) callback(globalPatternLibrary);
+  });
+
+  socket.on("get_hall_of_fame", (callback) => {
+    if (callback) callback(globalHallOfFame);
   });
 
   socket.on("save_global_pattern", (pattern: BingoPattern) => {
@@ -351,7 +399,8 @@ io.on("connection", (socket: Socket) => {
         code = generateRoomCode();
       }
       const sessionId = getSessionId(data.sessionId);
-      
+      registerSessionSocket(io, sessionId, socket.id);
+
       const newRoom: Room = {
         id: code,
         mode: 'Bingo',
@@ -411,6 +460,8 @@ io.on("connection", (socket: Socket) => {
       }
       touchRoom(code);
       const sessionId = getSessionId(data.sessionId);
+      registerSessionSocket(io, sessionId, socket.id);
+
       if (!room.players[sessionId]) {
         room.stats.totalPlayersJoined += 1;
       }
@@ -446,6 +497,8 @@ io.on("connection", (socket: Socket) => {
       const code = normalizeCode(data.code);
       const room = rooms[code];
       const sessionId = getSessionId(data.sessionId);
+      registerSessionSocket(io, sessionId, socket.id);
+
       if (!room) {
         if (callback) callback({ success: false, message: "Room not found" });
         return;
@@ -727,12 +780,19 @@ io.on("connection", (socket: Socket) => {
              
              if (data.isValid) {
                 room.verifiedWinners.push(claim);
-                room.stats.winners.push({
+                const winnerEntry = {
                    name: claim.playerName,
                    pattern: claim.pattern,
                    round: room.roundNumber,
                    time: Date.now()
-                });
+                };
+                room.stats.winners.push(winnerEntry);
+
+                // ADD TO GLOBAL HOF
+                globalHallOfFame.push(winnerEntry);
+                // Keep only last 100 entries to prevent file bloat
+                if (globalHallOfFame.length > 100) globalHallOfFame.shift();
+                saveHOF();
              } else {
                 io.to(code).emit("claim_rejected", claim);
              }

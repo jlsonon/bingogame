@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, type Player } from '../store/gameStore';
 import { PatternVisualizer } from '../components/PatternVisualizer';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -28,6 +28,9 @@ export default function Display() {
   const latestBall = useGameStore(s => s.latestBall);
   const winner = useGameStore(s => s.winner);
   const claimAlert = useGameStore(s => s.claimAlert);
+  const dikitAlert = useGameStore(s => s.dikitAlert);
+  const emotes = useGameStore(s => s.emotes);
+  const nearWinAlert = useGameStore(s => s.nearWinAlert);
   const connect = useGameStore(s => s.connect);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
   const dismissDikit = useGameStore(s => s.dismissDikit);
@@ -194,7 +197,86 @@ export default function Display() {
     }
   }, [winner, room?.mode]);
 
-  if (!room) return null;
+  if (room.status === 'waiting') {
+    return (
+      <div className="min-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col overflow-hidden relative p-12">
+         {/* Moving Background Pattern */}
+         <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] animate-pulse" />
+         
+         <div className="flex-1 flex flex-col items-center justify-center gap-12 relative z-10">
+            <motion.div 
+               animate={{ y: [0, -20, 0], rotate: [-2, 2, -2] }} 
+               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+               className="w-40 h-40 bg-[#EA580C] rounded-[40px] flex items-center justify-center shadow-2xl border-8 border-white"
+            >
+               <span className="text-8xl font-display text-white italic select-none">L</span>
+            </motion.div>
+
+            <div className="text-center">
+               <h1 className="text-9xl font-display uppercase tracking-tighter italic leading-none mb-4">Lucky Bingo</h1>
+               <div className="flex items-center justify-center gap-6">
+                  <div className="h-1 w-24 bg-[#E8E2D9] rounded-full" />
+                  <p className="text-2xl font-black text-[#A19B91] uppercase tracking-[0.5em]">The Hall is Open</p>
+                  <div className="h-1 w-24 bg-[#E8E2D9] rounded-full" />
+               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-12 w-full max-w-6xl mt-12">
+               <div className="bg-white rounded-[64px] p-12 border-4 border-[#E8E2D9] shadow-2xl flex flex-col items-center text-center">
+                  <h3 className="text-2xl font-black uppercase tracking-tight mb-8">Scan to Join</h3>
+                  <div className="bg-[#FAF7F2] p-8 rounded-[48px] border-4 border-white shadow-inner mb-8">
+                     <img src={qrUrl} alt="Join QR" className="w-80 h-80 mix-blend-multiply" />
+                  </div>
+                  <div className="space-y-2">
+                     <p className="text-lg font-bold text-[#A19B91] uppercase tracking-widest">Or enter code</p>
+                     <div className="text-7xl font-display text-[#EA580C] tracking-[0.2em] tabular-nums">{room.id}</div>
+                  </div>
+               </div>
+
+               <div className="bg-[#3D3A35] rounded-[64px] p-12 border-8 border-white shadow-2xl flex flex-col text-white">
+                  <div className="flex items-center justify-between mb-12">
+                     <div className="flex flex-col">
+                        <span className="text-6xl font-display leading-none tabular-nums text-[#FACC15]">{Object.values(room.players).filter((p: Player) => p.connected).length}</span>
+                        <span className="text-xs font-black uppercase tracking-[0.3em] opacity-60">Players In Hall</span>
+                     </div>
+                     <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center animate-pulse">
+                        <Users size={32} className="text-[#FACC15]" />
+                     </div>
+                  </div>
+
+                  <div className="flex-1 space-y-4 overflow-hidden relative">
+                     <div className="absolute inset-0 bg-gradient-to-t from-[#3D3A35] via-transparent to-transparent z-10 pointer-events-none" />
+                     <h4 className="text-xs font-black uppercase tracking-[0.3em] mb-6 opacity-40">Recent Arrivals</h4>
+                     {Object.values(room.players).filter((p: Player) => p.connected).slice(-6).reverse().map((p: Player, i) => (
+                        <motion.div 
+                           key={p.id} 
+                           initial={{ x: -20, opacity: 0 }} 
+                           animate={{ x: 0, opacity: 1 }} 
+                           transition={{ delay: i * 0.1 }}
+                           className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/10"
+                        >
+                           <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black" style={{ backgroundColor: p.avatarColor }}>
+                              {p.nickname.substring(0,2).toUpperCase()}
+                           </div>
+                           <span className="text-xl font-bold uppercase tracking-tight truncate">{p.nickname} has entered!</span>
+                        </motion.div>
+                     ))}
+                     {Object.values(room.players).length === 0 && <div className="py-20 text-center text-white/20 font-bold italic uppercase tracking-widest">Waiting for players...</div>}
+                  </div>
+               </div>
+            </div>
+         </div>
+
+         {!audioEnabled && (
+            <div className="fixed inset-0 z-[100] bg-[#3D3A35]/60 backdrop-blur-md flex items-center justify-center">
+               <button onClick={enableAudio} className="bg-[#EA580C] text-white px-12 py-8 rounded-[40px] font-display text-4xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center gap-4 border-4 border-white tracking-widest uppercase italic">
+                  <Monitor size={64} />ENABLE ANNOUNCER
+               </button>
+            </div>
+         )}
+      </div>
+    );
+  }
 
   const joinUrl = `${window.location.origin}/?code=${room.id}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&bgcolor=FAF7F2&color=3D3A35`;
@@ -256,7 +338,7 @@ export default function Display() {
         <div className="flex items-center gap-12">
           <div className="flex flex-col items-end"><span className="text-xs font-black text-[#A19B91] uppercase tracking-widest">Room Code</span><span className="text-6xl font-display tracking-tighter text-[#3D3A35] leading-none tabular-nums">{room.id}</span></div>
           <div className="h-12 w-1 bg-[#E8E2D9] rounded-full" />
-          <div className="flex flex-col items-end"><span className="text-xs font-black text-[#A19B91] uppercase tracking-widest">Players</span><div className="flex items-center gap-2"><Users className="text-[#0D9488]" size={24} /><span className="text-5xl font-display text-[#3D3A35] leading-none tabular-nums">{Object.values(room.players).filter(p => p.connected).length}</span></div></div>
+          <div className="flex flex-col items-end"><span className="text-xs font-black text-[#A19B91] uppercase tracking-widest">Players</span><div className="flex items-center gap-2"><Users className="text-[#0D9488]" size={24} /><span className="text-5xl font-display text-[#3D3A35] leading-none tabular-nums">{Object.values(room.players).filter((p: Player) => p.connected).length}</span></div></div>
         </div>
       </header>
 
@@ -264,18 +346,24 @@ export default function Display() {
         <AnimatePresence>
            {nearWinAlert && (
               <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
-                exit={{ opacity: 0 }} 
-                className="absolute inset-4 z-0 pointer-events-none rounded-[60px] shadow-[inset_0_0_100px_rgba(234,88,12,0.4)] border-4 border-[#EA580C]/50"
+                initial={{ opacity: 0, scale: 0.8 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                exit={{ opacity: 0, scale: 1.2 }} 
+                className="absolute inset-4 z-0 pointer-events-none rounded-[60px] shadow-[inset_0_0_100px_rgba(234,88,12,0.6)] border-8 border-[#EA580C]/50 flex items-center justify-center"
               >
                  <motion.div 
-                   animate={{ opacity: [0.3, 0.6, 0.3] }} 
-                   transition={{ repeat: Infinity, duration: 1.5 }}
-                   className="absolute inset-0 bg-[#EA580C]/5 rounded-[56px]"
+                   animate={{ opacity: [0.2, 0.5, 0.2] }} 
+                   transition={{ repeat: Infinity, duration: 1 }}
+                   className="absolute inset-0 bg-[#EA580C]/10 rounded-[56px]"
                  />
-                 <div className="absolute top-4 right-8 bg-[#EA580C] text-white px-6 py-2 rounded-full font-black uppercase tracking-widest animate-bounce shadow-lg">
-                    High Alert: 1 Away!
+                 <div className="relative z-10 flex flex-col items-center gap-4">
+                    <div className="bg-[#EA580C] text-white px-12 py-4 rounded-full font-black text-4xl uppercase tracking-[0.2em] animate-bounce shadow-2xl border-4 border-white italic">
+                       HIGH ALERT: 1 AWAY!
+                    </div>
+                    <div className="bg-white/90 backdrop-blur-md px-10 py-3 rounded-2xl border-4 border-[#EA580C] shadow-xl">
+                       <span className="text-5xl font-black text-[#3D3A35] uppercase tracking-tighter">{nearWinAlert.playerName}</span>
+                       <span className="text-xl font-bold text-[#EA580C] ml-4 uppercase tracking-widest">on {nearWinAlert.patternName}</span>
+                    </div>
                  </div>
               </motion.div>
            )}

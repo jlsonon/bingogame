@@ -110,7 +110,10 @@ export function checkValidWin(
     const r = Math.floor(index / 5);
     const c = index % 5;
     const val = card[r]?.[c];
-    return val === 0 || marked.includes(val);
+    // FREE space (val === 0) is always marked
+    if (val === 0) return true;
+    // Real numbers must be marked BY PLAYER AND called BY SERVER
+    return marked.includes(val) && called.includes(val);
   };
 
   const getDikitAway = () => {
