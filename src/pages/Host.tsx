@@ -3,11 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BallCaller } from '../components/BallCaller';
 import { PatternVisualizer } from '../components/PatternVisualizer';
-import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin } from '../lib/bingo';
-import { SOUNDS, setVoiceBaseUrl, playVoiceBall } from '../lib/sounds';
+import { SOUNDS, playVoiceBall, previewVoice } from '../lib/sounds';
+import { NATURAL_VOICES } from '../lib/voices';
 
 const DELETED_PATTERN_IDENTIFIERS = new Set([
   'letter-x', 'letter-t', 'letter-l', 'dikit',
@@ -84,12 +85,6 @@ export default function Host() {
   const [customCells, setCustomCells] = useState<number[]>([12]);
   const [activeCustomId, setActiveCustomId] = useState<string>(() => `custom-${Date.now()}`);
   const [saveFeedback, setSaveFeedback] = useState<string>('');
-  const [voiceUrl, setVoiceUrl] = useState(localStorage.getItem('bingo_voice_url') || '');
-
-  useEffect(() => {
-    localStorage.setItem('bingo_voice_url', voiceUrl);
-    setVoiceBaseUrl(voiceUrl);
-  }, [voiceUrl]);
 
   // --- MIGRATION: ONE-TIME SYNC LOCAL PATTERNS TO SERVER ---
   useEffect(() => {
@@ -149,9 +144,7 @@ export default function Host() {
       }
       if (event.code === 'KeyR' && latestBall) {
          // Re-read last ball
-         const voiceUrlParam = localStorage.getItem('bingo_voice_url') || '';
-         setVoiceBaseUrl(voiceUrlParam);
-         const played = playVoiceBall(latestBall, room?.voiceMode || 'robotic', voiceUrlParam);
+         const played = playVoiceBall(latestBall, room?.voiceMode || 'robotic');
          if (!played && 'speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const msg = new SpeechSynthesisUtterance(`${getBallLetter(latestBall)}... ${latestBall}`);
@@ -554,15 +547,30 @@ export default function Host() {
                       </div>
                     </div>
                   )}
-                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Hall Ambience</span><button onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#A19B91] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? '🔊 Active' : '🔇 Muted'}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Voice Engine</span><select value={room.voiceMode} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 bg-white rounded-xl text-[10px] font-black uppercase border-2 border-[#DED9D1] outline-none">
-  <option value="robotic">🤖 Robotic</option>
-  <option value="custom">👤 Custom / Local</option>
-  <option value="ai_sarcastic">😈 Sarcastic AI</option>
-  <option value="ai_vegas">🎲 Vegas AI</option>
-  <option value="ai_lounge">🍸 Lounge AI</option>
+                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Hall Ambience</span><button onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#A19B91] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? '🔊 Active' : '🔇 Muted'}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex justify-between items-center mb-2"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Voice Engine</span><button type="button" onClick={() => previewVoice(room.voiceMode || 'robotic')} className="text-[9px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2 py-0.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1" title="Test selected voice"><Volume2 size={10} />Test</button></div><select value={room.voiceMode || 'robotic'} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 px-1 bg-white rounded-xl text-[10px] font-black uppercase border-2 border-[#DED9D1] outline-none cursor-pointer">
+  <option value="robotic">🤖 Robotic (Browser TTS)</option>
+  <optgroup label="United States Natural Voices">
+    {NATURAL_VOICES.filter(v => v.region === 'United States').map(v => (
+      <option key={v.id} value={v.id}>{v.label}</option>
+    ))}
+  </optgroup>
+  <optgroup label="United Kingdom Natural Voices">
+    {NATURAL_VOICES.filter(v => v.region === 'United Kingdom').map(v => (
+      <option key={v.id} value={v.id}>{v.label}</option>
+    ))}
+  </optgroup>
+  <optgroup label="Australia & Canada Natural Voices">
+    {NATURAL_VOICES.filter(v => v.region === 'Australia' || v.region === 'Canada').map(v => (
+      <option key={v.id} value={v.id}>{v.label}</option>
+    ))}
+  </optgroup>
+  <optgroup label="Philippines & Ireland & India">
+    {NATURAL_VOICES.filter(v => ['Philippines', 'Ireland', 'India'].includes(v.region)).map(v => (
+      <option key={v.id} value={v.id}>{v.label}</option>
+    ))}
+  </optgroup>
 </select></div></div>
                  <div className="pt-4 border-t-2 border-[#FAF7F2]"><div className="flex items-center justify-between bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex flex-col"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Mystery Mode</span><span className="text-[10px] font-bold text-[#A19B91] uppercase tracking-tighter">Hide winning pattern from screens</span></div><button onClick={() => updateSettings({ hidePattern: !room.hidePattern })} className={`w-14 h-8 rounded-full transition-all relative ${room.hidePattern ? 'bg-[#0D9488]' : 'bg-[#DED9D1]'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${room.hidePattern ? 'left-7' : 'left-1'}`} /></button></div></div>
-                 {room.voiceMode === 'custom' && (<div className="pt-4 border-t-2 border-[#FAF7F2]"><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Custom Voice URL Template</label><input value={voiceUrl} onChange={e => setVoiceUrl(e.target.value)} placeholder="https://site.com/voices/{filename}" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-bold text-xs focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]" /><p className="text-[8px] text-[#A19B91] font-bold uppercase leading-tight mt-1 px-1">Use <span className="text-[#EA580C]">{'{filename}'}</span> for B12.mp3 or <span className="text-[#EA580C]">{'{number}'}</span> for 12.</p></div></div>)}
               </div><button onClick={() => setShowSettings(false)} className="mt-8 w-full bg-[#3D3A35] text-white py-4 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">Save & Close</button></div></div>)}
 
       {room.claims.length > 0 && !winner && (

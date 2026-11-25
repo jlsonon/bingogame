@@ -28,7 +28,7 @@ export interface Room {
   roundName: string;
   roundNumber: number;
   autoCallSpeed: number;
-  voiceMode: 'robotic' | 'custom' | 'ai_sarcastic' | 'ai_vegas' | 'ai_lounge';
+  voiceMode: string;
   ambienceEnabled: boolean;
   voiceId?: string;
   patterns: BingoPattern[];

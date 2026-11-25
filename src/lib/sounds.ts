@@ -1,5 +1,6 @@
 // Sound Manager Utility for Lucky Bingo
-// Handles UI sound effects and custom external voice calls
+// Handles UI sound effects, natural human neural voices, and robotic speech fallback
+import { isNaturalVoice } from './voices';
 
 export const SOUNDS = {
   BALL_DRAW: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',
@@ -8,15 +9,24 @@ export const SOUNDS = {
   DIKIT_HIT: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
   JACKPOT_WIN: 'https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3',
   DRUMROLL: 'https://www.soundjay.com/misc/sounds/drum-roll-01.mp3',
-  CLICK: 'https://assets.mixkit.co/active_storage/sfx/2568/2571-preview.mp3', // Generic click
+  CLICK: 'https://assets.mixkit.co/active_storage/sfx/2568/2571-preview.mp3',
 };
 
-// Map for external voice calls
-let VOICE_BASE_URL = ''; 
-const AUDIO_CACHE: Record<string, string> = {}; // text -> blobUrl
+let currentVoiceAudio: HTMLAudioElement | null = null;
 
-export function setVoiceBaseUrl(url: string) {
-  VOICE_BASE_URL = url;
+export function stopVoice() {
+  if (currentVoiceAudio) {
+    try {
+      currentVoiceAudio.pause();
+      currentVoiceAudio.currentTime = 0;
+    } catch {
+      // Ignore abort errors
+    }
+    currentVoiceAudio = null;
+  }
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
 }
 
 export function playSound(url: string, volume = 0.5) {
@@ -29,90 +39,48 @@ export function playSound(url: string, volume = 0.5) {
   }
 }
 
-export async function playElevenLabs(text: string, voiceId: string, apiKey: string) {
-  if (AUDIO_CACHE[text]) {
-    playSound(AUDIO_CACHE[text], 1.0);
+export function playVoiceBall(ball: number, mode: string): boolean {
+  stopVoice();
+
+  // 1. Natural Neural Voices (Streamed via Edge Natural Neural TTS)
+  if (isNaturalVoice(mode)) {
+    try {
+      const url = `/api/tts?voice=${encodeURIComponent(mode)}&ball=${ball}`;
+      const audio = new Audio(url);
+      audio.volume = 1.0;
+      currentVoiceAudio = audio;
+      audio.play().catch(e => console.warn('Natural voice playback blocked:', e));
+      return true;
+    } catch (err) {
+      console.error('Failed to play natural voice ball:', err);
+      return false;
+    }
+  }
+
+  // 2. Robotic Mode (Standard Browser Web Speech)
+  return false;
+}
+
+export function previewVoice(mode: string): void {
+  stopVoice();
+
+  if (isNaturalVoice(mode)) {
+    try {
+      const url = `/api/tts?voice=${encodeURIComponent(mode)}&preview=true`;
+      const audio = new Audio(url);
+      audio.volume = 1.0;
+      currentVoiceAudio = audio;
+      audio.play().catch(e => console.warn('Voice preview blocked:', e));
+    } catch (err) {
+      console.error('Failed to preview natural voice:', err);
+    }
     return;
   }
 
-  try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.4, similarity_boost: 0.8 }
-      }),
-    });
-
-    if (!response.ok) throw new Error('ElevenLabs API error');
-    
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    AUDIO_CACHE[text] = url;
-    playSound(url, 1.0);
-  } catch (err) {
-    console.error('ElevenLabs TTS failed, check API key or balance:', err);
-    return false;
+  // Robotic Preview
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance("Lucky Bingo! B... 12.");
+    utterance.rate = 0.85;
+    window.speechSynthesis.speak(utterance);
   }
-}
-
-export function playVoiceBall(ball: number, mode: string, customUrlTemplate?: string) {
-  const letter = ball <= 15 ? 'B' : ball <= 30 ? 'I' : ball <= 45 ? 'N' : ball <= 60 ? 'G' : 'O';
-  const text = `${letter}... ${ball}`;
-  const filename = `${letter}${ball}.mp3`;
-
-  // Priority 1: Custom/Static Mode
-  if (mode === 'custom') {
-    const localUrl = `/assets/voices/${filename}`;
-    const templateUrl = customUrlTemplate 
-      ? customUrlTemplate.replace('{filename}', filename).replace('{number}', String(ball))
-      : localUrl;
-    
-    playSound(templateUrl, 1.0);
-    return true;
-  }
-  
-  // Priority 2: AI Personas
-  if (mode.startsWith('ai_')) {
-     const scripts: Record<string, string[]> = {
-        ai_sarcastic: [
-           `Pay attention! It's ${letter} ${ball}. Not that most of you are close anyway.`,
-           `${letter} ${ball}. Finally! Was that so hard to find?`,
-           `Look who's awake! ${letter} ${ball} is called.`,
-           `Oh look, another number you don't have. ${letter} ${ball}.`
-        ],
-        ai_vegas: [
-           `Place your bets! We've got ${letter} ${ball}!`,
-           `The dice are hot! Next up is ${letter} ${ball}!`,
-           `Winner winner chicken dinner! It's ${letter} ${ball}!`,
-           `High rollers, take note: ${letter} ${ball}!`
-        ],
-        ai_lounge: [
-           `Relax and enjoy the vibe. The number is ${letter} ${ball}.`,
-           `Smooth calls only. We have ${letter} ${ball}.`,
-           `Take a sip, check your card. ${letter} ${ball}.`,
-           `In the pocket. ${letter} ${ball}.`
-        ]
-     };
-     
-     const personaLines = scripts[mode] || [`${letter}... ${ball}`];
-     const line = personaLines[Math.floor(Math.random() * personaLines.length)];
-     
-     if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(line);
-        // We'll use the voice set in the component
-        utterance.rate = mode === 'ai_vegas' ? 1.1 : mode === 'ai_lounge' ? 0.7 : 0.9;
-        window.speechSynthesis.speak(utterance);
-        return true;
-     }
-  }
-
-  // Priority 3: Robotic Mode (Standard Browser)
-  return false; // Tells the component to use default SpeechSynthesis
 }

@@ -6,12 +6,14 @@ import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import { checkValidWin, checkDikitSidequest, generateRandomCard, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
+import { NATURAL_VOICE_MAP } from "./src/lib/voices";
 import { z } from "zod";
 
 const SettingsSchema = z.object({
   mode: z.enum(['Bingo', 'Blackout', 'Dikit']).optional(),
   autoCallSpeed: z.number().min(0).optional(),
-  voiceMode: z.enum(['robotic', 'custom', 'ai_sarcastic', 'ai_vegas', 'ai_lounge']).optional(),
+  voiceMode: z.string().max(64).optional(),
   ambienceEnabled: z.boolean().optional(),
   voiceId: z.string().max(64).optional(),
   roundName: z.string().max(40).optional(),
@@ -58,7 +60,7 @@ interface Room {
   roundName: string;
   roundNumber: number;
   autoCallSpeed: number; // in seconds, 0 means manual
-  voiceMode: 'robotic' | 'custom' | 'ai_sarcastic' | 'ai_vegas' | 'ai_lounge';
+  voiceMode: string;
   ambienceEnabled: boolean;
   voiceId: string;
   patterns: BingoPattern[];
@@ -273,7 +275,8 @@ function prepareNextRound(code: string, io: Server, autoStart = false) {
   }
 }
 
-function normalizeCode(code: string) {
+function normalizeCode(code: unknown) {
+  if (typeof code !== 'string') return '';
   return code.trim().toUpperCase();
 }
 
@@ -379,6 +382,73 @@ async function startServer() {
     }
   });
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+
+  const ttsCache = new Map<string, Buffer>();
+
+  app.get("/api/tts", async (req, res) => {
+    try {
+      const voiceId = String(req.query.voice || 'natural_jenny');
+      const ballNum = req.query.ball ? parseInt(String(req.query.ball), 10) : undefined;
+      const preview = req.query.preview === 'true';
+      const customText = req.query.text ? String(req.query.text).slice(0, 100) : undefined;
+
+      const voiceConfig = NATURAL_VOICE_MAP[voiceId];
+      if (!voiceConfig) {
+        return res.status(400).json({ error: "Invalid natural voice ID" });
+      }
+
+      let textToSpeak = "";
+      if (ballNum && ballNum >= 1 && ballNum <= 75) {
+        const letter = ballNum <= 15 ? 'B' : ballNum <= 30 ? 'I' : ballNum <= 45 ? 'N' : ballNum <= 60 ? 'G' : 'O';
+        textToSpeak = `${letter}... ${ballNum}.`;
+      } else if (customText) {
+        textToSpeak = customText;
+      } else if (preview) {
+        textToSpeak = `Lucky Bingo! B... 12.`;
+      } else {
+        textToSpeak = `Lucky Bingo!`;
+      }
+
+      const cacheKey = `${voiceConfig.edgeVoice}:${textToSpeak}`;
+      if (ttsCache.has(cacheKey)) {
+        const cached = ttsCache.get(cacheKey)!;
+        res.setHeader("Content-Type", "audio/mpeg");
+        res.setHeader("Content-Length", cached.length);
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(cached);
+      }
+
+      const tts = new MsEdgeTTS();
+      await tts.setMetadata(voiceConfig.edgeVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+      const stream = tts.toStream(textToSpeak);
+      const chunks: Buffer[] = [];
+
+      stream.audioStream.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+
+      stream.audioStream.on("end", () => {
+        const fullBuffer = Buffer.concat(chunks);
+        ttsCache.set(cacheKey, fullBuffer);
+        res.setHeader("Content-Type", "audio/mpeg");
+        res.setHeader("Content-Length", fullBuffer.length);
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.send(fullBuffer);
+      });
+
+      stream.audioStream.on("error", (err: any) => {
+        console.error("TTS stream error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "TTS generation error" });
+        }
+      });
+    } catch (err: any) {
+      console.error("TTS endpoint error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "TTS endpoint failed" });
+      }
+    }
+  });
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
