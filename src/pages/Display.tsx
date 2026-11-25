@@ -38,6 +38,8 @@ export default function Display() {
   const [lastBalls, setLastBalls] = useState<number[]>([]);
   const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [revealedBall, setRevealedBall] = useState<number | null>(() => latestBall || null);
+  const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Reveal Spectacle State
   const [revealStatus, setRevealStatus] = useState<'idle' | 'verifying' | 'winner'>('idle');
@@ -122,34 +124,77 @@ export default function Display() {
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }, [connect]);
 
-  // Voice Trigger logic with Ducking
+  // Voice & Ball Reveal Synchronization with Ducking
   useEffect(() => {
-    if (latestBall && audioEnabled) {
-      playSound(SOUNDS.BALL_DRAW, 0.4);
-      
-      // DUCK AMBIENCE
-      if (ambienceRef.current) ambienceRef.current.volume = 0.05;
-      
-      const voiceTriggered = playVoiceBall(latestBall, room?.voiceMode || 'robotic');
-      
-      if (!voiceTriggered) {
-        window.speechSynthesis.cancel();
-        const letter = getBallLetter(latestBall);
-        const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
-        if (maleVoice) utterance.voice = maleVoice;
-        utterance.rate = 0.85;
-        utterance.onend = () => {
-           // RESTORE AMBIENCE
-           if (ambienceRef.current) ambienceRef.current.volume = 0.15;
-        };
-        window.speechSynthesis.speak(utterance);
-      } else {
-         // If using custom/file voice, restore after 2 seconds (typical call duration)
-         setTimeout(() => {
-            if (ambienceRef.current) ambienceRef.current.volume = 0.15;
-         }, 2500);
-      }
+    if (!latestBall) {
+      setRevealedBall(null);
+      return;
     }
+
+    // If audio is disabled, reveal immediately
+    if (!audioEnabled) {
+      setRevealedBall(latestBall);
+      return;
+    }
+
+    // Play chute / ball draw sound
+    playSound(SOUNDS.BALL_DRAW, 0.4);
+
+    // DUCK AMBIENCE
+    if (ambienceRef.current) ambienceRef.current.volume = 0.05;
+
+    let hasRevealed = false;
+    const triggerReveal = () => {
+      if (!hasRevealed) {
+        hasRevealed = true;
+        setRevealedBall(latestBall);
+      }
+    };
+
+    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    // Safety fallback: ensure ball reveals within 300ms if voice initialization stalls
+    fallbackTimerRef.current = setTimeout(triggerReveal, 300);
+
+    const voiceTriggered = playVoiceBall(latestBall, room?.voiceMode || 'robotic', {
+      onStart: () => {
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        triggerReveal();
+      },
+      onEnd: () => {
+        if (ambienceRef.current) ambienceRef.current.volume = 0.15;
+      }
+    });
+
+    if (!voiceTriggered) {
+      window.speechSynthesis.cancel();
+      const letter = getBallLetter(latestBall);
+      const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
+      if (maleVoice) utterance.voice = maleVoice;
+      utterance.rate = 0.85;
+
+      utterance.onstart = () => {
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        triggerReveal();
+      };
+      utterance.onend = () => {
+        if (ambienceRef.current) ambienceRef.current.volume = 0.15;
+      };
+      utterance.onerror = () => {
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        triggerReveal();
+        if (ambienceRef.current) ambienceRef.current.volume = 0.15;
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setTimeout(() => {
+        if (ambienceRef.current) ambienceRef.current.volume = 0.15;
+      }, 2500);
+    }
+
+    return () => {
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    };
   }, [latestBall, maleVoice, audioEnabled, room?.voiceMode]);
 
   const enableAudio = () => {
@@ -384,14 +429,21 @@ export default function Display() {
           <div className="grid grid-cols-[400px_1fr] gap-8 shrink-0">
             <div className="aspect-square bg-white rounded-[48px] border-4 border-[#E8E2D9] shadow-xl flex flex-col items-center justify-center relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-white to-[#FAF7F2]" />
-              <AnimatePresence mode="wait">
-                {latestBall ? (
-                  <motion.div key={latestBall} initial={{ scale: 0.5, y: 100, opacity: 0, rotate: -20 }} animate={{ scale: 1, y: 0, opacity: 1, rotate: 0 }} exit={{ scale: 1.2, opacity: 0, transition: { duration: 0.2 } }} className="relative z-10 flex flex-col items-center">
+              <AnimatePresence mode="popLayout">
+                {revealedBall ? (
+                  <motion.div
+                    key={revealedBall}
+                    initial={{ scale: 0.5, y: 100, opacity: 0, rotate: -20 }}
+                    animate={{ scale: 1, y: 0, opacity: 1, rotate: 0 }}
+                    exit={{ scale: 1.15, opacity: 0, transition: { duration: 0.15 } }}
+                    transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                    className="relative z-10 flex flex-col items-center"
+                  >
                     <div className="w-64 h-64 rounded-full bg-[#FACC15] border-[12px] border-white outline outline-[12px] outline-[#FACC15] shadow-2xl flex flex-col items-center justify-center text-[#854D0E] relative">
                       <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-black/20 via-transparent to-white/40 pointer-events-none" />
                       <div className="absolute top-8 left-12 w-16 h-8 bg-white/30 rounded-[100%] blur-sm -rotate-45 pointer-events-none" />
-                      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-5xl font-display leading-none mb-2 z-10">{getBallLetter(latestBall)}</motion.span>
-                      <motion.span initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="text-[160px] font-display leading-none tracking-tighter z-10">{latestBall}</motion.span>
+                      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-5xl font-display leading-none mb-2 z-10">{getBallLetter(revealedBall)}</motion.span>
+                      <motion.span initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="text-[160px] font-display leading-none tracking-tighter z-10">{revealedBall}</motion.span>
                     </div>
                   </motion.div>
                 ) : (<div className="relative z-10 flex flex-col items-center gap-4 text-[#DED9D1]"><PlayCircle size={100} strokeWidth={1.5} /><span className="text-2xl font-black uppercase tracking-widest">Waiting to start</span></div>)}

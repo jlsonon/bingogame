@@ -317,7 +317,55 @@ export default function Host() {
         <section className="bg-white border-r-2 border-[#E8E2D9] p-6 flex flex-col gap-6 overflow-y-auto">
            <div><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Tactical Controls</h3><div className="grid grid-cols-1 gap-3">{room.status === 'waiting' && (<button onClick={startGame} className="w-full py-5 bg-[#0D9488] text-white rounded-2xl font-black text-xl shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all uppercase tracking-widest flex items-center justify-center gap-3"><Play size={24} fill="currentColor" />Lobby Start</button>)}{(room.status === 'playing' || room.status === 'paused') && (<div className="flex flex-col gap-3"><div className="grid grid-cols-2 gap-3"><button onClick={pauseGame} disabled={room.status === 'paused'} className={`py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all border-2 ${room.status === 'paused' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#A19B91]' : 'bg-[#EF4444] border-[#EF4444] text-white shadow-[0_4px_0_#B91C1C] active:translate-y-[4px] active:shadow-none'}`}><Square size={18} fill="currentColor" className="inline mr-2" />Emergency Stop</button><button onClick={resumeGame} disabled={room.status === 'playing'} className={`py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all border-2 ${room.status === 'playing' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#A19B91]' : 'bg-[#0D9488] border-[#0D9488] text-white shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none'}`}><Play size={18} fill="currentColor" className="inline mr-2" />Safety Resume</button></div><button onClick={resetGame} className="w-full py-3 bg-[#FAF7F2] border-2 border-[#E8E2D9] text-[#A19B91] rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-[#E8E2D9] hover:text-[#3D3A35] transition-all">Abort Round / Reset</button></div>)}{room.status === 'next_round' && (<button onClick={startNextRound} className="w-full py-5 bg-[#FACC15] text-[#854D0E] rounded-2xl font-black text-xl shadow-[0_6px_0_#A16207] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-tighter flex flex-col items-center leading-none"><span className="text-[10px] mb-1">Manual Override</span>Next Round Now</button>)}</div></div>
            <div className="pt-6 border-t-2 border-[#FAF7F2]"><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Ball Calling</h3><div className="space-y-4"><div className="bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest block mb-2">Auto-Call Speed (seconds)</label><div className="flex gap-2">{[0, 3, 5].map(speed => (<button key={speed} onClick={() => updateSettings({ autoCallSpeed: speed })} className={`flex-1 py-2 rounded-xl text-xs font-black border-2 transition-all ${room.autoCallSpeed === speed ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#DED9D1] text-[#A19B91] hover:border-[#A19B91]'}`}>{speed === 0 ? 'Off' : `${speed}s`}</button>))}<input type="number" min="0" placeholder="Custom" value={room.autoCallSpeed || ''} onChange={e => updateSettings({ autoCallSpeed: parseInt(e.target.value) || 0 })} className="w-16 py-2 px-1 text-center rounded-xl text-xs font-black border-2 bg-white border-[#DED9D1] text-[#3D3A35] focus:border-[#0D9488] outline-none" /></div></div>{room.status === 'playing' && room.autoCallSpeed === 0 && (<button onClick={callNextBall} className="w-full py-8 bg-[#3D3A35] text-white rounded-[32px] font-black text-2xl shadow-[0_8px_0_#1C1917] active:translate-y-[8px] active:shadow-none transition-all uppercase tracking-widest">Call Ball</button>)}</div></div>
-           <div className="mt-auto pt-6 border-t-2 border-[#FAF7F2]"><div className="bg-[#FDFBF7] rounded-2xl p-4 border border-[#E8E2D9] text-center"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x180&data=${encodeURIComponent(joinUrl)}`} alt="QR" className="mx-auto w-32 h-32 mb-3" /><p className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest">Join via Link</p><p className="text-xs font-bold text-[#3D3A35] truncate mt-1">{joinUrl}</p></div></div>
+           <div className="mt-auto pt-4 border-t-2 border-[#FAF7F2]">
+             <div className="bg-[#FAF7F2] rounded-2xl p-4 border-2 border-[#E8E2D9] space-y-4">
+               <div>
+                 <div className="text-[10px] font-black uppercase tracking-widest text-[#0D9488] mb-1.5 flex items-center justify-between">
+                   <span>⚔️ Dikit Winners:</span>
+                   {room.dikitWinners && room.dikitWinners.length > 0 && (
+                     <span className="text-[9px] bg-[#0D9488]/15 text-[#0D9488] px-1.5 py-0.5 rounded font-black">
+                       {room.dikitWinners.length}
+                     </span>
+                   )}
+                 </div>
+                 {room.dikitWinners && room.dikitWinners.length > 0 ? (
+                   <div className="space-y-1">
+                     {room.dikitWinners.map((w: any, idx: number) => (
+                       <div key={w.id || idx} className="bg-white px-2.5 py-1.5 rounded-xl border border-[#E8E2D9] flex items-center justify-between text-xs">
+                         <span className="font-black text-[#3D3A35] truncate">{w.playerName || w.name}</span>
+                         <span className="text-[10px] font-bold text-[#0D9488] bg-[#0D9488]/10 px-1.5 py-0.5 rounded">Card {(w.cardIndex ?? 0) + 1}</span>
+                       </div>
+                     ))}
+                   </div>
+                 ) : (
+                   <p className="text-xs text-[#A19B91] italic pl-1">None yet</p>
+                 )}
+               </div>
+
+               <div className="pt-2 border-t border-[#E8E2D9]">
+                 <div className="text-[10px] font-black uppercase tracking-widest text-[#EA580C] mb-1.5 flex items-center justify-between">
+                   <span>🏆 Bingo Winners:</span>
+                   {room.verifiedWinners && room.verifiedWinners.length > 0 && (
+                     <span className="text-[9px] bg-[#EA580C]/15 text-[#EA580C] px-1.5 py-0.5 rounded font-black">
+                       {room.verifiedWinners.length}
+                     </span>
+                   )}
+                 </div>
+                 {room.verifiedWinners && room.verifiedWinners.length > 0 ? (
+                   <div className="space-y-1">
+                     {room.verifiedWinners.map((w: any, idx: number) => (
+                       <div key={w.id || idx} className="bg-white px-2.5 py-1.5 rounded-xl border border-[#E8E2D9] flex items-center justify-between text-xs">
+                         <span className="font-black text-[#3D3A35] truncate">{w.playerName || w.name}</span>
+                         <span className="text-[10px] font-bold text-[#EA580C] bg-[#EA580C]/10 px-1.5 py-0.5 rounded">{w.pattern || 'Bingo'}</span>
+                       </div>
+                     ))}
+                   </div>
+                 ) : (
+                   <p className="text-xs text-[#A19B91] italic pl-1">None yet</p>
+                 )}
+               </div>
+             </div>
+           </div>
         </section>
 
         <section className="bg-[#FAF7F2] p-8 flex flex-col gap-8 overflow-y-auto">

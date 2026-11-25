@@ -39,7 +39,14 @@ export function playSound(url: string, volume = 0.5) {
   }
 }
 
-export function playVoiceBall(ball: number, mode: string): boolean {
+export function playVoiceBall(
+  ball: number,
+  mode: string,
+  callbacks?: {
+    onStart?: () => void;
+    onEnd?: () => void;
+  }
+): boolean {
   stopVoice();
 
   // 1. Natural Neural Voices (Streamed via Edge Natural Neural TTS)
@@ -49,10 +56,34 @@ export function playVoiceBall(ball: number, mode: string): boolean {
       const audio = new Audio(url);
       audio.volume = 1.0;
       currentVoiceAudio = audio;
-      audio.play().catch(e => console.warn('Natural voice playback blocked:', e));
+
+      let started = false;
+      const triggerStart = () => {
+        if (!started) {
+          started = true;
+          callbacks?.onStart?.();
+        }
+      };
+
+      audio.addEventListener('play', triggerStart, { once: true });
+      audio.addEventListener('playing', triggerStart, { once: true });
+      if (callbacks?.onEnd) {
+        audio.addEventListener('ended', callbacks.onEnd, { once: true });
+      }
+
+      // Fallback timer: ensure visual reveal triggers even if network/audio buffers slowly
+      const fallbackTimer = setTimeout(triggerStart, 350);
+      audio.addEventListener('playing', () => clearTimeout(fallbackTimer), { once: true });
+
+      audio.play().catch(e => {
+        console.warn('Natural voice playback blocked:', e);
+        clearTimeout(fallbackTimer);
+        triggerStart();
+      });
       return true;
     } catch (err) {
       console.error('Failed to play natural voice ball:', err);
+      callbacks?.onStart?.();
       return false;
     }
   }
