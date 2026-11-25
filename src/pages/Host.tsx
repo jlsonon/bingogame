@@ -339,7 +339,28 @@ export default function Host() {
               </div>
               <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-6 shadow-sm flex flex-col"><div className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em] mb-4 text-center">Active Pattern</div><div className="flex-1 flex items-center justify-center">{!room.hidePattern ? (<PatternVisualizer patterns={room.patterns} className="scale-125 origin-center" />) : (<div className="text-[#DED9D1] flex flex-col items-center gap-2"><Eye size={32} className="opacity-30" /><span className="text-[10px] font-black uppercase tracking-widest text-center leading-tight px-4">Pattern Hidden from Screens</span></div>)}</div><div className="mt-4 pt-4 border-t-2 border-[#FAF7F2] text-center"><div className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest leading-none mb-1">Mode</div><div className="text-lg font-black text-[#EA580C] uppercase tracking-tighter">{room.mode}</div></div></div>
            </div>
-           <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-8 shadow-sm flex-1 min-h-0 overflow-y-auto"><div className="flex justify-between items-center mb-6"><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Master Number Board</h3><div className="text-xs font-black text-[#EA580C] tabular-nums bg-[#EA580C]/10 px-3 py-1 rounded-full">{room.calledNumbers.length} / 75</div></div><div className="grid grid-cols-15 gap-2">{Array.from({length: 75}, (_, i) => i + 1).map(num => (<div key={num} className={`aspect-square flex items-center justify-center text-lg font-display rounded-lg border-2 transition-all relative overflow-hidden ${room.calledNumbers.includes(num) ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm' : 'bg-[#FAF7F2] text-[#DED9D1] border-[#E8E2D9]'}`}>{room.calledNumbers.includes(num) && (<div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />)}{num}</div>))}</div></div>
+           <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-8 shadow-sm flex-1 min-h-0 overflow-y-auto">
+             {room.dikitFight && room.dikitFight.status === 'active' && (
+               <div className="bg-[#0D9488]/10 border-2 border-[#0D9488] rounded-2xl p-3 mb-6 flex items-center justify-between">
+                 <div className="flex items-center gap-2">
+                   <span className="text-xl">⚔️</span>
+                   <div>
+                     <div className="text-xs font-black uppercase tracking-wider text-[#0D9488]">
+                       Dikit Fight In Progress
+                     </div>
+                     <div className="text-[10px] font-bold text-[#7A746B]">
+                       {room.dikitFight.roundBingoPending
+                         ? '🏆 BINGO VERIFIED! Continue calling balls to conclude Dikit Fight'
+                         : 'Simultaneous sidebet: Waiting for 1 or 2 cards to hit another Dikit'}
+                     </div>
+                   </div>
+                 </div>
+                 <div className="text-[10px] font-black uppercase bg-[#0D9488] text-white px-3 py-1 rounded-full">
+                   {room.dikitFight.contenders.map(c => c.playerName).join(' vs ')}
+                 </div>
+               </div>
+             )}
+             <div className="flex justify-between items-center mb-6"><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Master Number Board</h3><div className="text-xs font-black text-[#EA580C] tabular-nums bg-[#EA580C]/10 px-3 py-1 rounded-full">{room.calledNumbers.length} / 75</div></div><div className="grid grid-cols-15 gap-2">{Array.from({length: 75}, (_, i) => i + 1).map(num => (<div key={num} className={`aspect-square flex items-center justify-center text-lg font-display rounded-lg border-2 transition-all relative overflow-hidden ${room.calledNumbers.includes(num) ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm' : 'bg-[#FAF7F2] text-[#DED9D1] border-[#E8E2D9]'}`}>{room.calledNumbers.includes(num) && (<div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />)}{num}</div>))}</div></div>
         </section>
 
         <section className="bg-white border-l-2 border-[#E8E2D9] flex flex-col overflow-hidden">

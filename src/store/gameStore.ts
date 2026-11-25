@@ -16,6 +16,23 @@ export interface Player {
   isReady: boolean;
 }
 
+export interface DikitFightContender {
+  id: string;
+  playerId: string;
+  playerName: string;
+  cardIndex: number;
+  card: number[][];
+  initialDikitCount: number;
+}
+
+export interface DikitFightState {
+  status: 'active' | 'resolved';
+  ballCalledIndex: number;
+  contenders: DikitFightContender[];
+  winners?: DikitFightContender[];
+  roundBingoPending?: boolean;
+}
+
 export interface Room {
   id: string;
   mode: GameMode;
@@ -37,6 +54,7 @@ export interface Room {
   claims: any[];
   hidePattern: boolean;
   dikitWinners: any[];
+  dikitFight?: DikitFightState | null;
   verifiedWinners: any[];
   stats: {
     totalCardsSold: number;
@@ -90,6 +108,7 @@ interface GameState {
   latestBall: number | null;
   claimAlert: any | null;
   dikitAlert: any[] | null;
+  dikitFight: DikitFightState | null;
   winner: any[] | null;
   emotes: Emote[];
   nearWinAlert: { playerName: string, patternName: string } | null;
@@ -134,6 +153,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   latestBall: null,
   claimAlert: null,
   dikitAlert: null,
+  dikitFight: null,
   winner: null,
   globalPatterns: [],
   emotes: [],
@@ -165,6 +185,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         winner: (room.status === 'waiting' || roundChanged || !hasVerifiedWinners) ? null : get().winner,
         claimAlert: roundChanged ? null : get().claimAlert,
         dikitAlert: roundChanged ? null : get().dikitAlert,
+        dikitFight: roundChanged ? null : (room.dikitFight || null),
         nearWinAlert: roundChanged ? null : get().nearWinAlert
       });
     });
@@ -192,6 +213,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     newSocket.on("dikit_winners_announced", (claims: any[]) => {
       set({ dikitAlert: claims });
       // Auto dismiss after 7 seconds
+      setTimeout(() => {
+         set({ dikitAlert: null });
+      }, 7000);
+    });
+
+    newSocket.on("dikit_fight_started", (fight: DikitFightState) => {
+      set({ dikitFight: fight });
+    });
+
+    newSocket.on("dikit_fight_won", (winners: any[]) => {
+      set({ dikitAlert: winners });
       setTimeout(() => {
          set({ dikitAlert: null });
       }, 7000);

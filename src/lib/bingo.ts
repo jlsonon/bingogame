@@ -68,7 +68,7 @@ function patternCellsFor(pattern: BingoPattern): number[][] {
   return [pattern.cells];
 }
 
-export function checkDikitSidequest(card: number[][], marked: number[], called: number[]): boolean {
+export function getDikitPairs(card: number[][], marked: number[], called: number[]): [number, number][] {
   const isMarkedNumber = (index: number) => {
     const r = Math.floor(index / 5);
     const c = index % 5;
@@ -79,15 +79,26 @@ export function checkDikitSidequest(card: number[][], marked: number[], called: 
     return marked.includes(val) && called.includes(val);
   };
 
+  const pairs: [number, number][] = [];
   for (let r = 0; r < 5; r++) {
     for (let c = 0; c < 4; c++) {
+      const idx1 = r * 5 + c;
+      const idx2 = r * 5 + c + 1;
       // Both cells in the horizontal pair must be real marked numbers (not Free space)
-      if (isMarkedNumber(r * 5 + c) && isMarkedNumber(r * 5 + c + 1)) {
-        return true;
+      if (isMarkedNumber(idx1) && isMarkedNumber(idx2)) {
+        pairs.push([idx1, idx2]);
       }
     }
   }
-  return false;
+  return pairs;
+}
+
+export function countDikitPairs(card: number[][], marked: number[], called: number[]): number {
+  return getDikitPairs(card, marked, called).length;
+}
+
+export function checkDikitSidequest(card: number[][], marked: number[], called: number[]): boolean {
+  return countDikitPairs(card, marked, called) >= 1;
 }
 
 export function checkValidWin(

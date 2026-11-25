@@ -345,6 +345,16 @@ export default function Display() {
       </header>
 
       <main className="flex-1 p-8 grid grid-cols-[1fr_420px] gap-8 min-h-0 relative">
+        {room.dikitFight && room.dikitFight.status === 'active' && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-[#0D9488] text-white px-8 py-3 rounded-full shadow-2xl border-4 border-white flex items-center gap-3 animate-pulse">
+            <span className="text-2xl">⚔️</span>
+            <span className="font-black text-xl uppercase tracking-widest">
+              {room.dikitFight.roundBingoPending
+                ? `BINGO WON! DIKIT FIGHT IN PROGRESS (${room.dikitFight.contenders.map(c => c.playerName).join(' vs ')})`
+                : `DIKIT FIGHT IN PROGRESS: ${room.dikitFight.contenders.map(c => c.playerName).join(' vs ')}`}
+            </span>
+          </div>
+        )}
         <AnimatePresence>
            {nearWinAlert && (
               <motion.div 

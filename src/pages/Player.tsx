@@ -287,6 +287,11 @@ export default function Player() {
 
   const isSpectator = cards.length === 0;
 
+  const isCardInDikitFight = (cardIdx: number) => {
+    return room?.dikitFight?.status === 'active' &&
+           room.dikitFight.contenders.some(c => c.playerId === me?.id && c.cardIndex === cardIdx);
+  };
+
   return (
     <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full bg-[#FAF7F2] flex flex-col font-sans touch-manipulation text-[#3D3A35] select-none overflow-hidden">
       {/* Offline/Reconnecting Overlay */}
@@ -421,11 +426,29 @@ export default function Player() {
                                   )}
                                </button>
                             </div>
+                            {/* Dikit Fight Active Alert Banner */}
+                            {room?.dikitFight?.status === "active" && (
+                               <div className="w-full max-w-[440px] bg-[#0D9488]/15 border border-[#0D9488]/40 rounded-xl px-2.5 py-1 text-center shrink-0 mb-1 flex items-center justify-between gap-1 shadow-sm">
+                                  <span className="text-[9px] font-black text-[#0D9488] uppercase tracking-wider flex items-center gap-1">
+                                     <span className="text-xs">⚔️</span> DIKIT FIGHT
+                                  </span>
+                                  <span className="text-[8px] font-black text-[#3D3A35] truncate max-w-[240px]">
+                                     {room.dikitFight.roundBingoPending
+                                        ? "🏆 Bingo Won! Fighting for Dikit..."
+                                        : room.dikitFight.contenders.map(c => c.playerName).join(" vs ")}
+                                  </span>
+                               </div>
+                            )}
 
                            {cards.length === 1 && (
                               <div className="w-full h-full max-w-[420px] flex flex-col items-center justify-center min-h-0 overflow-hidden">
                                  <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                    <div className="flex items-center gap-1.5">
+                                       <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                       {isCardInDikitFight(0) && (
+                                          <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
+                                       )}
+                                    </div>
                                     {cardStatus[0]?.win.cellsAway === 1 && (
                                        <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                     )}
@@ -453,7 +476,12 @@ export default function Player() {
                                  {/* Card 1 - Above */}
                                  <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
                                     <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
-                                       <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                       <div className="flex items-center gap-1.5">
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                          {isCardInDikitFight(0) && (
+                                             <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
+                                          )}
+                                       </div>
                                        {cardStatus[0]?.win.cellsAway === 1 && (
                                           <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
@@ -478,7 +506,12 @@ export default function Player() {
                                  {/* Card 2 - Below */}
                                  <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
                                     <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
-                                       <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 2</span>
+                                       <div className="flex items-center gap-1.5">
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 2</span>
+                                          {isCardInDikitFight(1) && (
+                                             <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
+                                          )}
+                                       </div>
                                        {cardStatus[1]?.win.cellsAway === 1 && (
                                           <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
