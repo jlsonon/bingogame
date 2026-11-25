@@ -211,14 +211,21 @@ export default function Player() {
     });
   }, [cards, markedCells, room, latestBall]);
 
-  const winningCardIdx = useMemo(() => cardStatus.findIndex(s => s.win.valid), [cardStatus]);
-  const dikitCardIdx = useMemo(() => cardStatus.findIndex((s, i) => s.dikit && !claimedDikitIndices.includes(i)), [cardStatus, claimedDikitIndices]);
+  const hasCalledBalls = Boolean(room?.calledNumbers && room.calledNumbers.length > 0);
+  const winningCardIdx = useMemo(() => {
+    if (!hasCalledBalls) return -1;
+    return cardStatus.findIndex(s => s.win.valid);
+  }, [cardStatus, hasCalledBalls]);
+  const dikitCardIdx = useMemo(() => {
+    if (!hasCalledBalls) return -1;
+    return cardStatus.findIndex((s, i) => s.dikit && !claimedDikitIndices.includes(i));
+  }, [cardStatus, claimedDikitIndices, hasCalledBalls]);
 
   useEffect(() => {
     if (winningCardIdx !== -1 && room?.status === 'playing') {
       if ('vibrate' in navigator) navigator.vibrate([100, 50, 100, 50, 200]); // Long Heartbeat
     }
-    const nearWinIdx = cardStatus.findIndex(status => status.win.cellsAway === 1);
+    const nearWinIdx = hasCalledBalls ? cardStatus.findIndex(status => status.win.cellsAway === 1) : -1;
     if (nearWinIdx !== -1 && room?.status === 'playing') {
        if (nearWinAlert === null) {
          playSound(SOUNDS.NEAR_BINGO, 0.6);
@@ -228,7 +235,7 @@ export default function Player() {
     } else {
        setNearWinAlert(null);
     }
-  }, [cardStatus, room?.status, winningCardIdx, nearWinAlert]);
+  }, [cardStatus, room?.status, winningCardIdx, nearWinAlert, hasCalledBalls]);
 
   const handleClaim = () => {
     if (winningCardIdx !== -1 && room?.status === 'playing') {

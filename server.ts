@@ -97,7 +97,13 @@ function loadGlobalPatterns() {
   try {
     if (fs.existsSync(PATTERNS_FILE)) {
       const data = fs.readFileSync(PATTERNS_FILE, "utf-8");
-      globalPatternLibrary = JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        globalPatternLibrary = parsed
+          .map(sanitizeCustomPattern)
+          .filter((p): p is BingoPattern => Boolean(p));
+        saveGlobalPatterns();
+      }
       console.log(`Loaded ${globalPatternLibrary.length} patterns from server storage.`);
     }
   } catch (err) {
@@ -182,6 +188,7 @@ function stopAutoCaller(code: string) {
 
 // Helper to check near wins across the room when a ball is called
 function checkRoomForNearWins(code: string, io: Server, room: Room) {
+  if (!room.calledNumbers || room.calledNumbers.length === 0) return;
   let nearWinData: { playerName: string, patternName: string } | null = null;
 
   Object.values(room.players).forEach(player => {
@@ -276,6 +283,34 @@ function isValidCardSet(cards: unknown): cards is number[][][] {
   return Array.isArray(cards) && cards.length > 0 && cards.length <= 4 && cards.every(isValidCard);
 }
 
+function sanitizeCustomPattern(pattern: unknown): BingoPattern | null {
+  if (!pattern || typeof pattern !== 'object') return null;
+  const source = pattern as Partial<BingoPattern>;
+  const id = sanitizeText(source.id, randomUUID(), 48);
+  const match = source.match === 'dikit' ? 'dikit' : 'cells';
+  if (match === 'dikit') {
+    return {
+      id,
+      name: sanitizeText(source.name, 'Dikit', 28),
+      type: 'custom',
+      match: 'dikit',
+      cells: []
+    };
+  }
+  const cells = Array.isArray(source.cells)
+    ? [...new Set(source.cells.filter(cell => Number.isInteger(cell) && cell >= 0 && cell < 25))]
+    : [];
+  const nonFree = cells.filter(cell => cell !== 12);
+  if (nonFree.length === 0) return null;
+  return {
+    id,
+    name: sanitizeText(source.name, 'Custom Pattern', 28),
+    type: 'custom',
+    match: 'cells',
+    cells: [...new Set([...cells, 12])].sort((a, b) => a - b)
+  };
+}
+
 function sanitizePatterns(value: unknown): BingoPattern[] {
   if (!Array.isArray(value)) return DEFAULT_BINGO_PATTERNS;
   const presetIds = new Set(PRESET_PATTERNS.map(pattern => pattern.id));
@@ -284,20 +319,9 @@ function sanitizePatterns(value: unknown): BingoPattern[] {
       if (!pattern || typeof pattern !== 'object') return null;
       const source = pattern as Partial<BingoPattern>;
       const id = sanitizeText(source.id, randomUUID(), 48);
-      const match = source.match === 'dikit' ? 'dikit' : 'cells';
       const preset = presetIds.has(id) ? PRESET_PATTERNS.find(item => item.id === id) : null;
       if (preset) return preset;
-      const cells = Array.isArray(source.cells)
-        ? [...new Set(source.cells.filter(cell => Number.isInteger(cell) && cell >= 0 && cell < 25))]
-        : [];
-      if (match === 'cells' && cells.length === 0) return null;
-      return {
-        id,
-        name: sanitizeText(source.name, 'Custom Pattern', 28),
-        type: 'custom',
-        match,
-        cells
-      };
+      return sanitizeCustomPattern(pattern);
     })
     .filter((pattern): pattern is BingoPattern => Boolean(pattern));
 
@@ -369,8 +393,7 @@ io.on("connection", (socket: Socket) => {
   });
 
   socket.on("save_global_pattern", (pattern: BingoPattern) => {
-    if (!pattern || typeof pattern !== 'object') return;
-    const sanitized = sanitizePatterns([pattern])[0];
+    const sanitized = sanitizeCustomPattern(pattern);
     if (!sanitized) return;
     const index = globalPatternLibrary.findIndex(p => p.id === sanitized.id);
     if (index !== -1) {
@@ -592,6 +615,9 @@ io.on("connection", (socket: Socket) => {
       const host = room?.players[room.hostId];
       if (room && host?.socketId === socket.id) {
         room.status = 'playing';
+        room.claims = [];
+        room.verifiedWinners = [];
+        room.dikitWinners = [];
         io.to(code).emit("room_updated", room);
         
         if (room.autoCallSpeed > 0) {
@@ -630,13 +656,16 @@ io.on("connection", (socket: Socket) => {
           let patternsChanged = false;
           room.patterns.forEach(p => {
             if (p.type === 'custom') {
-              const idx = globalPatternLibrary.findIndex(gp => gp.id === p.id);
-              if (idx !== -1) {
-                globalPatternLibrary[idx] = p;
-              } else {
-                globalPatternLibrary.push(p);
+              const sanitized = sanitizeCustomPattern(p);
+              if (sanitized) {
+                const idx = globalPatternLibrary.findIndex(gp => gp.id === sanitized.id);
+                if (idx !== -1) {
+                  globalPatternLibrary[idx] = sanitized;
+                } else {
+                  globalPatternLibrary.push(sanitized);
+                }
+                patternsChanged = true;
               }
-              patternsChanged = true;
             }
           });
           if (patternsChanged) {
@@ -729,6 +758,10 @@ io.on("connection", (socket: Socket) => {
       const room = rooms[code];
       const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
       if (room && player && room.status === 'playing') {
+        if (!room.calledNumbers || room.calledNumbers.length === 0) {
+          socket.emit("claim_rejected", { message: "No balls have been called yet" });
+          return;
+        }
         const card = player.activeCards[data.cardIndex];
         const markedCells = Array.isArray(data.markedCells) ? data.markedCells.filter(Number.isInteger) : [];
         if (!isValidCard(card)) return;
@@ -764,6 +797,10 @@ io.on("connection", (socket: Socket) => {
       const room = rooms[code];
       const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
       if (room && player && room.status === 'playing') {
+        if (!room.calledNumbers || room.calledNumbers.length === 0) {
+          socket.emit("claim_rejected", { message: "No balls have been called yet" });
+          return;
+        }
         if (room.dikitWinners.some(w => w.playerId === player.id)) return; 
         
         const card = player.activeCards[data.cardIndex];

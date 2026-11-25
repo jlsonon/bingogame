@@ -71,45 +71,13 @@ export default function Host() {
   const [customName, setCustomName] = useState('Custom Pattern');
   const [customCells, setCustomCells] = useState<number[]>([12]);
   const [activeCustomId, setActiveCustomId] = useState<string>(() => `custom-${Date.now()}`);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
+  const [saveFeedback, setSaveFeedback] = useState<string>('');
   const [voiceUrl, setVoiceUrl] = useState(localStorage.getItem('bingo_voice_url') || '');
 
   useEffect(() => {
     localStorage.setItem('bingo_voice_url', voiceUrl);
     setVoiceBaseUrl(voiceUrl);
   }, [voiceUrl]);
-
-  // --- AUTO-SAVE ALL CUSTOM PATTERNS ---
-  useEffect(() => {
-    const validCells = customCells.filter(c => c !== 12);
-    if (validCells.length === 0) {
-      setAutoSaveStatus('');
-      return;
-    }
-
-    setAutoSaveStatus('Saving...');
-    const timer = setTimeout(() => {
-      const sortedCells = [...new Set([...customCells, 12])].sort((a, b) => a - b);
-      const pattern: BingoPattern = {
-        id: activeCustomId,
-        name: customName.trim() || 'Custom Pattern',
-        type: 'custom',
-        match: 'cells',
-        cells: sortedCells
-      };
-      saveGlobalPattern(pattern);
-      if (room) {
-        const exists = room.patterns.some(p => p.id === pattern.id);
-        const next = exists
-          ? room.patterns.map(p => p.id === pattern.id ? pattern : p)
-          : [...room.patterns, pattern];
-        updateSettings({ patterns: next });
-      }
-      setAutoSaveStatus('Auto-Saved');
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [customCells, customName, activeCustomId, saveGlobalPattern, room?.id, updateSettings]);
 
   // --- MIGRATION: ONE-TIME SYNC LOCAL PATTERNS TO SERVER ---
   useEffect(() => {
@@ -222,33 +190,48 @@ export default function Host() {
     setActiveCustomId(`custom-${Date.now()}`);
     setCustomName('Custom Pattern');
     setCustomCells([12]);
-    setAutoSaveStatus('');
+    setSaveFeedback('');
   };
 
   const selectCustomPatternToEdit = (pattern: BingoPattern) => {
     setActiveCustomId(pattern.id);
     setCustomName(pattern.name);
     setCustomCells(pattern.cells && pattern.cells.length ? pattern.cells : [12]);
-    setAutoSaveStatus('Loaded');
+    setSaveFeedback('Loaded for editing');
+    setTimeout(() => setSaveFeedback(''), 2500);
   };
 
-  const addCustomPattern = () => {
+  const saveCustomPattern = (addToRound: boolean) => {
+    const nonFree = customCells.filter(c => c !== 12);
+    if (nonFree.length === 0) {
+      setSaveFeedback('Please select at least 1 cell on the grid');
+      setTimeout(() => setSaveFeedback(''), 2500);
+      return;
+    }
+
     const sortedCells = [...new Set([...customCells, 12])].sort((a, b) => a - b);
-    const newPattern: BingoPattern = {
+    const pattern: BingoPattern = {
       id: activeCustomId,
       name: customName.trim() || 'Custom Pattern',
       type: 'custom',
       match: 'cells',
       cells: sortedCells
     };
-    
-    const exists = room.patterns.some(p => p.id === newPattern.id);
-    const next = exists
-      ? room.patterns.map(p => p.id === newPattern.id ? newPattern : p)
-      : [...room.patterns, newPattern];
-    updateSettings({ patterns: next });
-    saveGlobalPattern(newPattern);
-    setAutoSaveStatus('Auto-Saved');
+
+    // Save permanently to server database and global pattern library
+    saveGlobalPattern(pattern);
+
+    if (addToRound) {
+      const exists = room.patterns.some(p => p.id === pattern.id);
+      const next = exists
+        ? room.patterns.map(p => p.id === pattern.id ? pattern : p)
+        : [...room.patterns, pattern];
+      updateSettings({ patterns: next });
+      setSaveFeedback('Saved permanently to database & active in round!');
+    } else {
+      setSaveFeedback('Saved permanently to database!');
+    }
+    setTimeout(() => setSaveFeedback(''), 3000);
   };
 
   const deleteFromLibrary = (id: string) => {
@@ -421,34 +404,44 @@ export default function Host() {
                         </div>
                         <div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar border-2 border-[#FAF7F2] rounded-2xl p-2 bg-[#FAF7F2]/50">
                           <div className="grid grid-cols-2 gap-2">
-                            {[...PRESET_PATTERNS, ...globalPatterns].map(pattern => {
-                              const selected = room.patterns.some(item => item.id === pattern.id);
-                              const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
-                              return (
-                                <div key={pattern.id} className="relative group">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      togglePattern(pattern);
-                                      if (!isPreset) selectCustomPatternToEdit(pattern);
-                                    }}
-                                    className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]" : "bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]"}`}
-                                  >
-                                    <span className="truncate block pr-4">{pattern.name}</span>
-                                    {selected && <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full" />}
-                                  </button>
-                                  {!isPreset && (
+                            {(() => {
+                              const patternMap = new Map<string, BingoPattern>();
+                              PRESET_PATTERNS.forEach(p => patternMap.set(p.id, p));
+                              globalPatterns.forEach(p => {
+                                if (p && p.id && (p.match === 'dikit' || (Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0))) {
+                                  patternMap.set(p.id, p);
+                                }
+                              });
+                              return Array.from(patternMap.values()).map(pattern => {
+                                const selected = room.patterns.some(item => item.id === pattern.id);
+                                const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
+                                return (
+                                  <div key={pattern.id} className="relative group">
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
-                                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"
-                                      title="Delete Pattern"
+                                      type="button"
+                                      onClick={() => {
+                                        togglePattern(pattern);
+                                        if (!isPreset) selectCustomPatternToEdit(pattern);
+                                      }}
+                                      className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]" : "bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]"}`}
                                     >
-                                      <Plus size={8} className="rotate-45" strokeWidth={5} />
+                                      <span className="truncate block pr-4">{pattern.name}</span>
+                                      {selected && <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full" />}
                                     </button>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                    {!isPreset && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
+                                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"
+                                        title="Delete Pattern from Database"
+                                      >
+                                        <Plus size={8} className="rotate-45" strokeWidth={5} />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              });
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -456,13 +449,10 @@ export default function Host() {
                       <div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4 shadow-inner">
                         <div className="flex justify-between items-center gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest whitespace-nowrap">Draw Custom</span>
-                            {autoSaveStatus && (
-                              <span className="text-[8px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                                <CheckCircle2 size={10} />
-                                {autoSaveStatus}
-                              </span>
-                            )}
+                            <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest whitespace-nowrap">Draw Pattern</span>
+                            <span className="text-[8px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full">
+                              {customCells.filter(c => c !== 12).length} Selected
+                            </span>
                           </div>
                           <div className="flex items-center gap-1.5">
                             <input
@@ -491,20 +481,36 @@ export default function Host() {
                             })}
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={addCustomPattern}
-                          className="w-full bg-[#3D3A35] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest active:translate-y-1 shadow-md flex items-center justify-center gap-2"
-                        >
-                          {room.patterns.some(p => p.id === activeCustomId) ? (
-                            <>
-                              <CheckCircle2 size={14} className="text-[#0D9488]" />
-                              Saved & Active in Round
-                            </>
-                          ) : (
-                            "Add / Save to Round"
-                          )}
-                        </button>
+
+                        {saveFeedback && (
+                          <div className="text-center text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 py-1.5 px-3 rounded-xl">
+                            {saveFeedback}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => saveCustomPattern(false)}
+                            className="w-full bg-white border-2 border-[#3D3A35] text-[#3D3A35] py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-[#3D3A35] hover:text-white transition-all shadow-sm flex items-center justify-center gap-1"
+                          >
+                            Save to Database
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveCustomPattern(true)}
+                            className="w-full bg-[#0D9488] text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider shadow-md hover:bg-[#0F766E] transition-all flex items-center justify-center gap-1"
+                          >
+                            {room.patterns.some(p => p.id === activeCustomId) ? (
+                              <>
+                                <CheckCircle2 size={12} />
+                                Active in Round
+                              </>
+                            ) : (
+                              "Save & Add to Round"
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}

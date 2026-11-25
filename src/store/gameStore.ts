@@ -144,12 +144,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       
       // If round changed or game reset, clear local alerts
       const roundChanged = currentRoom && (room.roundNumber !== currentRoom.roundNumber || room.status === 'waiting');
+      const hasVerifiedWinners = Array.isArray(room.verifiedWinners) && room.verifiedWinners.length > 0;
       
       set({
         room,
         me: room.players[sessionId] || null,
         latestBall: room.calledNumbers.at(-1) || null,
-        winner: room.status === 'waiting' ? null : get().winner,
+        winner: (room.status === 'waiting' || roundChanged || !hasVerifiedWinners) ? null : get().winner,
         claimAlert: roundChanged ? null : get().claimAlert,
         dikitAlert: roundChanged ? null : get().dikitAlert,
         nearWinAlert: roundChanged ? null : get().nearWinAlert
@@ -210,11 +211,21 @@ export const useGameStore = create<GameState>((set, get) => ({
         const stored = localStorage.getItem('bingo_pattern_library');
         const localPatterns: BingoPattern[] = stored ? JSON.parse(stored) : [];
         const patternMap = new Map<string, BingoPattern>();
-        (serverPatterns || []).forEach(p => patternMap.set(p.id, p));
-        localPatterns.forEach(p => {
-          if (!patternMap.has(p.id)) {
+        
+        // Add valid server patterns
+        (serverPatterns || []).forEach(p => {
+          if (p && p.id && (p.match === 'dikit' || (Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0))) {
             patternMap.set(p.id, p);
-            newSocket.emit("save_global_pattern", p);
+          }
+        });
+
+        // Sync valid local patterns
+        localPatterns.forEach(p => {
+          if (p && p.id && (p.match === 'dikit' || (Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0))) {
+            if (!patternMap.has(p.id)) {
+              patternMap.set(p.id, p);
+              newSocket.emit("save_global_pattern", p);
+            }
           }
         });
         const combined = Array.from(patternMap.values());
@@ -225,6 +236,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     });
 
+
     newSocket.emit("get_hall_of_fame", (hof: any[]) => {
       set({ hallOfFame: hof });
     });
@@ -233,6 +245,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   saveGlobalPattern: (pattern: BingoPattern) => {
+    // Validate pattern before saving - must have at least 1 non-free cell
+    const nonFree = pattern.cells?.filter(c => c !== 12) || [];
+    if (pattern.match !== 'dikit' && nonFree.length === 0) return;
+
     set(state => {
       const exists = state.globalPatterns.some(p => p.id === pattern.id);
       const next = exists
@@ -404,7 +420,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   startGame: () => {
     const { socket, room } = get();
-    if (socket && room) socket.emit("start_game", { code: room.id });
+    if (socket && room) {
+      set({ winner: null, claimAlert: null, dikitAlert: null, nearWinAlert: null });
+      socket.emit("start_game", { code: room.id });
+    }
   },
 
   pauseGame: () => {
