@@ -112,6 +112,18 @@ function getSessionId() {
   return next;
 }
 
+const DELETED_PATTERN_IDENTIFIERS = new Set([
+  'letter-x', 'letter-t', 'letter-l', 'dikit',
+  'letter x', 'letter t', 'letter l'
+]);
+
+function isDeletedPattern(pattern: { id?: string; name?: string } | null | undefined): boolean {
+  if (!pattern) return false;
+  const id = (pattern.id || '').toLowerCase().trim();
+  const name = (pattern.name || '').toLowerCase().trim();
+  return DELETED_PATTERN_IDENTIFIERS.has(id) || DELETED_PATTERN_IDENTIFIERS.has(name);
+}
+
 export const useGameStore = create<GameState>((set, get) => ({
   socket: null,
   sessionId: getSessionId(),
@@ -194,12 +206,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
 
     newSocket.on("global_patterns_updated", (patterns: BingoPattern[]) => {
+      const cleaned = (patterns || []).filter(p => !isDeletedPattern(p) && p.match !== 'dikit');
       try {
-        localStorage.setItem('bingo_pattern_library', JSON.stringify(patterns || []));
+        localStorage.setItem('bingo_pattern_library', JSON.stringify(cleaned));
       } catch (e) {
         console.warn("Could not cache patterns to localStorage:", e);
       }
-      set({ globalPatterns: patterns });
+      set({ globalPatterns: cleaned });
     });
 
     newSocket.on("hall_of_fame_updated", (hof: any[]) => {
@@ -214,14 +227,14 @@ export const useGameStore = create<GameState>((set, get) => ({
         
         // Add valid server patterns
         (serverPatterns || []).forEach(p => {
-          if (p && p.id && (p.match === 'dikit' || (Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0))) {
+          if (p && p.id && !isDeletedPattern(p) && p.match !== 'dikit' && Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0) {
             patternMap.set(p.id, p);
           }
         });
 
         // Sync valid local patterns
         localPatterns.forEach(p => {
-          if (p && p.id && (p.match === 'dikit' || (Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0))) {
+          if (p && p.id && !isDeletedPattern(p) && p.match !== 'dikit' && Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0) {
             if (!patternMap.has(p.id)) {
               patternMap.set(p.id, p);
               newSocket.emit("save_global_pattern", p);
@@ -232,7 +245,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         localStorage.setItem('bingo_pattern_library', JSON.stringify(combined));
         set({ globalPatterns: combined });
       } catch {
-        set({ globalPatterns: serverPatterns || [] });
+        const cleaned = (serverPatterns || []).filter(p => !isDeletedPattern(p) && p.match !== 'dikit');
+        set({ globalPatterns: cleaned });
       }
     });
 
@@ -245,9 +259,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   saveGlobalPattern: (pattern: BingoPattern) => {
+    if (isDeletedPattern(pattern) || pattern.match === 'dikit') return;
     // Validate pattern before saving - must have at least 1 non-free cell
     const nonFree = pattern.cells?.filter(c => c !== 12) || [];
-    if (pattern.match !== 'dikit' && nonFree.length === 0) return;
+    if (nonFree.length === 0) return;
 
     set(state => {
       const exists = state.globalPatterns.some(p => p.id === pattern.id);

@@ -90,6 +90,18 @@ const sessionSockets: Record<string, string> = {}; // sessionId -> socketId
 const PATTERNS_FILE = path.join(process.cwd(), "patterns.json");
 let globalPatternLibrary: BingoPattern[] = [];
 
+const DELETED_PATTERN_IDENTIFIERS = new Set([
+  'letter-x', 'letter-t', 'letter-l', 'dikit',
+  'letter x', 'letter t', 'letter l'
+]);
+
+function isDeletedPattern(pattern: { id?: string; name?: string } | null | undefined): boolean {
+  if (!pattern) return false;
+  const id = (pattern.id || '').toLowerCase().trim();
+  const name = (pattern.name || '').toLowerCase().trim();
+  return DELETED_PATTERN_IDENTIFIERS.has(id) || DELETED_PATTERN_IDENTIFIERS.has(name);
+}
+
 // --- HALL OF FAME PERSISTENCE ---
 const HOF_FILE = path.join(process.cwd(), "hallOfFame.json");
 let globalHallOfFame: any[] = [];
@@ -101,6 +113,7 @@ function loadGlobalPatterns() {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
         globalPatternLibrary = parsed
+          .filter(p => !isDeletedPattern(p))
           .map(sanitizeCustomPattern)
           .filter((p): p is BingoPattern => Boolean(p));
         saveGlobalPatterns();
@@ -287,17 +300,10 @@ function isValidCardSet(cards: unknown): cards is number[][][] {
 function sanitizeCustomPattern(pattern: unknown): BingoPattern | null {
   if (!pattern || typeof pattern !== 'object') return null;
   const source = pattern as Partial<BingoPattern>;
+  if (isDeletedPattern(source)) return null;
+  if (source.match === 'dikit') return null;
+
   const id = sanitizeText(source.id, randomUUID(), 48);
-  const match = source.match === 'dikit' ? 'dikit' : 'cells';
-  if (match === 'dikit') {
-    return {
-      id,
-      name: sanitizeText(source.name, 'Dikit', 28),
-      type: 'custom',
-      match: 'dikit',
-      cells: []
-    };
-  }
   const cells = Array.isArray(source.cells)
     ? [...new Set(source.cells.filter(cell => Number.isInteger(cell) && cell >= 0 && cell < 25))]
     : [];
@@ -312,13 +318,23 @@ function sanitizeCustomPattern(pattern: unknown): BingoPattern | null {
   };
 }
 
+function getAllLibraryPatterns(): BingoPattern[] {
+  const customPatterns = globalPatternLibrary.filter(p => !isDeletedPattern(p));
+  return [
+    ...PRESET_PATTERNS,
+    ...customPatterns.filter(p => !PRESET_PATTERNS.some(preset => preset.id === p.id))
+  ];
+}
+
 function sanitizePatterns(value: unknown): BingoPattern[] {
-  if (!Array.isArray(value)) return DEFAULT_BINGO_PATTERNS;
+  const allLibraryPatterns = getAllLibraryPatterns();
+  if (!Array.isArray(value)) return allLibraryPatterns;
   const presetIds = new Set(PRESET_PATTERNS.map(pattern => pattern.id));
   const patterns = value
     .map((pattern): BingoPattern | null => {
       if (!pattern || typeof pattern !== 'object') return null;
       const source = pattern as Partial<BingoPattern>;
+      if (isDeletedPattern(source)) return null;
       const id = sanitizeText(source.id, randomUUID(), 48);
       const preset = presetIds.has(id) ? PRESET_PATTERNS.find(item => item.id === id) : null;
       if (preset) return preset;
@@ -326,7 +342,7 @@ function sanitizePatterns(value: unknown): BingoPattern[] {
     })
     .filter((pattern): pattern is BingoPattern => Boolean(pattern));
 
-  return patterns.length ? patterns : DEFAULT_BINGO_PATTERNS;
+  return patterns.length ? patterns : allLibraryPatterns;
 }
 
 function touchRoom(code: string) {
@@ -444,7 +460,7 @@ io.on("connection", (socket: Socket) => {
         voiceMode: 'robotic',
         ambienceEnabled: false,
         voiceId: '24JGmqE2AvYy6abpAy3g',
-        patterns: DEFAULT_BINGO_PATTERNS,
+        patterns: getAllLibraryPatterns(),
         claims: [],
         hidePattern: false,
         dikitWinners: [],

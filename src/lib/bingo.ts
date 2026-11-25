@@ -16,15 +16,9 @@ export const PRESET_PATTERNS: BingoPattern[] = [
   { id: 'col-any', name: 'Any Column', type: 'preset', match: 'cells', cells: [] },
   { id: 'diag-any', name: 'Any Diagonal', type: 'preset', match: 'cells', cells: [] },
   { id: 'corners', name: 'Four Corners', type: 'preset', match: 'cells', cells: [0, 4, 20, 24] },
-  { id: 'letter-x', name: 'Letter X', type: 'preset', match: 'cells', cells: [0, 4, 6, 8, 12, 16, 18, 20, 24] },
-  { id: 'letter-t', name: 'Letter T', type: 'preset', match: 'cells', cells: [...row(0), 2, 7, 12, 17, 22] },
-  { id: 'letter-l', name: 'Letter L', type: 'preset', match: 'cells', cells: [0, 5, 10, 15, 20, 21, 22, 23, 24] },
-  { id: 'dikit', name: 'Dikit', type: 'preset', match: 'dikit', cells: [] },
 ];
 
-export const DEFAULT_BINGO_PATTERNS = PRESET_PATTERNS.filter(pattern =>
-  ['row-any', 'col-any', 'diag-any', 'corners'].includes(pattern.id)
-);
+export const DEFAULT_BINGO_PATTERNS = [...PRESET_PATTERNS];
 
 export function getBallLetter(num: number) {
   if (num <= 15) return 'B';

@@ -46,3 +46,13 @@
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* Card Responsive Auto-Scaling Utilities */
+.card-fit-wrapper {
+  container-type: size;
+}
+
+.card-fit-square {
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+}

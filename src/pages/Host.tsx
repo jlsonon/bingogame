@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BallCaller } from '../components/BallCaller';
@@ -8,6 +8,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin } from '../lib/bingo';
 import { SOUNDS, setVoiceBaseUrl, playVoiceBall } from '../lib/sounds';
+
+const DELETED_PATTERN_IDENTIFIERS = new Set([
+  'letter-x', 'letter-t', 'letter-l', 'dikit',
+  'letter x', 'letter t', 'letter l'
+]);
+
+function isDeletedPattern(pattern: { id?: string; name?: string } | null | undefined): boolean {
+  if (!pattern) return false;
+  const id = (pattern.id || '').toLowerCase().trim();
+  const name = (pattern.name || '').toLowerCase().trim();
+  return DELETED_PATTERN_IDENTIFIERS.has(id) || DELETED_PATTERN_IDENTIFIERS.has(name);
+}
 
 function Countdown({ endsAt }: { endsAt?: number }) {
   const [now, setNow] = useState(Date.now());
@@ -175,6 +187,35 @@ export default function Host() {
     window.open(displayUrl, '_blank');
   };
 
+  const libraryPatterns = useMemo(() => {
+    const map = new Map<string, BingoPattern>();
+    PRESET_PATTERNS.forEach(p => {
+      if (!isDeletedPattern(p)) map.set(p.id, p);
+    });
+    globalPatterns.forEach(p => {
+      if (p && p.id && !isDeletedPattern(p) && p.match !== 'dikit' && Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0) {
+        map.set(p.id, p);
+      }
+    });
+    return Array.from(map.values());
+  }, [globalPatterns]);
+
+  // Auto-activate ALL library patterns so rooms start with all patterns active
+  useEffect(() => {
+    if (!room || room.status === 'playing') return;
+    if (libraryPatterns.length === 0) return;
+    const missing = libraryPatterns.filter(lp => !room.patterns.some(rp => rp.id === lp.id));
+    if (missing.length > 0) {
+      updateSettings({ patterns: libraryPatterns });
+    }
+  }, [libraryPatterns, room?.patterns, room?.status, updateSettings]);
+
+  const activateAllPatterns = () => {
+    updateSettings({ patterns: libraryPatterns });
+    setSaveFeedback('All patterns activated!');
+    setTimeout(() => setSaveFeedback(''), 2500);
+  };
+
   const togglePattern = (pattern: BingoPattern) => {
     const exists = room.patterns.some(item => item.id === pattern.id);
     const next = exists
@@ -221,16 +262,13 @@ export default function Host() {
     // Save permanently to server database and global pattern library
     saveGlobalPattern(pattern);
 
-    if (addToRound) {
-      const exists = room.patterns.some(p => p.id === pattern.id);
-      const next = exists
-        ? room.patterns.map(p => p.id === pattern.id ? pattern : p)
-        : [...room.patterns, pattern];
-      updateSettings({ patterns: next });
-      setSaveFeedback('Saved permanently to database & active in round!');
-    } else {
-      setSaveFeedback('Saved permanently to database!');
-    }
+    // Auto-activate in the round
+    const exists = room.patterns.some(p => p.id === pattern.id);
+    const next = exists
+      ? room.patterns.map(p => p.id === pattern.id ? pattern : p)
+      : [...room.patterns, pattern];
+    updateSettings({ patterns: next });
+    setSaveFeedback('Saved to database & activated in round!');
     setTimeout(() => setSaveFeedback(''), 3000);
   };
 
@@ -399,49 +437,51 @@ export default function Host() {
                     <div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]">
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
-                          <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Pattern Library</label>
-                          <span className="text-[9px] font-bold text-[#A19B91] uppercase">Click custom to edit</span>
+                          <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Pattern Library</label>
+                            <span className="text-[8px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full">
+                              {libraryPatterns.filter(p => room.patterns.some(rp => rp.id === p.id)).length} / {libraryPatterns.length} Active
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={activateAllPatterns}
+                            className="text-[9px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2.5 py-1 rounded-lg transition-all shadow-sm active:scale-95"
+                          >
+                            Activate All
+                          </button>
                         </div>
                         <div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar border-2 border-[#FAF7F2] rounded-2xl p-2 bg-[#FAF7F2]/50">
                           <div className="grid grid-cols-2 gap-2">
-                            {(() => {
-                              const patternMap = new Map<string, BingoPattern>();
-                              PRESET_PATTERNS.forEach(p => patternMap.set(p.id, p));
-                              globalPatterns.forEach(p => {
-                                if (p && p.id && (p.match === 'dikit' || (Array.isArray(p.cells) && p.cells.filter(c => c !== 12).length > 0))) {
-                                  patternMap.set(p.id, p);
-                                }
-                              });
-                              return Array.from(patternMap.values()).map(pattern => {
-                                const selected = room.patterns.some(item => item.id === pattern.id);
-                                const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
-                                return (
-                                  <div key={pattern.id} className="relative group">
+                            {libraryPatterns.map(pattern => {
+                              const selected = room.patterns.some(item => item.id === pattern.id);
+                              const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
+                              return (
+                                <div key={pattern.id} className="relative group">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      togglePattern(pattern);
+                                      if (!isPreset) selectCustomPatternToEdit(pattern);
+                                    }}
+                                    className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]" : "bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]"}`}
+                                  >
+                                    <span className="truncate block pr-4">{pattern.name}</span>
+                                    {selected && <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full" />}
+                                  </button>
+                                  {!isPreset && (
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        togglePattern(pattern);
-                                        if (!isPreset) selectCustomPatternToEdit(pattern);
-                                      }}
-                                      className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]" : "bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]"}`}
+                                      onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
+                                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"
+                                      title="Delete Pattern from Database"
                                     >
-                                      <span className="truncate block pr-4">{pattern.name}</span>
-                                      {selected && <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full" />}
+                                      <Plus size={8} className="rotate-45" strokeWidth={5} />
                                     </button>
-                                    {!isPreset && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
-                                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"
-                                        title="Delete Pattern from Database"
-                                      >
-                                        <Plus size={8} className="rotate-45" strokeWidth={5} />
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              });
-                            })()}
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>

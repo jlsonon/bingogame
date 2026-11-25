@@ -287,7 +287,7 @@ export default function Player() {
   const isSpectator = cards.length === 0;
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex flex-col font-sans touch-manipulation text-[#3D3A35] select-none">
+    <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full bg-[#FAF7F2] flex flex-col font-sans touch-manipulation text-[#3D3A35] select-none overflow-hidden">
       {/* Offline/Reconnecting Overlay */}
       {!socket?.connected && (
          <div className="fixed inset-0 z-[200] bg-[#3D3A35]/80 backdrop-blur-md flex items-center justify-center p-6 text-center">
@@ -300,7 +300,7 @@ export default function Player() {
       )}
 
       {/* Immersive Top Ribbon - Latest Call Persistent */}
-      <div className="bg-[#3D3A35] text-white h-16 shrink-0 relative overflow-hidden flex items-center justify-between px-4 z-30 shadow-lg">
+      <div className="bg-[#3D3A35] text-white h-14 sm:h-16 shrink-0 relative overflow-hidden flex items-center justify-between px-3 sm:px-4 z-30 shadow-lg">
          <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/asfalt-dark.png')] pointer-events-none" />
          <div className="flex items-center gap-3 relative z-10">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-display text-xs border-2 border-white/20 shadow-inner" style={{ backgroundColor: me.avatarColor || '#ccc' }}>
@@ -350,7 +350,7 @@ export default function Player() {
                </div>
             )}
             {activeTab === 'cards' && (
-               <motion.div key="cards" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col p-2 gap-2 min-h-0">
+               <motion.div key="cards" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col p-1.5 sm:p-2 gap-1 min-h-0 overflow-hidden">
                   {isSpectator ? (
                      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-6">
                         <div className="w-24 h-24 bg-[#E8E2D9] rounded-[32px] flex items-center justify-center text-[#7A746B] shadow-inner mb-2">
@@ -369,24 +369,24 @@ export default function Player() {
                      <>
                         <AnimatePresence>
                            {nearWinAlert && (
-                              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full bg-[#EA580C]/10 border-2 border-[#EA580C]/20 rounded-2xl py-1 text-center overflow-hidden shrink-0">
-                                 <span className="text-[9px] font-black text-[#EA580C] uppercase tracking-[0.2em] flex items-center justify-center gap-2"><Trophy size={10} />{nearWinAlert}</span>
+                              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full bg-[#EA580C]/10 border border-[#EA580C]/20 rounded-xl py-0.5 text-center overflow-hidden shrink-0">
+                                 <span className="text-[9px] font-black text-[#EA580C] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5"><Trophy size={10} />{nearWinAlert}</span>
                               </motion.div>
                            )}
                         </AnimatePresence>
-                        <div className="flex-1 w-full relative min-h-0 flex flex-col items-center overflow-hidden">
+                        <div className="flex-1 w-full relative min-h-0 flex flex-col items-center justify-center overflow-hidden">
                            {/* Quick Card Count Selector when waiting or next_round */}
                            {['waiting', 'next_round'].includes(room.status) && (
-                              <div className="flex items-center justify-between bg-white border-2 border-[#E8E2D9] px-3 py-1.5 rounded-2xl shrink-0 w-full max-w-[440px] mx-auto mb-1.5 shadow-sm">
+                              <div className="flex items-center justify-between bg-white border border-[#E8E2D9] px-2.5 py-1 rounded-xl shrink-0 w-full max-w-[440px] mx-auto mb-1 shadow-sm">
                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Cards:</span>
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Cards:</span>
                                     <div className="flex gap-1">
                                        {[1, 2, 3, 4].map(num => (
                                           <button
                                              key={num}
                                              type="button"
                                              onClick={() => setCardQuantity(num)}
-                                             className={`w-7 h-7 rounded-lg font-display text-sm font-bold border transition-all ${cards.length === num ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-sm scale-105' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#7A746B] hover:border-[#EA580C]'}`}
+                                             className={`w-6 h-6 rounded-md font-display text-xs font-bold border transition-all ${cards.length === num ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-sm scale-105' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#7A746B]'}`}
                                           >
                                              {num}
                                           </button>
@@ -396,7 +396,7 @@ export default function Player() {
                                  <button
                                     type="button"
                                     onClick={() => setCardQuantity(cards.length || 1)}
-                                    className="text-[9px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 px-2.5 py-1 rounded-lg transition-all"
+                                    className="text-[8px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 px-2 py-0.5 rounded-md transition-all"
                                  >
                                     New Numbers
                                  </button>
@@ -404,40 +404,15 @@ export default function Player() {
                            )}
 
                            {cards.length === 1 && (
-                              <div className="w-full h-full max-w-[400px] flex flex-col justify-center items-center p-1">
-                                 <div className="w-full max-w-[370px] aspect-square relative flex items-center justify-center">
-                                    <BingoCard
-                                       card={cards[0]}
-                                       markedCells={markedCells[0] || []}
-                                       calledNumbers={room.calledNumbers || []}
-                                       onToggleCell={(num) => toggleCell(0, num)}
-                                       readOnly={room.status !== 'playing'}
-                                       highlightLatest={latestBall}
-                                    />
-                                    {cardStatus[0]?.win.valid && (
-                                       <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
-                                    )}
-                                 </div>
-                                 <div className="text-center mt-2 flex items-center justify-center gap-2 shrink-0">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                              <div className="w-full h-full max-w-[420px] flex flex-col items-center justify-center min-h-0 overflow-hidden">
+                                 <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
                                     {cardStatus[0]?.win.cellsAway === 1 && (
-                                       <span className="bg-[#FACC15] text-[#854D0E] text-[8px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">1 Away</span>
+                                       <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                     )}
                                  </div>
-                              </div>
-                           )}
-
-                           {cards.length === 2 && (
-                              <div className="w-full h-full max-w-[440px] flex flex-col justify-between items-center gap-1.5 p-1 min-h-0 overflow-y-auto custom-scrollbar">
-                                 {/* Card 1 - Above */}
-                                 <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 max-h-[48%] relative">
-                                    <div className="flex items-center justify-between w-full max-w-[340px] px-1 mb-0.5 shrink-0">
-                                       <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
-                                       {cardStatus[0]?.win.cellsAway === 1 && (
-                                          <span className="bg-[#FACC15] text-[#854D0E] text-[8px] font-black px-1.5 py-0.2 rounded-full uppercase animate-pulse">1 Away</span>
-                                       )}
-                                    </div>
-                                    <div className="h-full aspect-square max-w-full relative flex items-center justify-center">
+                                 <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
+                                    <div className="card-fit-square relative flex items-center justify-center">
                                        <BingoCard
                                           card={cards[0]}
                                           markedCells={markedCells[0] || []}
@@ -451,87 +426,150 @@ export default function Player() {
                                        )}
                                     </div>
                                  </div>
+                              </div>
+                           )}
 
-                                 {/* Card 2 - Below */}
-                                 <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 max-h-[48%] relative">
-                                    <div className="flex items-center justify-between w-full max-w-[340px] px-1 mb-0.5 shrink-0">
-                                       <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 2</span>
-                                       {cardStatus[1]?.win.cellsAway === 1 && (
-                                          <span className="bg-[#FACC15] text-[#854D0E] text-[8px] font-black px-1.5 py-0.2 rounded-full uppercase animate-pulse">1 Away</span>
+                           {cards.length === 2 && (
+                              <div className="w-full h-full max-w-[440px] flex flex-col justify-between items-center gap-1 min-h-0 overflow-hidden">
+                                 {/* Card 1 - Above */}
+                                 <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
+                                    <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
+                                       <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                       {cardStatus[0]?.win.cellsAway === 1 && (
+                                          <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
                                     </div>
-                                    <div className="h-full aspect-square max-w-full relative flex items-center justify-center">
-                                       <BingoCard
-                                          card={cards[1]}
-                                          markedCells={markedCells[1] || []}
-                                          calledNumbers={room.calledNumbers || []}
-                                          onToggleCell={(num) => toggleCell(1, num)}
-                                          readOnly={room.status !== 'playing'}
-                                          highlightLatest={latestBall}
-                                       />
-                                       {cardStatus[1]?.win.valid && (
-                                          <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
+                                    <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
+                                       <div className="card-fit-square relative flex items-center justify-center">
+                                          <BingoCard
+                                             card={cards[0]}
+                                             markedCells={markedCells[0] || []}
+                                             calledNumbers={room.calledNumbers || []}
+                                             onToggleCell={(num) => toggleCell(0, num)}
+                                             readOnly={room.status !== 'playing'}
+                                             highlightLatest={latestBall}
+                                          />
+                                          {cardStatus[0]?.win.valid && (
+                                             <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
+                                          )}
+                                       </div>
+                                    </div>
+                                 </div>
+
+                                 {/* Card 2 - Below */}
+                                 <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
+                                    <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
+                                       <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 2</span>
+                                       {cardStatus[1]?.win.cellsAway === 1 && (
+                                          <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
+                                    </div>
+                                    <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
+                                       <div className="card-fit-square relative flex items-center justify-center">
+                                          <BingoCard
+                                             card={cards[1]}
+                                             markedCells={markedCells[1] || []}
+                                             calledNumbers={room.calledNumbers || []}
+                                             onToggleCell={(num) => toggleCell(1, num)}
+                                             readOnly={room.status !== 'playing'}
+                                             highlightLatest={latestBall}
+                                          />
+                                          {cardStatus[1]?.win.valid && (
+                                             <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
+                                          )}
+                                       </div>
                                     </div>
                                  </div>
                               </div>
                            )}
 
                            {cards.length === 3 && (
-                              <div className="w-full h-full max-w-[420px] flex flex-col items-center gap-3 overflow-y-auto custom-scrollbar p-1">
-                                 {cards.map((card, idx) => {
-                                    const isNearWin = cardStatus[idx]?.win.cellsAway === 1;
-                                    return (
-                                       <div key={idx} className="w-full max-w-[340px] shrink-0 flex flex-col items-center">
-                                          <div className="flex items-center justify-between w-full px-1 mb-1">
-                                             <span className="text-[10px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
-                                             {isNearWin && (
-                                                <span className="bg-[#FACC15] text-[#854D0E] text-[8px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">1 Away</span>
-                                             )}
-                                          </div>
-                                          <div className="w-full aspect-square relative">
-                                             <BingoCard
-                                                card={card}
-                                                markedCells={markedCells[idx] || []}
-                                                calledNumbers={room.calledNumbers || []}
-                                                onToggleCell={(num) => toggleCell(idx, num)}
-                                                readOnly={room.status !== 'playing'}
-                                                highlightLatest={latestBall}
-                                             />
-                                             {cardStatus[idx]?.win.valid && (
-                                                <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
-                                             )}
-                                          </div>
+                              <div className="w-full h-full max-w-[480px] flex flex-col gap-1 min-h-0 overflow-hidden">
+                                 {/* Card 1 - Top Center */}
+                                 <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
+                                    <div className="flex items-center justify-between w-full max-w-[280px] px-1 shrink-0 h-3.5 mb-0.5">
+                                       <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                       {cardStatus[0]?.win.cellsAway === 1 && (
+                                          <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
+                                       )}
+                                    </div>
+                                    <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
+                                       <div className="card-fit-square relative flex items-center justify-center">
+                                          <BingoCard
+                                             card={cards[0]}
+                                             markedCells={markedCells[0] || []}
+                                             calledNumbers={room.calledNumbers || []}
+                                             onToggleCell={(num) => toggleCell(0, num)}
+                                             readOnly={room.status !== 'playing'}
+                                             highlightLatest={latestBall}
+                                          />
+                                          {cardStatus[0]?.win.valid && (
+                                             <div className="absolute inset-0 border-2 sm:border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
+                                          )}
                                        </div>
-                                    );
-                                 })}
+                                    </div>
+                                 </div>
+
+                                 {/* Cards 2 & 3 - Bottom Row */}
+                                 <div className="w-full flex-1 grid grid-cols-2 gap-1 min-h-0 overflow-hidden">
+                                    {[1, 2].map((idx) => {
+                                       const isNearWin = cardStatus[idx]?.win.cellsAway === 1;
+                                       return (
+                                          <div key={idx} className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 overflow-hidden">
+                                             <div className="flex items-center justify-between w-full px-1 shrink-0 h-3.5 mb-0.5">
+                                                <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
+                                                {isNearWin && (
+                                                   <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
+                                                )}
+                                             </div>
+                                             <div className="flex-1 min-h-0 min-w-0 w-full h-full flex items-center justify-center card-fit-wrapper">
+                                                <div className="card-fit-square relative flex items-center justify-center">
+                                                   <BingoCard
+                                                      card={cards[idx]}
+                                                      markedCells={markedCells[idx] || []}
+                                                      calledNumbers={room.calledNumbers || []}
+                                                      onToggleCell={(num) => toggleCell(idx, num)}
+                                                      readOnly={room.status !== 'playing'}
+                                                      highlightLatest={latestBall}
+                                                   />
+                                                   {cardStatus[idx]?.win.valid && (
+                                                      <div className="absolute inset-0 border-2 sm:border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
+                                                   )}
+                                                </div>
+                                             </div>
+                                          </div>
+                                       );
+                                    })}
+                                 </div>
                               </div>
                            )}
 
                            {cards.length === 4 && (
-                              <div className="w-full h-full max-w-[480px] grid grid-cols-2 gap-2 p-1 overflow-y-auto custom-scrollbar items-center">
+                              <div className="w-full h-full max-w-[480px] grid grid-cols-2 grid-rows-2 gap-1 p-0.5 min-h-0 overflow-hidden">
                                  {cards.map((card, idx) => {
                                     const isNearWin = cardStatus[idx]?.win.cellsAway === 1;
                                     return (
-                                       <div key={idx} className="w-full flex flex-col items-center justify-center min-h-0">
-                                          <div className="flex items-center justify-between w-full px-1 mb-0.5 shrink-0">
+                                       <div key={idx} className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 overflow-hidden">
+                                          <div className="flex items-center justify-between w-full px-1 shrink-0 h-3.5 mb-0.5">
                                              <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
                                              {isNearWin && (
-                                                <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
+                                                <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
                                              )}
                                           </div>
-                                          <div className="w-full aspect-square relative flex items-center justify-center">
-                                             <BingoCard
-                                                card={card}
-                                                markedCells={markedCells[idx] || []}
-                                                calledNumbers={room.calledNumbers || []}
-                                                onToggleCell={(num) => toggleCell(idx, num)}
-                                                readOnly={room.status !== 'playing'}
-                                                highlightLatest={latestBall}
-                                             />
-                                             {cardStatus[idx]?.win.valid && (
-                                                <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
-                                             )}
+                                          <div className="flex-1 min-h-0 min-w-0 w-full h-full flex items-center justify-center card-fit-wrapper">
+                                             <div className="card-fit-square relative flex items-center justify-center">
+                                                <BingoCard
+                                                   card={card}
+                                                   markedCells={markedCells[idx] || []}
+                                                   calledNumbers={room.calledNumbers || []}
+                                                   onToggleCell={(num) => toggleCell(idx, num)}
+                                                   readOnly={room.status !== 'playing'}
+                                                   highlightLatest={latestBall}
+                                                />
+                                                {cardStatus[idx]?.win.valid && (
+                                                   <div className="absolute inset-0 border-2 sm:border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
+                                                )}
+                                             </div>
                                           </div>
                                        </div>
                                     );
@@ -539,9 +577,9 @@ export default function Player() {
                               </div>
                            )}
                         </div>
-                        <div className="flex justify-center shrink-0 py-1">
-                           <button onClick={() => setAutoMark(!autoMark)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 font-black text-[9px] uppercase tracking-widest transition-all ${autoMark ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-sm' : 'bg-white border-[#E8E2D9] text-[#7A746B]'}`}>
-                              <CheckCircle2 size={12} fill={autoMark ? "currentColor" : "none"} />Auto-Marking {autoMark ? 'ON' : 'OFF'}
+                        <div className="flex justify-center shrink-0 py-0.5 sm:py-1">
+                           <button onClick={() => setAutoMark(!autoMark)} className={`flex items-center gap-1.5 px-3 py-1 rounded-full border font-black text-[8px] sm:text-[9px] uppercase tracking-widest transition-all ${autoMark ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-sm' : 'bg-white border-[#E8E2D9] text-[#7A746B]'}`}>
+                              <CheckCircle2 size={11} fill={autoMark ? "currentColor" : "none"} />Auto-Marking {autoMark ? 'ON' : 'OFF'}
                            </button>
                         </div>
                      </>
@@ -682,7 +720,7 @@ export default function Player() {
          )}
       </AnimatePresence>
 
-      <nav className="h-16 bg-white border-t-2 border-[#E8E2D9] grid grid-cols-4 gap-1 px-2 shrink-0 z-30 pb-safe relative">
+      <nav className="h-14 sm:h-16 bg-white border-t-2 border-[#E8E2D9] grid grid-cols-4 gap-1 px-2 shrink-0 z-30 pb-safe relative">
          {[{ id: 'cards', icon: LayoutGrid, label: 'Cards' },{ id: 'pattern', icon: Eye, label: 'Pattern' },{ id: 'history', icon: History, label: 'Calls' },{ id: 'stats', icon: Trophy, label: 'Stats' },].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex flex-col items-center justify-center gap-1 transition-all ${activeTab === tab.id ? 'text-[#EA580C] scale-110' : 'text-[#A19B91]'}`}>
                <tab.icon size={20} strokeWidth={activeTab === tab.id ? 3 : 2} /><span className="text-[9px] font-black uppercase tracking-tighter">{tab.label}</span>
@@ -759,7 +797,6 @@ export default function Player() {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="h-24" />
     </div>
   );
 }
