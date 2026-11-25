@@ -105,7 +105,7 @@ export default function Display() {
   useEffect(() => {
     if (!socket || !code) return;
     if (!room) {
-      rejoinRoom(code, 'player').then(success => {
+      rejoinRoom(code, 'display').then(success => {
         if (!success) navigate('/');
       });
     }
@@ -197,6 +197,11 @@ export default function Display() {
     }
   }, [winner, room?.mode]);
 
+  if (!room) return null;
+
+  const joinUrl = `${window.location.origin}/?code=${room.id}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&bgcolor=FAF7F2&color=3D3A35`;
+
   if (room.status === 'waiting') {
     return (
       <div className="min-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col overflow-hidden relative p-12">
@@ -277,9 +282,6 @@ export default function Display() {
       </div>
     );
   }
-
-  const joinUrl = `${window.location.origin}/?code=${room.id}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&bgcolor=FAF7F2&color=3D3A35`;
 
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col overflow-hidden relative">

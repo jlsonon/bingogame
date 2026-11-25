@@ -7,7 +7,7 @@ import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin } from '../lib/bingo';
-import { SOUNDS, setVoiceBaseUrl } from '../lib/sounds';
+import { SOUNDS, setVoiceBaseUrl, playVoiceBall } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
   const [now, setNow] = useState(Date.now());
@@ -137,15 +137,13 @@ export default function Host() {
          // Re-read last ball
          const voiceUrlParam = localStorage.getItem('bingo_voice_url') || '';
          setVoiceBaseUrl(voiceUrlParam);
-         import('../lib/sounds').then(({ playVoiceBall }) => {
-            const played = playVoiceBall(latestBall, room?.voiceMode || 'robotic', voiceUrlParam);
-            if (!played && 'speechSynthesis' in window) {
-               window.speechSynthesis.cancel();
-               const msg = new SpeechSynthesisUtterance(`${getBallLetter(latestBall)}... ${latestBall}`);
-               msg.rate = 0.85;
-               window.speechSynthesis.speak(msg);
-            }
-         });
+         const played = playVoiceBall(latestBall, room?.voiceMode || 'robotic', voiceUrlParam);
+         if (!played && 'speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const msg = new SpeechSynthesisUtterance(`${getBallLetter(latestBall)}... ${latestBall}`);
+            msg.rate = 0.85;
+            window.speechSynthesis.speak(msg);
+         }
       }
 
       // Space to Call Ball (if playing and manual)

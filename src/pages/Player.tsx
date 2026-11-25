@@ -54,6 +54,9 @@ export default function Player() {
   const [roundChoices, setRoundChoices] = useState<Record<number, boolean>>({});
   const [nearWinAlert, setNearWinAlert] = useState<string | null>(null);
   const [claimedDikitIndices, setClaimedDikitIndices] = useState<number[]>([]);
+  const cardsInitializedRef = useRef(false);
+  const prevRoundRef = useRef<number | null>(null);
+  const prevStatusRef = useRef<string | null>(null);
 
   // Screen Wake Lock API
   useEffect(() => {
@@ -63,7 +66,7 @@ export default function Player() {
         if ('wakeLock' in navigator) {
           wakeLock = await (navigator as any).wakeLock.request('screen');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(`${err?.name}, ${err?.message}`);
       }
     };
@@ -71,9 +74,15 @@ export default function Player() {
     return () => { wakeLock?.release(); };
   }, []);
 
-  // Reset round-specific data when roundNumber changes
+  // Reset round-specific data when roundNumber changes or room resets to waiting
   useEffect(() => {
-     if (room?.roundNumber) {
+     if (!room) return;
+     const roundChanged = prevRoundRef.current !== null && prevRoundRef.current !== room.roundNumber;
+     const resetToWaiting = prevStatusRef.current !== null && prevStatusRef.current !== 'waiting' && room.status === 'waiting';
+     prevRoundRef.current = room.roundNumber;
+     prevStatusRef.current = room.status;
+
+     if (roundChanged || resetToWaiting) {
         setClaimedDikitIndices([]);
         setMarkedCells(prev => {
            const reset: Record<number, number[]> = {};
@@ -81,7 +90,7 @@ export default function Player() {
            return reset;
         });
      }
-  }, [room?.roundNumber, room?.status === 'waiting']);
+  }, [room?.roundNumber, room?.status]);
 
   useEffect(() => {
     if (!socket || !code) return;
@@ -96,28 +105,31 @@ export default function Player() {
       return;
     }
 
-    if (cards.length === 0 && me.activeCards.length > 0) {
-       setCards(me.activeCards);
-       if (me.markedCells && Object.keys(me.markedCells).length > 0) {
-         setMarkedCells(me.markedCells);
+    if (!cardsInitializedRef.current) {
+       cardsInitializedRef.current = true;
+       if (me.activeCards.length > 0) {
+          setCards(me.activeCards);
+          if (me.markedCells && Object.keys(me.markedCells).length > 0) {
+            setMarkedCells(me.markedCells);
+          } else {
+            const initialMarked: Record<number, number[]> = {};
+            me.activeCards.forEach((card, i) => {
+              const calledOnCard = card.flat().filter(num => num !== 0 && room.calledNumbers.includes(num));
+              initialMarked[i] = [0, ...calledOnCard];
+            });
+            setMarkedCells(initialMarked);
+          }
        } else {
-         const initialMarked: Record<number, number[]> = {};
-         me.activeCards.forEach((card, i) => {
-           const calledOnCard = card.flat().filter(num => num !== 0 && room.calledNumbers.includes(num));
-           initialMarked[i] = [0, ...calledOnCard];
-         });
-         setMarkedCells(initialMarked);
+          const initialCount = parseInt(localStorage.getItem('bingo_initial_cards') ?? '1');
+          const newCards = Array.from({ length: initialCount }, () => generateRandomCard());
+          setCards(newCards);
+          updateMyCards(newCards);
+          const initialMarked: Record<number, number[]> = {};
+          newCards.forEach((_, i) => { initialMarked[i] = [0]; });
+          setMarkedCells(initialMarked);
        }
-    } else if (cards.length === 0) {
-       const initialCount = parseInt(localStorage.getItem('bingo_initial_cards') || '1');
-       const newCards = Array.from({ length: initialCount }, () => generateRandomCard());
-       setCards(newCards);
-       updateMyCards(newCards);
-       const initialMarked: Record<number, number[]> = {};
-       newCards.forEach((_, i) => { initialMarked[i] = [0]; });
-       setMarkedCells(initialMarked);
     }
-  }, [socket, code, room, me, navigate, rejoinRoom]);
+  }, [socket, code, room, me, navigate, rejoinRoom, updateMyCards]);
 
   useEffect(() => {
      if (cards.length > 0) {
@@ -431,19 +443,21 @@ export default function Player() {
                      <div className="absolute inset-0 bg-gradient-to-br from-white to-[#FAF7F2] pointer-events-none" />
                      <div className="flex items-center justify-between relative z-10">
                         <LayoutGrid size={20} className="text-[#EA580C] mb-2" />
-                        <button 
-                           onClick={() => {
-                              const newCards = Array.from({ length: cards.length }, () => generateRandomCard());
-                              const emptyMarked: Record<number, number[]> = {};
-                              newCards.forEach((_, i) => { emptyMarked[i] = [0]; });
-                              setMarkedCells(emptyMarked);
-                              setCards(newCards);
-                              playSound(SOUNDS.BALL_DRAW, 0.5);
-                           }}
-                           className="px-3 py-1 bg-[#EA580C] text-white text-[10px] font-black uppercase rounded-lg shadow-md active:scale-95 transition-all"
-                        >
-                           Change Cards
-                        </button>
+                        {cards.length > 0 && ['waiting', 'next_round'].includes(room.status) && (
+                           <button 
+                              onClick={() => {
+                                 const newCards = Array.from({ length: cards.length }, () => generateRandomCard());
+                                 const emptyMarked: Record<number, number[]> = {};
+                                 newCards.forEach((_, i) => { emptyMarked[i] = [0]; });
+                                 setMarkedCells(emptyMarked);
+                                 setCards(newCards);
+                                 playSound(SOUNDS.BALL_DRAW, 0.5);
+                              }}
+                              className="px-3 py-1 bg-[#EA580C] text-white text-[10px] font-black uppercase rounded-lg shadow-md active:scale-95 transition-all"
+                           >
+                              Change Cards
+                           </button>
+                        )}
                      </div>
                      <div className="text-4xl font-display tabular-nums relative z-10">{cards.length}</div>
                      <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider relative z-10">My Cards</div>

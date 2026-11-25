@@ -11,7 +11,7 @@ import { z } from "zod";
 const SettingsSchema = z.object({
   mode: z.enum(['Bingo', 'Blackout', 'Dikit']).optional(),
   autoCallSpeed: z.number().min(0).optional(),
-  voiceMode: z.enum(['robotic', 'custom']).optional(),
+  voiceMode: z.enum(['robotic', 'custom', 'ai_sarcastic', 'ai_vegas', 'ai_lounge']).optional(),
   ambienceEnabled: z.boolean().optional(),
   voiceId: z.string().max(64).optional(),
   roundName: z.string().max(40).optional(),
@@ -180,6 +180,28 @@ function stopAutoCaller(code: string) {
   }
 }
 
+// Helper to check near wins across the room when a ball is called
+function checkRoomForNearWins(code: string, io: Server, room: Room) {
+  let nearWinData: { playerName: string, patternName: string } | null = null;
+
+  Object.values(room.players).forEach(player => {
+    player.activeCards.forEach((card, idx) => {
+      const marked = player.markedCells[idx] || [];
+      const res = checkValidWin(card, marked, room.calledNumbers, room.mode, room.patterns);
+      if (res.cellsAway === 1) {
+        nearWinData = { 
+           playerName: player.nickname, 
+           patternName: res.pattern || room.mode 
+        };
+      }
+    });
+  });
+
+  if (nearWinData) {
+    io.to(code).emit("near_win_alert", nearWinData);
+  }
+}
+
 function startAutoCaller(code: string, io: Server) {
   const room = rooms[code];
   if (!room || room.status !== 'playing' || room.autoCallSpeed <= 0) return;
@@ -191,6 +213,7 @@ function startAutoCaller(code: string, io: Server) {
       room.calledNumbers.push(ball);
       io.to(code).emit("ball_called", { ball, room });
       io.to(code).emit("room_updated", room);
+      checkRoomForNearWins(code, io, room);
     } else if (room && room.remainingBalls.length === 0) {
       stopAutoCaller(code);
     }
@@ -335,28 +358,6 @@ async function startServer() {
 
 const rateLimits: Record<string, number> = {};
 
-// Helper to check near wins across the room when a ball is called
-function checkRoomForNearWins(code: string, io: Server, room: Room) {
-  let nearWinData: { playerName: string, patternName: string } | null = null;
-
-  Object.values(room.players).forEach(player => {
-    player.activeCards.forEach((card, idx) => {
-      const marked = player.markedCells[idx] || [];
-      const res = checkValidWin(card, marked, room.calledNumbers, room.mode, room.patterns);
-      if (res.cellsAway === 1) {
-        nearWinData = { 
-           playerName: player.nickname, 
-           patternName: res.pattern || room.mode 
-        };
-      }
-    });
-  });
-
-  if (nearWinData) {
-    io.to(code).emit("near_win_alert", nearWinData);
-  }
-}
-
 io.on("connection", (socket: Socket) => {
   // --- GLOBAL PATTERN EVENTS ---
   socket.on("get_global_patterns", (callback) => {
@@ -460,7 +461,6 @@ io.on("connection", (socket: Socket) => {
       }
       touchRoom(code);
       const sessionId = getSessionId(data.sessionId);
-      registerSessionSocket(io, sessionId, socket.id);
 
       if (!room.players[sessionId]) {
         room.stats.totalPlayersJoined += 1;
@@ -488,19 +488,37 @@ io.on("connection", (socket: Socket) => {
         activeCards: room.players[sessionId]?.activeCards || [],
         markedCells: room.players[sessionId]?.markedCells || {}
       };
+      registerSessionSocket(io, sessionId, socket.id);
       socket.join(code);
       io.to(code).emit("room_updated", room);
       if (callback) callback({ success: true, room });
     });
 
-    socket.on("rejoin_room", (data: { code: string, sessionId?: string, nickname?: string, avatarColor?: string, role?: 'host' | 'player' }, callback) => {
+    socket.on("rejoin_room", (data: { code: string, sessionId?: string, nickname?: string, avatarColor?: string, role?: 'host' | 'player' | 'display' | 'godview' }, callback) => {
       const code = normalizeCode(data.code);
       const room = rooms[code];
       const sessionId = getSessionId(data.sessionId);
-      registerSessionSocket(io, sessionId, socket.id);
 
       if (!room) {
         if (callback) callback({ success: false, message: "Room not found" });
+        return;
+      }
+
+      if (data.role === 'display') {
+        touchRoom(code);
+        socket.join(code);
+        if (callback) callback({ success: true, room });
+        return;
+      }
+
+      if (data.role === 'godview') {
+        if (room.hostId !== sessionId) {
+          if (callback) callback({ success: false, message: "Host session not found" });
+          return;
+        }
+        touchRoom(code);
+        socket.join(code);
+        if (callback) callback({ success: true, room });
         return;
       }
 
@@ -516,6 +534,7 @@ io.on("connection", (socket: Socket) => {
         existing.connected = true;
         existing.nickname = sanitizeText(data.nickname || existing.nickname, existing.nickname, 24);
         existing.avatarColor = data.avatarColor || existing.avatarColor;
+        registerSessionSocket(io, sessionId, socket.id);
       } else {
         if (callback) callback({ success: false, message: "Session not found. Please join from the landing page." });
         return;
@@ -588,7 +607,16 @@ io.on("connection", (socket: Socket) => {
       if (room && host?.socketId === socket.id) {
         const settings = data.settings || {};
         if (settings.mode) room.mode = settings.mode;
-        if (typeof settings.autoCallSpeed === 'number') room.autoCallSpeed = settings.autoCallSpeed;
+        if (typeof settings.autoCallSpeed === 'number') {
+          room.autoCallSpeed = settings.autoCallSpeed;
+          if (room.status === 'playing') {
+            if (room.autoCallSpeed > 0) {
+              startAutoCaller(code, io);
+            } else {
+              stopAutoCaller(code);
+            }
+          }
+        }
         if (settings.voiceMode) room.voiceMode = settings.voiceMode;
         if (typeof settings.ambienceEnabled === 'boolean') room.ambienceEnabled = settings.ambienceEnabled;
         if (settings.voiceId) room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
@@ -793,6 +821,7 @@ io.on("connection", (socket: Socket) => {
                 // Keep only last 100 entries to prevent file bloat
                 if (globalHallOfFame.length > 100) globalHallOfFame.shift();
                 saveHOF();
+                io.emit("hall_of_fame_updated", globalHallOfFame);
              } else {
                 io.to(code).emit("claim_rejected", claim);
              }

@@ -64,7 +64,7 @@ interface GameState {
   setProfile: (nickname: string, color: string) => void;
   createRoom: () => Promise<string>;
   joinRoom: (code: string) => Promise<boolean>;
-  rejoinRoom: (code: string, role: 'host' | 'player') => Promise<boolean>;
+  rejoinRoom: (code: string, role: 'host' | 'player' | 'display' | 'godview') => Promise<boolean>;
   
   // Host actions
   startGame: () => void;
@@ -196,6 +196,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({ globalPatterns: patterns });
     });
 
+    newSocket.on("hall_of_fame_updated", (hof: any[]) => {
+      set({ hallOfFame: hof });
+    });
+
     newSocket.emit("get_global_patterns", (patterns: BingoPattern[]) => {
       set({ globalPatterns: patterns });
     });
@@ -249,7 +253,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  rejoinRoom: (code: string, role: 'host' | 'player') => {
+  rejoinRoom: (code: string, role: 'host' | 'player' | 'display' | 'godview') => {
     return new Promise((resolve) => {
       const { socket, nickname, avatarColor, sessionId } = get();
       if (!socket) {
@@ -258,9 +262,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       socket.emit("rejoin_room", { code, sessionId, nickname, avatarColor, role }, (res: any) => {
         if (res.success) {
-          localStorage.setItem('bingo_room_code', res.room.id);
-          localStorage.setItem('bingo_room_role', role);
-          set({ room: res.room, me: res.room.players[sessionId], latestBall: res.room.calledNumbers.at(-1) || null });
+          if (role === 'host' || role === 'player') {
+            localStorage.setItem('bingo_room_code', res.room.id);
+            localStorage.setItem('bingo_room_role', role);
+          }
+          set({ room: res.room, me: res.room.players[sessionId] || null, latestBall: res.room.calledNumbers.at(-1) || null });
           resolve(true);
         } else {
           resolve(false);

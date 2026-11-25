@@ -36,16 +36,17 @@ export default function Landing() {
     navigate(`/host/${code}`);
   };
 
-  const handleJoin = async () => {
+  const handleJoin = async (codeOverride?: string) => {
+    const targetCode = (codeOverride ?? joinCode).trim().toUpperCase();
     if (!localName.trim()) { setError('Please enter a nickname'); return; }
-    if (!joinCode.trim() || joinCode.length !== 4) { setError('Please enter a valid 4-letter code'); return; }
+    if (!targetCode || targetCode.length !== 4) { setError('Please enter a valid 4-letter code'); return; }
     
     setLoading(true);
     setProfile(localName, localColor);
     localStorage.setItem('bingo_initial_cards', String(cardCount));
-    const success = await joinRoom(joinCode);
+    const success = await joinRoom(targetCode);
     if (success) {
-      navigate(`/play/${joinCode.toUpperCase()}`);
+      navigate(`/play/${targetCode}`);
     } else {
       setError('Room not found or disconnected');
       setLoading(false);
@@ -82,7 +83,7 @@ export default function Landing() {
               value={localName}
               onChange={e => { setLocalName(e.target.value); setError(''); }}
               className="w-full px-4 py-3 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-bold transition-colors text-lg text-[#3D3A35]"
-              maxLength={12}
+              maxLength={24}
             />
           </div>
 
@@ -131,7 +132,7 @@ export default function Landing() {
 
               <button 
                 id="join-btn"
-                onClick={handleJoin}
+                onClick={() => handleJoin()}
                 disabled={loading}
                 className="w-full bg-[#EA580C] text-white py-5 rounded-[24px] font-display text-2xl italic transition-all flex items-center justify-center gap-3 shadow-[0_8px_0_#9A3412] active:translate-y-[8px] active:shadow-none touch-manipulation uppercase tracking-widest"
               >
@@ -149,11 +150,7 @@ export default function Landing() {
                          key={room.id}
                          onClick={() => {
                             setJoinCode(room.id);
-                            // Need a small timeout to let state update before joining
-                            setTimeout(() => {
-                               const btn = document.getElementById('join-btn');
-                               if (btn) btn.click();
-                            }, 50);
+                            handleJoin(room.id);
                          }}
                          className="w-full flex items-center justify-between bg-white border border-[#DED9D1] p-3 rounded-xl hover:border-[#0D9488] hover:bg-[#F3EFE9] transition-colors text-left"
                       >

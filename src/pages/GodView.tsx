@@ -1,18 +1,23 @@
 import { useGameStore } from '../store/gameStore';
 import { checkValidWin } from '../lib/bingo';
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 export default function GodView() {
   const { code } = useParams();
+  const navigate = useNavigate();
+  const socket = useGameStore(s => s.socket);
   const room = useGameStore(s => s.room);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
 
   useEffect(() => {
-    if (!room && code) {
-      rejoinRoom(code, 'host');
+    if (!socket || !code) return;
+    if (!room) {
+      rejoinRoom(code, 'godview').then(success => {
+        if (!success) navigate('/');
+      });
     }
-  }, [room, code, rejoinRoom]);
+  }, [socket, room, code, rejoinRoom, navigate]);
 
   if (!room) return <div className="p-8 text-center font-black uppercase tracking-widest">Loading God View...</div>;
 
