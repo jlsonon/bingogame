@@ -5,7 +5,7 @@ import fs from "fs";
 import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
 import { createServer as createViteServer } from "vite";
-import { checkValidWin, checkDikitSidequest, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
+import { checkValidWin, checkDikitSidequest, generateRandomCard, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
 import { z } from "zod";
 
 const SettingsSchema = z.object({
@@ -28,7 +28,8 @@ const UpdateCardsSchema = z.object({
 const JoinRoomSchema = z.object({
   code: z.string().length(4),
   nickname: z.string().min(1).max(24),
-  avatarColor: z.string().startsWith('#').max(7).optional()
+  avatarColor: z.string().startsWith('#').max(7).optional(),
+  cardCount: z.number().int().min(0).max(4).optional()
 });
 
 interface Player {
@@ -478,7 +479,8 @@ io.on("connection", (socket: Socket) => {
       if (callback) callback({ success: true, room: newRoom });
     });
 
-    socket.on("join_room", (data: { code: string, sessionId?: string, nickname: string, avatarColor?: string }, callback) => {
+    socket.on("join_room", (data: { code: string, sessionId?: string, nickname: string, avatarColor?: string, cardCount?: number }, callback) => {
+      const parsed = JoinRoomSchema.safeParse(data);
       const code = normalizeCode(data.code);
       const room = rooms[code];
       if (!room) {
@@ -492,6 +494,16 @@ io.on("connection", (socket: Socket) => {
         room.stats.totalPlayersJoined += 1;
       }
 
+      let activeCards = room.players[sessionId]?.activeCards || [];
+      let markedCells = room.players[sessionId]?.markedCells || {};
+
+      if (typeof data.cardCount === 'number' && (room.status === 'waiting' || room.status === 'next_round' || activeCards.length === 0)) {
+        const count = Math.min(Math.max(data.cardCount, 0), 4);
+        activeCards = Array.from({ length: count }, () => generateRandomCard());
+        markedCells = {};
+        activeCards.forEach((_, i) => { markedCells[i] = [0]; });
+      }
+
       const newPlayer: Player = {
         id: sessionId,
         socketId: socket.id,
@@ -499,8 +511,8 @@ io.on("connection", (socket: Socket) => {
         avatarColor: data.avatarColor || '#ef4444',
         isHost: false,
         connected: true,
-        activeCards: [],
-        markedCells: {},
+        activeCards,
+        markedCells,
         hasDikit: false,
         nextRoundChoice: 'keep',
         isReady: false
@@ -511,9 +523,11 @@ io.on("connection", (socket: Socket) => {
         ...newPlayer,
         isHost: room.players[sessionId]?.isHost || false,
         nextRoundChoice: room.players[sessionId]?.nextRoundChoice || 'keep',
-        activeCards: room.players[sessionId]?.activeCards || [],
-        markedCells: room.players[sessionId]?.markedCells || {}
+        activeCards,
+        markedCells
       };
+
+      room.stats.totalCardsSold = Object.values(room.players).reduce((sum, p) => sum + (p.activeCards?.length || 0), 0);
       registerSessionSocket(io, sessionId, socket.id);
       socket.join(code);
       io.to(code).emit("room_updated", room);

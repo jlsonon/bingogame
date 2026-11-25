@@ -63,7 +63,7 @@ interface GameState {
   avatarColor: string;
   setProfile: (nickname: string, color: string) => void;
   createRoom: () => Promise<{ success: boolean; code?: string; error?: string }>;
-  joinRoom: (code: string) => Promise<boolean>;
+  joinRoom: (code: string, cardCount?: number) => Promise<boolean>;
   rejoinRoom: (code: string, role: 'host' | 'player' | 'display' | 'godview') => Promise<boolean>;
   
   // Host actions
@@ -327,7 +327,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  joinRoom: (code: string) => {
+  joinRoom: (code: string, cardCount?: number) => {
     return new Promise((resolve) => {
       let { socket } = get();
       if (!socket) {
@@ -346,7 +346,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       const doJoin = () => {
         const { nickname, avatarColor } = get();
         const effectiveName = nickname.trim() || 'Player';
-        socket!.emit("join_room", { code, sessionId: get().sessionId, nickname: effectiveName, avatarColor }, (res: any) => {
+        const count = typeof cardCount === 'number'
+          ? cardCount
+          : parseInt(localStorage.getItem('bingo_initial_cards') ?? '1');
+        socket!.emit("join_room", { code, sessionId: get().sessionId, nickname: effectiveName, avatarColor, cardCount: count }, (res: any) => {
           clearTimeout(timeout);
           if (res && res.success && res.room) {
             localStorage.setItem('bingo_room_code', res.room.id);

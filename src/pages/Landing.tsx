@@ -67,7 +67,7 @@ export default function Landing() {
       setError('');
       setProfile(name, localColor);
       localStorage.setItem('bingo_initial_cards', String(cardCount));
-      const success = await joinRoom(targetCode);
+      const success = await joinRoom(targetCode, cardCount);
       if (success) {
         navigate(`/play/${targetCode}`);
       } else {
