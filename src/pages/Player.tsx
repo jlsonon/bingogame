@@ -6,7 +6,7 @@ import { PatternVisualizer } from '../components/PatternVisualizer';
 import { generateRandomCard, checkValidWin, getBallLetter, checkDikitSidequest } from '../lib/bingo';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { Plus, Trash2, ArrowLeft, ArrowRight, Loader, LayoutGrid, Eye, History, Settings2, Trophy, CheckCircle2, Users, Ticket } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, ArrowRight, Loader, LayoutGrid, Eye, History, Settings2, Trophy, CheckCircle2, Users, Ticket, Lock } from 'lucide-react';
 import { SOUNDS, playSound } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
@@ -36,7 +36,6 @@ export default function Player() {
   const updateMarkedCells = useGameStore(s => s.updateMarkedCells);
   const claimBingo = useGameStore(s => s.claimBingo);
   const claimDikit = useGameStore(s => s.claimDikit);
-  const sendEmote = useGameStore(s => s.sendEmote);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
   const setNextRoundChoice = useGameStore(s => s.setNextRoundChoice);
   const setPlayerReady = useGameStore(s => s.setPlayerReady);
@@ -269,8 +268,10 @@ export default function Player() {
      setRoundChoices({});
   };
 
+  const isGameOn = room?.status === 'playing' || room?.status === 'paused';
+
   const setCardQuantity = (count: number) => {
-    if (!['waiting', 'next_round'].includes(room?.status || '')) return;
+    if (isGameOn || !['waiting', 'next_round'].includes(room?.status || '')) return;
     const clamped = Math.min(Math.max(count, 0), 4);
     localStorage.setItem('bingo_initial_cards', String(clamped));
     const newCards = Array.from({ length: clamped }, () => generateRandomCard());
@@ -375,33 +376,51 @@ export default function Player() {
                            )}
                         </AnimatePresence>
                         <div className="flex-1 w-full relative min-h-0 flex flex-col items-center justify-center overflow-hidden">
-                           {/* Quick Card Count Selector when waiting or next_round */}
-                           {['waiting', 'next_round'].includes(room.status) && (
-                              <div className="flex items-center justify-between bg-white border border-[#E8E2D9] px-2.5 py-1 rounded-xl shrink-0 w-full max-w-[440px] mx-auto mb-1 shadow-sm">
-                                 <div className="flex items-center gap-1.5">
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Cards:</span>
-                                    <div className="flex gap-1">
-                                       {[1, 2, 3, 4].map(num => (
-                                          <button
-                                             key={num}
-                                             type="button"
-                                             onClick={() => setCardQuantity(num)}
-                                             className={`w-6 h-6 rounded-md font-display text-xs font-bold border transition-all ${cards.length === num ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-sm scale-105' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#7A746B]'}`}
-                                          >
-                                             {num}
-                                          </button>
-                                       ))}
-                                    </div>
-                                 </div>
-                                 <button
-                                    type="button"
-                                    onClick={() => setCardQuantity(cards.length || 1)}
-                                    className="text-[8px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 px-2 py-0.5 rounded-md transition-all"
-                                 >
-                                    New Numbers
-                                 </button>
-                              </div>
-                           )}
+                            {/* Card Count Selector: unlocked when waiting/next_round, locked and unclickable when game is on */}
+                            <div className={`flex items-center justify-between bg-white border border-[#E8E2D9] px-2.5 py-1 rounded-xl shrink-0 w-full max-w-[440px] mx-auto mb-1 shadow-sm transition-all ${isGameOn ? 'bg-[#FAF7F2]/90 border-dashed opacity-85' : ''}`}>
+                               <div className="flex items-center gap-1.5">
+                                  <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B] flex items-center gap-1">
+                                     {isGameOn && <Lock size={9} className="text-[#EA580C]" />}
+                                     Cards:
+                                  </span>
+                                  <div className="flex gap-1">
+                                     {[1, 2, 3, 4].map(num => (
+                                        <button
+                                           key={num}
+                                           type="button"
+                                           disabled={isGameOn}
+                                           onClick={() => {
+                                              if (isGameOn) return;
+                                              setCardQuantity(num);
+                                           }}
+                                           className={`w-6 h-6 rounded-md font-display text-xs font-bold border transition-all ${cards.length === num ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-sm scale-105' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#7A746B]'} ${isGameOn ? 'cursor-not-allowed pointer-events-none' : 'cursor-pointer active:scale-95'}`}
+                                           title={isGameOn ? 'Cards are locked during active game' : `Select ${num} card${num > 1 ? 's' : ''}`}
+                                        >
+                                           {num}
+                                        </button>
+                                     ))}
+                                  </div>
+                               </div>
+                               <button
+                                  type="button"
+                                  disabled={isGameOn}
+                                  onClick={() => {
+                                     if (isGameOn) return;
+                                     setCardQuantity(cards.length || 1);
+                                  }}
+                                  className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md transition-all flex items-center gap-1 ${isGameOn ? 'text-[#A19B91] bg-gray-100 border border-[#E8E2D9] cursor-not-allowed pointer-events-none' : 'text-[#0D9488] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 cursor-pointer active:scale-95'}`}
+                                  title={isGameOn ? 'Card numbers are locked during active game' : 'Generate new random card numbers'}
+                               >
+                                  {isGameOn ? (
+                                     <>
+                                        <Lock size={8} className="text-[#A19B91]" />
+                                        <span>Locked</span>
+                                     </>
+                                  ) : (
+                                     'New Numbers'
+                                  )}
+                               </button>
+                            </div>
 
                            {cards.length === 1 && (
                               <div className="w-full h-full max-w-[420px] flex flex-col items-center justify-center min-h-0 overflow-hidden">
@@ -700,25 +719,6 @@ export default function Player() {
             )}
          </AnimatePresence>
       </main>
-
-      <AnimatePresence>
-         {room.status === 'playing' && (
-            <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="absolute bottom-20 right-4 z-40 flex flex-col gap-2">
-               {['🔥', '🎉', '😂', '🙌', '💎'].map(emoji => (
-                  <button
-                    key={emoji}
-                    onClick={() => {
-                       if ('vibrate' in navigator) navigator.vibrate(20);
-                       sendEmote(emoji);
-                    }}
-                    className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-white flex items-center justify-center text-2xl active:scale-90 transition-all hover:bg-white"
-                  >
-                     {emoji}
-                  </button>
-               ))}
-            </motion.div>
-         )}
-      </AnimatePresence>
 
       <nav className="h-14 sm:h-16 bg-white border-t-2 border-[#E8E2D9] grid grid-cols-4 gap-1 px-2 shrink-0 z-30 pb-safe relative">
          {[{ id: 'cards', icon: LayoutGrid, label: 'Cards' },{ id: 'pattern', icon: Eye, label: 'Pattern' },{ id: 'history', icon: History, label: 'Calls' },{ id: 'stats', icon: Trophy, label: 'Stats' },].map(tab => (
