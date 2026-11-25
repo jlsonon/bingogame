@@ -3,11 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BallCaller } from '../components/BallCaller';
 import { PatternVisualizer } from '../components/PatternVisualizer';
-import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2 } from 'lucide-react';
+import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin } from '../lib/bingo';
-import { SOUNDS, playVoiceBall, previewVoice } from '../lib/sounds';
+import { SOUNDS, playSound, playVoiceBall, previewVoice } from '../lib/sounds';
 import { NATURAL_VOICES } from '../lib/voices';
 
 const DELETED_PATTERN_IDENTIFIERS = new Set([
@@ -85,6 +85,91 @@ export default function Host() {
   const [customCells, setCustomCells] = useState<number[]>([12]);
   const [activeCustomId, setActiveCustomId] = useState<string>(() => `custom-${Date.now()}`);
   const [saveFeedback, setSaveFeedback] = useState<string>('');
+
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [revealedBall, setRevealedBall] = useState<number | null>(() => latestBall || null);
+  const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load voices and enable audio context on first interaction
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.name.includes('David') || v.name.includes('Daniel') || v.name.includes('Male'));
+      setMaleVoice(preferred || voices[0] || null);
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    const unlockAudio = () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+      }
+    };
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+
+  // Automatic Voice Calling & Ball Reveal on Ball Call
+  useEffect(() => {
+    if (!latestBall) {
+      setRevealedBall(null);
+      return;
+    }
+
+    if (!audioEnabled) {
+      setRevealedBall(latestBall);
+      return;
+    }
+
+    // Play mechanical chute sound
+    playSound(SOUNDS.BALL_DRAW, 0.4);
+
+    let hasRevealed = false;
+    const triggerReveal = () => {
+      if (!hasRevealed) {
+        hasRevealed = true;
+        setRevealedBall(latestBall);
+      }
+    };
+
+    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = setTimeout(triggerReveal, 300);
+
+    const voiceTriggered = playVoiceBall(latestBall, room?.voiceMode || 'robotic', {
+      onStart: () => {
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        triggerReveal();
+      }
+    });
+
+    if (!voiceTriggered && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const letter = getBallLetter(latestBall);
+      const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
+      if (maleVoice) utterance.voice = maleVoice;
+      utterance.rate = 0.85;
+
+      utterance.onstart = () => {
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        triggerReveal();
+      };
+      utterance.onerror = () => {
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        triggerReveal();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    return () => {
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    };
+  }, [latestBall, audioEnabled, room?.voiceMode, maleVoice]);
 
   // --- MIGRATION: ONE-TIME SYNC LOCAL PATTERNS TO SERVER ---
   useEffect(() => {
@@ -302,6 +387,16 @@ export default function Host() {
              >
                <LayoutGrid size={16} />God View
              </button>
+             <button
+               onClick={() => setAudioEnabled(!audioEnabled)}
+               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
+                 audioEnabled ? 'bg-[#0D9488]/10 text-[#0D9488] hover:bg-[#0D9488]/20' : 'bg-[#EF4444]/10 text-[#EF4444] hover:bg-[#EF4444]/20'
+               }`}
+               title={audioEnabled ? "Caller Voice is ON (Click to Mute)" : "Caller Voice is MUTED (Click to Enable)"}
+             >
+               {audioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+               {audioEnabled ? 'Voice On' : 'Muted'}
+             </button>
           </div>
         </div>
         <div className="flex items-center gap-6">
@@ -372,17 +467,24 @@ export default function Host() {
            <div className="grid grid-cols-[1fr_320px] gap-8 shrink-0">
               <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-8 shadow-sm flex flex-col justify-center items-center relative overflow-hidden">
                  <div className="absolute top-4 left-6 text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Latest Call</div>
-                 <AnimatePresence mode="wait">
-                    {latestBall ? (
-                       <motion.div key={latestBall} initial={{ scale: 0.5, y: 50, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} className="flex flex-col items-center">
+                 <AnimatePresence mode="popLayout">
+                    {revealedBall ? (
+                       <motion.div
+                         key={revealedBall}
+                         initial={{ scale: 0.5, y: 50, opacity: 0 }}
+                         animate={{ scale: 1, y: 0, opacity: 1 }}
+                         exit={{ scale: 1.15, opacity: 0, transition: { duration: 0.15 } }}
+                         transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                         className="flex flex-col items-center"
+                       >
                           <div className="w-48 h-48 rounded-full bg-[#FACC15] border-[8px] border-white outline outline-8 outline-[#FACC15] shadow-xl flex flex-col items-center justify-center text-[#854D0E] relative">
                             <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-black/20 via-transparent to-white/40 pointer-events-none" />
                             <div className="absolute top-6 left-8 w-12 h-6 bg-white/30 rounded-[100%] blur-sm -rotate-45 pointer-events-none" />
-                            <span className="text-2xl font-display leading-none mb-1 z-10">{getBallLetter(latestBall)}</span>
-                            <span className="text-8xl font-display leading-none tracking-tighter z-10">{latestBall}</span>
+                            <span className="text-2xl font-display leading-none mb-1 z-10">{getBallLetter(revealedBall)}</span>
+                            <span className="text-8xl font-display leading-none tracking-tighter z-10">{revealedBall}</span>
                           </div>
                        </motion.div>
-                    ) : (<div className="text-xl font-black text-[#DED9D1] uppercase tracking-widest">Awaiting First Ball</div>)}
+                    ) : (<div className="text-xl font-black text-[#DED9D1] uppercase tracking-widest">{room.status === 'playing' ? 'Drawing Ball...' : 'Awaiting First Ball'}</div>)}
                  </AnimatePresence>
               </div>
               <div className="bg-white rounded-[40px] border-4 border-[#E8E2D9] p-6 shadow-sm flex flex-col"><div className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em] mb-4 text-center">Active Pattern</div><div className="flex-1 flex items-center justify-center">{!room.hidePattern ? (<PatternVisualizer patterns={room.patterns} className="scale-125 origin-center" />) : (<div className="text-[#DED9D1] flex flex-col items-center gap-2"><Eye size={32} className="opacity-30" /><span className="text-[10px] font-black uppercase tracking-widest text-center leading-tight px-4">Pattern Hidden from Screens</span></div>)}</div><div className="mt-4 pt-4 border-t-2 border-[#FAF7F2] text-center"><div className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest leading-none mb-1">Mode</div><div className="text-lg font-black text-[#EA580C] uppercase tracking-tighter">{room.mode}</div></div></div>
