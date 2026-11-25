@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { motion } from 'framer-motion';
-import { Dices, PlayCircle, Settings2, Users } from 'lucide-react';
+import { Dices, PlayCircle, Settings2, Users, Loader } from 'lucide-react';
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
 
@@ -11,7 +11,7 @@ export default function Landing() {
   const [searchParams] = useSearchParams();
   const initialCode = searchParams.get('code') || '';
 
-  const { nickname, avatarColor, setProfile, createRoom, joinRoom } = useGameStore();
+  const { nickname, avatarColor, setProfile, createRoom, joinRoom, connect } = useGameStore();
 
   const [localName, setLocalName] = useState(nickname);
   const [localColor, setLocalColor] = useState(avatarColor);
@@ -22,33 +22,60 @@ export default function Landing() {
   const [publicRooms, setPublicRooms] = useState<any[]>([]);
 
   useEffect(() => {
+    connect();
     fetch('/api/rooms')
       .then(res => res.json())
       .then(data => setPublicRooms(data))
       .catch(() => console.error("Could not fetch rooms"));
-  }, []);
+  }, [connect]);
 
   const handleHost = async () => {
-    if (!localName.trim()) { setError('Please enter a nickname'); return; }
-    setLoading(true);
-    setProfile(localName, localColor);
-    const code = await createRoom();
-    navigate(`/host/${code}`);
+    try {
+      const name = localName.trim() || 'Host';
+      if (!localName.trim()) {
+        setLocalName(name);
+      }
+      setLoading(true);
+      setError('');
+      setProfile(name, localColor);
+      const res = await createRoom();
+      if (res.success && res.code) {
+        navigate(`/host/${res.code}`);
+      } else {
+        setError(res.error || 'Failed to create room. Please try again.');
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Connection error. Please try again.');
+      setLoading(false);
+    }
   };
 
   const handleJoin = async (codeOverride?: string) => {
-    const targetCode = (codeOverride ?? joinCode).trim().toUpperCase();
-    if (!localName.trim()) { setError('Please enter a nickname'); return; }
-    if (!targetCode || targetCode.length !== 4) { setError('Please enter a valid 4-letter code'); return; }
-    
-    setLoading(true);
-    setProfile(localName, localColor);
-    localStorage.setItem('bingo_initial_cards', String(cardCount));
-    const success = await joinRoom(targetCode);
-    if (success) {
-      navigate(`/play/${targetCode}`);
-    } else {
-      setError('Room not found or disconnected');
+    try {
+      const targetCode = (codeOverride ?? joinCode).trim().toUpperCase();
+      const name = localName.trim() || 'Player';
+      if (!localName.trim()) {
+        setLocalName(name);
+      }
+      if (!targetCode || targetCode.length !== 4) {
+        setError('Please enter a valid 4-letter code');
+        return;
+      }
+      
+      setLoading(true);
+      setError('');
+      setProfile(name, localColor);
+      localStorage.setItem('bingo_initial_cards', String(cardCount));
+      const success = await joinRoom(targetCode);
+      if (success) {
+        navigate(`/play/${targetCode}`);
+      } else {
+        setError('Room not found or disconnected');
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Connection error. Please try again.');
       setLoading(false);
     }
   };
@@ -176,10 +203,10 @@ export default function Landing() {
           <button 
             onClick={handleHost}
             disabled={loading}
-            className="w-full py-4 bg-[#F3EFE9] border-2 border-[#DED9D1] text-[#7A746B] rounded-[24px] font-black text-sm transition-all flex items-center justify-center gap-2 active:translate-y-1 touch-manipulation uppercase tracking-widest"
+            className="w-full py-4 bg-[#F3EFE9] border-2 border-[#DED9D1] text-[#7A746B] rounded-[24px] font-black text-sm transition-all flex items-center justify-center gap-2 active:translate-y-1 touch-manipulation uppercase tracking-widest disabled:opacity-60"
           >
-            <Users size={20} />
-            Host New Room
+            {loading ? <Loader className="animate-spin text-[#0D9488]" size={20} /> : <Users size={20} />}
+            {loading ? 'Starting Host...' : 'Host New Room'}
           </button>
 
           {error && (

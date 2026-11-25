@@ -369,11 +369,14 @@ io.on("connection", (socket: Socket) => {
   });
 
   socket.on("save_global_pattern", (pattern: BingoPattern) => {
-    const index = globalPatternLibrary.findIndex(p => p.id === pattern.id);
+    if (!pattern || typeof pattern !== 'object') return;
+    const sanitized = sanitizePatterns([pattern])[0];
+    if (!sanitized) return;
+    const index = globalPatternLibrary.findIndex(p => p.id === sanitized.id);
     if (index !== -1) {
-      globalPatternLibrary[index] = pattern;
+      globalPatternLibrary[index] = sanitized;
     } else {
-      globalPatternLibrary.push(pattern);
+      globalPatternLibrary.push(sanitized);
     }
     saveGlobalPatterns();
     io.emit("global_patterns_updated", globalPatternLibrary);
@@ -388,12 +391,12 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("create_room", (data: { sessionId?: string, nickname: string, avatarColor?: string }, callback) => {
     const ip = socket.handshake.address;
-      const now = Date.now();
-      if (rateLimits[ip] && now - rateLimits[ip] < 5000) {
-        if (callback) callback({ success: false, message: "Too many room creations. Please wait." });
-        return;
-      }
-      rateLimits[ip] = now;
+    const now = Date.now();
+    if (rateLimits[ip] && now - rateLimits[ip] < 1000) {
+      if (callback) callback({ success: false, message: "Too many room creations. Please wait a moment." });
+      return;
+    }
+    rateLimits[ip] = now;
 
       let code = generateRoomCode();
       while (rooms[code]) {
@@ -622,7 +625,25 @@ io.on("connection", (socket: Socket) => {
         if (settings.voiceId) room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
         if (settings.roundName) room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
         if (settings.prizeText) room.prizeText = sanitizeText(settings.prizeText, '', 80);
-        if (settings.patterns) room.patterns = sanitizePatterns(settings.patterns);
+        if (settings.patterns) {
+          room.patterns = sanitizePatterns(settings.patterns);
+          let patternsChanged = false;
+          room.patterns.forEach(p => {
+            if (p.type === 'custom') {
+              const idx = globalPatternLibrary.findIndex(gp => gp.id === p.id);
+              if (idx !== -1) {
+                globalPatternLibrary[idx] = p;
+              } else {
+                globalPatternLibrary.push(p);
+              }
+              patternsChanged = true;
+            }
+          });
+          if (patternsChanged) {
+            saveGlobalPatterns();
+            io.emit("global_patterns_updated", globalPatternLibrary);
+          }
+        }
         if (typeof settings.hidePattern === 'boolean') room.hidePattern = settings.hidePattern;
         io.to(code).emit("room_updated", room);
       }

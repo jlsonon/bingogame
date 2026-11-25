@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { BallCaller } from '../components/BallCaller';
 import { PatternVisualizer } from '../components/PatternVisualizer';
-import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid } from 'lucide-react';
+import { Maximize2, Play, Square, Settings, Share2, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin } from '../lib/bingo';
@@ -70,12 +70,46 @@ export default function Host() {
   const [copyLabel, setCopyLabel] = useState('Copy');
   const [customName, setCustomName] = useState('Custom Pattern');
   const [customCells, setCustomCells] = useState<number[]>([12]);
+  const [activeCustomId, setActiveCustomId] = useState<string>(() => `custom-${Date.now()}`);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
   const [voiceUrl, setVoiceUrl] = useState(localStorage.getItem('bingo_voice_url') || '');
 
   useEffect(() => {
     localStorage.setItem('bingo_voice_url', voiceUrl);
     setVoiceBaseUrl(voiceUrl);
   }, [voiceUrl]);
+
+  // --- AUTO-SAVE ALL CUSTOM PATTERNS ---
+  useEffect(() => {
+    const validCells = customCells.filter(c => c !== 12);
+    if (validCells.length === 0) {
+      setAutoSaveStatus('');
+      return;
+    }
+
+    setAutoSaveStatus('Saving...');
+    const timer = setTimeout(() => {
+      const sortedCells = [...new Set([...customCells, 12])].sort((a, b) => a - b);
+      const pattern: BingoPattern = {
+        id: activeCustomId,
+        name: customName.trim() || 'Custom Pattern',
+        type: 'custom',
+        match: 'cells',
+        cells: sortedCells
+      };
+      saveGlobalPattern(pattern);
+      if (room) {
+        const exists = room.patterns.some(p => p.id === pattern.id);
+        const next = exists
+          ? room.patterns.map(p => p.id === pattern.id ? pattern : p)
+          : [...room.patterns, pattern];
+        updateSettings({ patterns: next });
+      }
+      setAutoSaveStatus('Auto-Saved');
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [customCells, customName, activeCustomId, saveGlobalPattern, room?.id, updateSettings]);
 
   // --- MIGRATION: ONE-TIME SYNC LOCAL PATTERNS TO SERVER ---
   useEffect(() => {
@@ -179,26 +213,52 @@ export default function Host() {
       ? room.patterns.filter(item => item.id !== pattern.id)
       : [...room.patterns, pattern];
     updateSettings({ patterns: next });
+    if (pattern.type === 'custom') {
+      saveGlobalPattern(pattern);
+    }
+  };
+
+  const startNewCustomPattern = () => {
+    setActiveCustomId(`custom-${Date.now()}`);
+    setCustomName('Custom Pattern');
+    setCustomCells([12]);
+    setAutoSaveStatus('');
+  };
+
+  const selectCustomPatternToEdit = (pattern: BingoPattern) => {
+    setActiveCustomId(pattern.id);
+    setCustomName(pattern.name);
+    setCustomCells(pattern.cells && pattern.cells.length ? pattern.cells : [12]);
+    setAutoSaveStatus('Loaded');
   };
 
   const addCustomPattern = () => {
-    const cells = [...new Set([...customCells, 12])].sort((a, b) => a - b);
+    const sortedCells = [...new Set([...customCells, 12])].sort((a, b) => a - b);
     const newPattern: BingoPattern = {
-      id: `custom-${Date.now()}`,
+      id: activeCustomId,
       name: customName.trim() || 'Custom Pattern',
       type: 'custom',
       match: 'cells',
-      cells
+      cells: sortedCells
     };
     
-    updateSettings({ patterns: [...room.patterns, newPattern] });
+    const exists = room.patterns.some(p => p.id === newPattern.id);
+    const next = exists
+      ? room.patterns.map(p => p.id === newPattern.id ? newPattern : p)
+      : [...room.patterns, newPattern];
+    updateSettings({ patterns: next });
     saveGlobalPattern(newPattern);
-    setCustomName('Custom Pattern');
-    setCustomCells([12]);
+    setAutoSaveStatus('Auto-Saved');
   };
 
   const deleteFromLibrary = (id: string) => {
     deleteGlobalPattern(id);
+    if (room.patterns.some(p => p.id === id)) {
+      updateSettings({ patterns: room.patterns.filter(p => p.id !== id) });
+    }
+    if (activeCustomId === id) {
+      startNewCustomPattern();
+    }
   };
 
   return (
@@ -352,7 +412,102 @@ export default function Host() {
            <div className="bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl relative border-4 border-[#3D3A35]">
               <div className="flex justify-between items-center mb-8"><h2 className="text-3xl font-black uppercase tracking-tighter">Room Config</h2><button onClick={() => setShowSettings(false)} className="text-[#A19B91] hover:text-[#3D3A35]"><Plus size={24} className="rotate-45" /></button></div>
               <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar"><div className="grid grid-cols-2 gap-4"><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Round Name</label><input value={room.roundName} onChange={e => updateSettings({ roundName: e.target.value })} className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none" maxLength={40} /></div><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Prize Info</label><input value={room.prizeText} onChange={e => updateSettings({ prizeText: e.target.value })} placeholder="Optional prize" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]" maxLength={80} /></div></div><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Game Mode</label><div className="flex gap-2">{['Bingo', 'Blackout', 'Dikit'].map(m => (<button key={m} onClick={() => updateSettings({ mode: m })} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${room.mode === m ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#A19B91]'}`}>{m === 'Bingo' ? 'Standard' : m}</button>))}</div></div>
-                 {room.mode === 'Bingo' && (<div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]"><div className="space-y-2"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Pattern Library</label><div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar border-2 border-[#FAF7F2] rounded-2xl p-2 bg-[#FAF7F2]/50"><div className="grid grid-cols-2 gap-2">{[...PRESET_PATTERNS, ...globalPatterns].map(pattern => { const selected = room.patterns.some(item => item.id === pattern.id); const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id); return (<div key={pattern.id} className="relative group"><button type="button" onClick={() => togglePattern(pattern)} className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}>{pattern.name}{selected && <div className="absolute top-1 right-1 w-2 h-2 bg-white rounded-full" />}</button>{!isPreset && (<button onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"><Plus size={8} className="rotate-45" strokeWidth={5} /></button>)}</div>); })}</div></div></div><div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4 shadow-inner"><div className="flex justify-between items-center"><span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Draw Custom</span><input value={customName} onChange={e => setCustomName(e.target.value)} className="bg-white px-3 py-1 rounded-lg border-2 border-[#E8E2D9] font-bold text-[10px] focus:border-[#0D9488] outline-none" maxLength={28} placeholder="Pattern Name" /></div><div className="flex justify-center"><PatternGrid cells={customCells} onToggle={cell => setCustomCells(prev => { if (cell === 12) return prev; return prev.includes(cell) ? prev.filter(item => item !== cell) : [...prev, cell]; })} /></div><button type="button" onClick={addCustomPattern} className="w-full bg-[#3D3A35] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest active:translate-y-1 shadow-md">Add to Round</button></div></div>)}
+                  {room.mode === "Bingo" && (
+                    <div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center px-1">
+                          <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Pattern Library</label>
+                          <span className="text-[9px] font-bold text-[#A19B91] uppercase">Click custom to edit</span>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar border-2 border-[#FAF7F2] rounded-2xl p-2 bg-[#FAF7F2]/50">
+                          <div className="grid grid-cols-2 gap-2">
+                            {[...PRESET_PATTERNS, ...globalPatterns].map(pattern => {
+                              const selected = room.patterns.some(item => item.id === pattern.id);
+                              const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
+                              return (
+                                <div key={pattern.id} className="relative group">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      togglePattern(pattern);
+                                      if (!isPreset) selectCustomPatternToEdit(pattern);
+                                    }}
+                                    className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]" : "bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]"}`}
+                                  >
+                                    <span className="truncate block pr-4">{pattern.name}</span>
+                                    {selected && <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full" />}
+                                  </button>
+                                  {!isPreset && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
+                                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"
+                                      title="Delete Pattern"
+                                    >
+                                      <Plus size={8} className="rotate-45" strokeWidth={5} />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4 shadow-inner">
+                        <div className="flex justify-between items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest whitespace-nowrap">Draw Custom</span>
+                            {autoSaveStatus && (
+                              <span className="text-[8px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                <CheckCircle2 size={10} />
+                                {autoSaveStatus}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              value={customName}
+                              onChange={e => setCustomName(e.target.value)}
+                              className="bg-white px-2 py-1 rounded-lg border-2 border-[#E8E2D9] font-bold text-[10px] focus:border-[#0D9488] outline-none w-28 sm:w-36"
+                              maxLength={28}
+                              placeholder="Pattern Name"
+                            />
+                            <button
+                              type="button"
+                              onClick={startNewCustomPattern}
+                              title="Start Fresh Pattern"
+                              className="p-1.5 rounded-lg bg-white border-2 border-[#E8E2D9] text-[#7A746B] hover:text-[#3D3A35] hover:border-[#0D9488] transition-colors"
+                            >
+                              <RotateCcw size={12} />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex justify-center">
+                          <PatternGrid
+                            cells={customCells}
+                            onToggle={cell => setCustomCells(prev => {
+                              if (cell === 12) return prev;
+                              return prev.includes(cell) ? prev.filter(item => item !== cell) : [...prev, cell];
+                            })}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addCustomPattern}
+                          className="w-full bg-[#3D3A35] text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest active:translate-y-1 shadow-md flex items-center justify-center gap-2"
+                        >
+                          {room.patterns.some(p => p.id === activeCustomId) ? (
+                            <>
+                              <CheckCircle2 size={14} className="text-[#0D9488]" />
+                              Saved & Active in Round
+                            </>
+                          ) : (
+                            "Add / Save to Round"
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                  <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Hall Ambience</span><button onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#A19B91] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? '🔊 Active' : '🔇 Muted'}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Voice Engine</span><select value={room.voiceMode} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 bg-white rounded-xl text-[10px] font-black uppercase border-2 border-[#DED9D1] outline-none">
   <option value="robotic">🤖 Robotic</option>
   <option value="custom">👤 Custom / Local</option>

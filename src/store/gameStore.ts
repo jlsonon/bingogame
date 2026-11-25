@@ -62,7 +62,7 @@ interface GameState {
   nickname: string;
   avatarColor: string;
   setProfile: (nickname: string, color: string) => void;
-  createRoom: () => Promise<string>;
+  createRoom: () => Promise<{ success: boolean; code?: string; error?: string }>;
   joinRoom: (code: string) => Promise<boolean>;
   rejoinRoom: (code: string, role: 'host' | 'player' | 'display' | 'godview') => Promise<boolean>;
   
@@ -193,6 +193,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
 
     newSocket.on("global_patterns_updated", (patterns: BingoPattern[]) => {
+      try {
+        localStorage.setItem('bingo_pattern_library', JSON.stringify(patterns || []));
+      } catch (e) {
+        console.warn("Could not cache patterns to localStorage:", e);
+      }
       set({ globalPatterns: patterns });
     });
 
@@ -200,8 +205,24 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({ hallOfFame: hof });
     });
 
-    newSocket.emit("get_global_patterns", (patterns: BingoPattern[]) => {
-      set({ globalPatterns: patterns });
+    newSocket.emit("get_global_patterns", (serverPatterns: BingoPattern[]) => {
+      try {
+        const stored = localStorage.getItem('bingo_pattern_library');
+        const localPatterns: BingoPattern[] = stored ? JSON.parse(stored) : [];
+        const patternMap = new Map<string, BingoPattern>();
+        (serverPatterns || []).forEach(p => patternMap.set(p.id, p));
+        localPatterns.forEach(p => {
+          if (!patternMap.has(p.id)) {
+            patternMap.set(p.id, p);
+            newSocket.emit("save_global_pattern", p);
+          }
+        });
+        const combined = Array.from(patternMap.values());
+        localStorage.setItem('bingo_pattern_library', JSON.stringify(combined));
+        set({ globalPatterns: combined });
+      } catch {
+        set({ globalPatterns: serverPatterns || [] });
+      }
     });
 
     newSocket.emit("get_hall_of_fame", (hof: any[]) => {
@@ -212,66 +233,162 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   saveGlobalPattern: (pattern: BingoPattern) => {
+    set(state => {
+      const exists = state.globalPatterns.some(p => p.id === pattern.id);
+      const next = exists
+        ? state.globalPatterns.map(p => p.id === pattern.id ? pattern : p)
+        : [...state.globalPatterns, pattern];
+      return { globalPatterns: next };
+    });
+    try {
+      const stored = localStorage.getItem('bingo_pattern_library');
+      const list: BingoPattern[] = stored ? JSON.parse(stored) : [];
+      const idx = list.findIndex(p => p.id === pattern.id);
+      if (idx !== -1) list[idx] = pattern;
+      else list.push(pattern);
+      localStorage.setItem('bingo_pattern_library', JSON.stringify(list));
+    } catch (e) {
+      console.warn("Could not save pattern to localStorage:", e);
+    }
     const { socket } = get();
     if (socket) socket.emit("save_global_pattern", pattern);
   },
 
   deleteGlobalPattern: (id: string) => {
+    set(state => ({
+      globalPatterns: state.globalPatterns.filter(p => p.id !== id)
+    }));
+    try {
+      const stored = localStorage.getItem('bingo_pattern_library');
+      if (stored) {
+        const list: BingoPattern[] = JSON.parse(stored);
+        localStorage.setItem('bingo_pattern_library', JSON.stringify(list.filter(p => p.id !== id)));
+      }
+    } catch (e) {
+      console.warn("Could not remove pattern from localStorage:", e);
+    }
     const { socket } = get();
     if (socket) socket.emit("delete_global_pattern", id);
   },
 
   createRoom: () => {
-    return new Promise((resolve) => {
-      const { socket, nickname, avatarColor } = get();
-      if (!socket) return;
-      socket.emit("create_room", { sessionId: get().sessionId, nickname, avatarColor }, (res: any) => {
-        if (res.success) {
-          localStorage.setItem('bingo_room_code', res.room.id);
-          localStorage.setItem('bingo_room_role', 'host');
-          set({ room: res.room, me: res.room.players[get().sessionId] });
-          resolve(res.room.id);
-        }
-      });
+    return new Promise<{ success: boolean; code?: string; error?: string }>((resolve) => {
+      let { socket } = get();
+      if (!socket) {
+        get().connect();
+        socket = get().socket;
+      }
+      if (!socket) {
+        resolve({ success: false, error: "Unable to establish connection to server." });
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        resolve({ success: false, error: "Server response timed out. Please try again." });
+      }, 6000);
+
+      const doCreate = () => {
+        const { nickname, avatarColor } = get();
+        const effectiveName = nickname.trim() || 'Host';
+        socket!.emit("create_room", { sessionId: get().sessionId, nickname: effectiveName, avatarColor }, (res: any) => {
+          clearTimeout(timeout);
+          if (res && res.success && res.room) {
+            localStorage.setItem('bingo_room_code', res.room.id);
+            localStorage.setItem('bingo_room_role', 'host');
+            set({ room: res.room, me: res.room.players[get().sessionId] });
+            resolve({ success: true, code: res.room.id });
+          } else {
+            resolve({ success: false, error: res?.message || "Failed to create room." });
+          }
+        });
+      };
+
+      if (socket.connected) {
+        doCreate();
+      } else {
+        socket.once("connect", doCreate);
+      }
     });
   },
 
   joinRoom: (code: string) => {
     return new Promise((resolve) => {
-      const { socket, nickname, avatarColor } = get();
-      if (!socket) return;
-      socket.emit("join_room", { code, sessionId: get().sessionId, nickname, avatarColor }, (res: any) => {
-        if (res.success) {
-          localStorage.setItem('bingo_room_code', res.room.id);
-          localStorage.setItem('bingo_room_role', 'player');
-          set({ room: res.room, me: res.room.players[get().sessionId] });
-          resolve(true);
-        } else {
-          resolve(false);
-        }
-      });
+      let { socket } = get();
+      if (!socket) {
+        get().connect();
+        socket = get().socket;
+      }
+      if (!socket) {
+        resolve(false);
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        resolve(false);
+      }, 6000);
+
+      const doJoin = () => {
+        const { nickname, avatarColor } = get();
+        const effectiveName = nickname.trim() || 'Player';
+        socket!.emit("join_room", { code, sessionId: get().sessionId, nickname: effectiveName, avatarColor }, (res: any) => {
+          clearTimeout(timeout);
+          if (res && res.success && res.room) {
+            localStorage.setItem('bingo_room_code', res.room.id);
+            localStorage.setItem('bingo_room_role', 'player');
+            set({ room: res.room, me: res.room.players[get().sessionId] });
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        });
+      };
+
+      if (socket.connected) {
+        doJoin();
+      } else {
+        socket.once("connect", doJoin);
+      }
     });
   },
 
   rejoinRoom: (code: string, role: 'host' | 'player' | 'display' | 'godview') => {
     return new Promise((resolve) => {
-      const { socket, nickname, avatarColor, sessionId } = get();
+      let { socket } = get();
+      if (!socket) {
+        get().connect();
+        socket = get().socket;
+      }
       if (!socket) {
         resolve(false);
         return;
       }
-      socket.emit("rejoin_room", { code, sessionId, nickname, avatarColor, role }, (res: any) => {
-        if (res.success) {
-          if (role === 'host' || role === 'player') {
-            localStorage.setItem('bingo_room_code', res.room.id);
-            localStorage.setItem('bingo_room_role', role);
+
+      const timeout = setTimeout(() => {
+        resolve(false);
+      }, 6000);
+
+      const doRejoin = () => {
+        const { nickname, avatarColor, sessionId } = get();
+        socket!.emit("rejoin_room", { code, sessionId, nickname, avatarColor, role }, (res: any) => {
+          clearTimeout(timeout);
+          if (res && res.success && res.room) {
+            if (role === 'host' || role === 'player') {
+              localStorage.setItem('bingo_room_code', res.room.id);
+              localStorage.setItem('bingo_room_role', role);
+            }
+            set({ room: res.room, me: res.room.players[sessionId] || null, latestBall: res.room.calledNumbers.at(-1) || null });
+            resolve(true);
+          } else {
+            resolve(false);
           }
-          set({ room: res.room, me: res.room.players[sessionId] || null, latestBall: res.room.calledNumbers.at(-1) || null });
-          resolve(true);
-        } else {
-          resolve(false);
-        }
-      });
+        });
+      };
+
+      if (socket.connected) {
+        doRejoin();
+      } else {
+        socket.once("connect", doRejoin);
+      }
     });
   },
 
