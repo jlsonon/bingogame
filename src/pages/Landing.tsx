@@ -129,29 +129,29 @@ export default function Landing() {
           </div>
 
           <div className="pt-6 border-t-2 border-[#FAF7F2] space-y-4">
-              <div className="flex gap-3">
+              <div className="flex gap-2.5 sm:gap-3 items-stretch">
                  <input 
                     type="text" 
                     placeholder="CODE"
                     value={joinCode}
                     onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError(''); }}
-                    className="w-1/3 px-4 py-4 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-display text-center text-3xl tracking-[0.2em] uppercase text-[#3D3A35]"
+                    className="w-[116px] sm:w-1/3 shrink-0 px-2 sm:px-3 py-3 sm:py-4 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-display text-center text-2xl sm:text-3xl tracking-[0.1em] sm:tracking-[0.18em] uppercase text-[#3D3A35] placeholder:text-[#C5BFB6]"
                     maxLength={4}
                   />
-                  <div className="flex-1 flex flex-col gap-1.5">
+                  <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                      <label className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest ml-1">Buy Cards</label>
-                     <div className="flex gap-1.5 h-full">
+                     <div className="flex gap-1 sm:gap-1.5 flex-1">
                         {[0, 1, 2, 3, 4].map(num => (
                            <button
                              key={num}
                              onClick={() => setCardCount(num)}
-                             className={`flex-1 rounded-xl font-display text-xl border-2 transition-all ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
+                             className={`flex-1 min-w-0 py-2 rounded-xl font-display text-lg sm:text-xl border-2 transition-all ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
                            >
                              {num === 0 ? '👀' : num}
                            </button>
                         ))}
                      </div>
-                     <span className="text-[8px] font-black text-[#A19B91] uppercase tracking-widest text-center mt-1">
+                     <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-wider text-center">
                         {cardCount === 0 ? 'Spectator Mode (No Cards)' : 'Select card count'}
                      </span>
                   </div>

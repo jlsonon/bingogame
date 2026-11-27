@@ -1,18 +1,60 @@
 // Sound Manager Utility for Lucky Bingo
-// Handles UI sound effects, natural human neural voices, and robotic speech fallback
+// Handles Web Audio synthesized SFX (no blocked external hotlinks), natural human neural voices, and robotic speech fallback
 import { isNaturalVoice } from './voices';
 
 export const SOUNDS = {
-  BALL_DRAW: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',
-  NEAR_BINGO: 'https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3',
-  BINGO_WIN: 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3',
-  DIKIT_HIT: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
-  JACKPOT_WIN: 'https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3',
-  DRUMROLL: 'https://www.soundjay.com/misc/sounds/drum-roll-01.mp3',
-  CLICK: 'https://assets.mixkit.co/active_storage/sfx/2568/2571-preview.mp3',
-};
+  BALL_DRAW: 'BALL_DRAW',
+  NEAR_BINGO: 'NEAR_BINGO',
+  BINGO_WIN: 'BINGO_WIN',
+  DIKIT_HIT: 'DIKIT_HIT',
+  JACKPOT_WIN: 'JACKPOT_WIN',
+  DRUMROLL: 'DRUMROLL',
+  CLICK: 'CLICK',
+} as const;
 
+let audioCtx: AudioContext | null = null;
 let currentVoiceAudio: HTMLAudioElement | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (!audioCtx) {
+    const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    audioCtx = new AudioContextCtor();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+  return audioCtx;
+}
+
+function playTone(
+  ctx: AudioContext,
+  freq: number,
+  startTime: number,
+  duration: number,
+  volume: number,
+  type: OscillatorType = 'sine',
+  endFreq?: number
+) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, startTime);
+  if (endFreq !== undefined) {
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), startTime + duration);
+  }
+
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.linearRampToValueAtTime(volume, startTime + Math.min(0.015, duration * 0.25));
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.02);
+}
 
 export function stopVoice() {
   if (currentVoiceAudio) {
@@ -29,13 +71,68 @@ export function stopVoice() {
   }
 }
 
-export function playSound(url: string, volume = 0.5) {
+export function playSound(soundId: string, volume = 0.5) {
   try {
-    const audio = new Audio(url);
-    audio.volume = volume;
-    audio.play().catch(e => console.warn('Audio playback blocked by browser:', e));
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const v = Math.min(Math.max(volume, 0.05), 1) * 0.35;
+
+    switch (soundId) {
+      case SOUNDS.BALL_DRAW: {
+        // Tactile mechanical ball chute pop + soft wood click
+        playTone(ctx, 260, now, 0.06, v * 0.9, 'triangle', 120);
+        playTone(ctx, 540, now + 0.055, 0.09, v * 0.75, 'sine', 680);
+        break;
+      }
+      case SOUNDS.CLICK: {
+        playTone(ctx, 640, now, 0.04, v * 0.5, 'triangle', 320);
+        break;
+      }
+      case SOUNDS.NEAR_BINGO: {
+        // Exciting rising two-note alert chime
+        playTone(ctx, 587.33, now, 0.14, v * 0.7, 'sine');
+        playTone(ctx, 880, now + 0.12, 0.24, v * 0.85, 'sine');
+        break;
+      }
+      case SOUNDS.DIKIT_HIT: {
+        // Punchy bright double ding
+        playTone(ctx, 783.99, now, 0.12, v * 0.85, 'triangle');
+        playTone(ctx, 1046.5, now + 0.09, 0.22, v * 0.95, 'sine');
+        playTone(ctx, 1318.5, now + 0.18, 0.32, v * 0.8, 'sine');
+        break;
+      }
+      case SOUNDS.BINGO_WIN: {
+        // Celebratory major fanfare arpeggio
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((n, idx) => {
+          playTone(ctx, n, now + idx * 0.09, 0.32, v * 0.9, 'triangle');
+        });
+        playTone(ctx, 1046.5, now + 0.38, 0.55, v * 0.85, 'sine');
+        break;
+      }
+      case SOUNDS.JACKPOT_WIN: {
+        // Grand chord victory fanfare
+        const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98];
+        notes.forEach((n, idx) => {
+          playTone(ctx, n, now + idx * 0.08, 0.45, v * 0.85, 'triangle');
+        });
+        break;
+      }
+      case SOUNDS.DRUMROLL: {
+        // Subtle rhythmic suspense roll
+        for (let i = 0; i < 12; i++) {
+          playTone(ctx, 130 + (i % 2) * 18, now + i * 0.085, 0.055, v * (0.35 + i * 0.03), 'triangle', 75);
+        }
+        break;
+      }
+      default: {
+        playTone(ctx, 520, now, 0.08, v * 0.6, 'sine');
+      }
+    }
   } catch (err) {
-    console.error('Sound play error:', err);
+    console.warn('Sound play error:', err);
   }
 }
 

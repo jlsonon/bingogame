@@ -843,8 +843,8 @@ io.on("connection", (socket: Socket) => {
         if (settings.voiceMode) room.voiceMode = settings.voiceMode;
         if (typeof settings.ambienceEnabled === 'boolean') room.ambienceEnabled = settings.ambienceEnabled;
         if (settings.voiceId) room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
-        if (settings.roundName) room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
-        if (settings.prizeText) room.prizeText = sanitizeText(settings.prizeText, '', 80);
+        if (typeof settings.roundName === 'string') room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
+        if (typeof settings.prizeText === 'string') room.prizeText = sanitizeText(settings.prizeText, '', 80);
         if (settings.patterns) {
           room.patterns = sanitizePatterns(settings.patterns);
           let patternsChanged = false;
@@ -919,6 +919,12 @@ io.on("connection", (socket: Socket) => {
          room.remainingBalls = initBalls();
          room.claims = [];
          room.dikitWinners = [];
+         room.dikitFight = null;
+         delete pendingDikitClaims[code];
+         if (dikitGraceTimers[code]) {
+           clearTimeout(dikitGraceTimers[code]);
+           delete dikitGraceTimers[code];
+         }
          room.verifiedWinners = [];
          room.multiBingoPending = false;
          room.tiedWinners = [];
@@ -1092,20 +1098,6 @@ io.on("connection", (socket: Socket) => {
              
              if (data.isValid) {
                 room.verifiedWinners.push(claim);
-                const winnerEntry = {
-                   name: claim.playerName,
-                   pattern: claim.pattern,
-                   round: room.roundNumber,
-                   time: Date.now()
-                };
-                room.stats.winners.push(winnerEntry);
-
-                // ADD TO GLOBAL HOF
-                globalHallOfFame.push(winnerEntry);
-                // Keep only last 100 entries to prevent file bloat
-                if (globalHallOfFame.length > 100) globalHallOfFame.shift();
-                saveHOF();
-                io.emit("hall_of_fame_updated", globalHallOfFame);
              } else {
                 io.to(code).emit("claim_rejected", claim);
              }
@@ -1121,6 +1113,21 @@ io.on("connection", (socket: Socket) => {
                        io.to(code).emit("room_updated", room);
                        return;
                     }
+
+                    // 1 or 2 winners: record finalized winners to Room Stats & Hall of Fame
+                    room.verifiedWinners.forEach(w => {
+                       const winnerEntry = {
+                          name: w.playerName,
+                          pattern: w.pattern,
+                          round: room.roundNumber,
+                          time: Date.now()
+                       };
+                       room.stats.winners.push(winnerEntry);
+                       globalHallOfFame.push(winnerEntry);
+                       if (globalHallOfFame.length > 100) globalHallOfFame.shift();
+                    });
+                    saveHOF();
+                    io.emit("hall_of_fame_updated", globalHallOfFame);
 
                     // 1 or 2 winners: normal finish
                     // Check if Dikit Fight is currently active!
@@ -1172,6 +1179,21 @@ io.on("connection", (socket: Socket) => {
           room.multiBingoPending = false;
 
           if (data.action === 'settle') {
+             // Record finalized 3+ winners to Room Stats & Hall of Fame
+             room.verifiedWinners.forEach(w => {
+                const winnerEntry = {
+                   name: w.playerName,
+                   pattern: w.pattern,
+                   round: room.roundNumber,
+                   time: Date.now()
+                };
+                room.stats.winners.push(winnerEntry);
+                globalHallOfFame.push(winnerEntry);
+                if (globalHallOfFame.length > 100) globalHallOfFame.shift();
+             });
+             saveHOF();
+             io.emit("hall_of_fame_updated", globalHallOfFame);
+
              // Conclude round awarding all 3+ winners!
              if (room.dikitFight && room.dikitFight.status === 'active') {
                 room.dikitFight.roundBingoPending = true;
@@ -1225,7 +1247,7 @@ io.on("connection", (socket: Socket) => {
           player.isReady = true;
           io.to(code).emit("room_updated", room);
           
-          const connectedPlayers = Object.values(room.players).filter(p => p.connected);
+          const connectedPlayers = Object.values(room.players).filter(p => p.connected && !p.isHost);
           const allReady = connectedPlayers.every(p => p.isReady);
           if (allReady && connectedPlayers.length > 0) {
              if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);

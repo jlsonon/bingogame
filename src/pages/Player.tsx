@@ -189,8 +189,13 @@ export default function Player() {
     });
   }, [latestBall, autoMark, cards]);
 
+  const isPlayingOrClaimPause = Boolean(
+    room?.status === 'playing' ||
+    (room?.status === 'paused' && ((room.claims?.length || 0) > 0 || (room.verifiedWinners?.length || 0) > 0))
+  );
+
   const toggleCell = (cardIdx: number, num: number) => {
-    if (room?.status !== 'playing' || num === 0) return;
+    if (!isPlayingOrClaimPause || num === 0) return;
     
     setMarkedCells(prev => {
       const current = prev[cardIdx] || [];
@@ -215,9 +220,15 @@ export default function Player() {
 
   const hasCalledBalls = Boolean(room?.calledNumbers && room.calledNumbers.length > 0);
   const winningCardIdx = useMemo(() => {
-    if (!hasCalledBalls) return -1;
-    return cardStatus.findIndex(s => s.win.valid);
-  }, [cardStatus, hasCalledBalls]);
+    if (!hasCalledBalls || !room || !me) return -1;
+    return cardStatus.findIndex((s, i) => {
+      if (!s.win.valid) return false;
+      const alreadyClaimed =
+        (room.claims || []).some((c: any) => c.playerId === me.id && c.cardIndex === i) ||
+        (room.verifiedWinners || []).some((w: any) => w.playerId === me.id && w.cardIndex === i);
+      return !alreadyClaimed;
+    });
+  }, [cardStatus, hasCalledBalls, room, me]);
   const dikitCardIdx = useMemo(() => {
     if (!hasCalledBalls) return -1;
     return cardStatus.findIndex((s, i) => s.dikit && !claimedDikitIndices.includes(i));
@@ -240,8 +251,7 @@ export default function Player() {
   }, [cardStatus, room?.status, winningCardIdx, nearWinAlert, hasCalledBalls]);
 
   const handleClaim = () => {
-    const canClaim = room?.status === 'playing' || (room?.status === 'paused' && ((room.claims?.length || 0) > 0 || (room.verifiedWinners?.length || 0) > 0));
-    if (winningCardIdx !== -1 && canClaim) {
+    if (winningCardIdx !== -1 && isPlayingOrClaimPause) {
        claimBingo(winningCardIdx, markedCells[winningCardIdx] || []);
        setShowClaimConfirm(false);
     }
@@ -256,8 +266,16 @@ export default function Player() {
   };
 
   const toggleRoundChoice = (idx: number) => {
-    setRoundChoices(prev => ({ ...prev, [idx]: !prev[idx] }));
-    setNextRoundChoice('change'); 
+    setRoundChoices(prev => {
+      const next = { ...prev };
+      if (next[idx]) {
+        delete next[idx];
+      } else {
+        next[idx] = true;
+      }
+      setNextRoundChoice(Object.keys(next).length > 0 ? 'change' : 'keep');
+      return next;
+    });
   };
 
   const applyRoundChoices = () => {
@@ -307,8 +325,7 @@ export default function Player() {
       )}
 
       {/* Immersive Top Ribbon - Latest Call Persistent */}
-      <div className="bg-[#3D3A35] text-white h-14 sm:h-16 shrink-0 relative overflow-hidden flex items-center justify-between px-3 sm:px-4 z-30 shadow-lg">
-         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/asfalt-dark.png')] pointer-events-none" />
+      <div className="bg-[#3D3A35] text-white h-14 sm:h-16 shrink-0 relative overflow-hidden flex items-center justify-between px-3 sm:px-4 z-30 shadow-lg paper-texture">
          <div className="flex items-center gap-3 relative z-10">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-display text-xs border-2 border-white/20 shadow-inner" style={{ backgroundColor: me.avatarColor || '#ccc' }}>
                {me.nickname.substring(0,2).toUpperCase()}
@@ -359,14 +376,33 @@ export default function Player() {
             {activeTab === 'cards' && (
                <motion.div key="cards" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col p-1.5 sm:p-2 gap-1 min-h-0 overflow-hidden">
                   {isSpectator ? (
-                     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-6">
-                        <div className="w-24 h-24 bg-[#E8E2D9] rounded-[32px] flex items-center justify-center text-[#7A746B] shadow-inner mb-2">
-                           <Eye size={48} />
+                     <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-8 text-center gap-5 overflow-y-auto">
+                        <div className="w-20 h-20 bg-[#E8E2D9] rounded-[28px] flex items-center justify-center text-[#7A746B] shadow-inner">
+                           <Eye size={40} />
                         </div>
-                        <h2 className="text-3xl font-display uppercase tracking-tight text-[#3D3A35]">Spectator Mode</h2>
-                        <p className="text-sm font-bold text-[#A19B91] uppercase tracking-widest leading-relaxed max-w-xs">
-                           You're watching the game live! You can follow the calls and pattern in the other tabs.
-                        </p>
+                        <div>
+                          <h2 className="text-3xl font-display uppercase tracking-tight text-[#3D3A35]">Spectator Mode</h2>
+                          <p className="text-xs sm:text-sm font-bold text-[#A19B91] uppercase tracking-widest leading-relaxed max-w-xs mt-1">
+                             You're watching the game live! Follow the calls and pattern in the tabs below.
+                          </p>
+                        </div>
+                        {!isGameOn && ['waiting', 'next_round'].includes(room.status) && (
+                           <div className="bg-white border-2 border-[#E8E2D9] rounded-2xl p-4 w-full max-w-[280px] shadow-sm">
+                              <div className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest mb-2">Want to Play? Pick Cards</div>
+                              <div className="grid grid-cols-4 gap-2">
+                                 {[1, 2, 3, 4].map(num => (
+                                    <button
+                                       key={num}
+                                       type="button"
+                                       onClick={() => setCardQuantity(num)}
+                                       className="py-2 rounded-xl bg-[#FAF7F2] border-2 border-[#E8E2D9] hover:border-[#EA580C] hover:bg-[#EA580C] hover:text-white font-display text-lg text-[#3D3A35] transition-all active:scale-95"
+                                    >
+                                       {num}
+                                    </button>
+                                 ))}
+                              </div>
+                           </div>
+                        )}
                         <div className="bg-white border-2 border-[#E8E2D9] rounded-2xl p-4 w-full max-w-[240px]">
                            <div className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest mb-1 text-center">Numbers Called</div>
                            <div className="text-3xl font-display text-[#EA580C]">{room.calledNumbers.length} / 75</div>
@@ -450,7 +486,7 @@ export default function Player() {
                                           <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
                                        )}
                                     </div>
-                                    {cardStatus[0]?.win.cellsAway === 1 && (
+                                    {hasCalledBalls && cardStatus[0]?.win.cellsAway === 1 && (
                                        <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                     )}
                                  </div>
@@ -461,7 +497,7 @@ export default function Player() {
                                           markedCells={markedCells[0] || []}
                                           calledNumbers={room.calledNumbers || []}
                                           onToggleCell={(num) => toggleCell(0, num)}
-                                          readOnly={room.status !== 'playing'}
+                                          readOnly={!isPlayingOrClaimPause}
                                           highlightLatest={latestBall}
                                        />
                                        {cardStatus[0]?.win.valid && (
@@ -483,7 +519,7 @@ export default function Player() {
                                              <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
                                           )}
                                        </div>
-                                       {cardStatus[0]?.win.cellsAway === 1 && (
+                                       {hasCalledBalls && cardStatus[0]?.win.cellsAway === 1 && (
                                           <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
                                     </div>
@@ -494,7 +530,7 @@ export default function Player() {
                                              markedCells={markedCells[0] || []}
                                              calledNumbers={room.calledNumbers || []}
                                              onToggleCell={(num) => toggleCell(0, num)}
-                                             readOnly={room.status !== 'playing'}
+                                             readOnly={!isPlayingOrClaimPause}
                                              highlightLatest={latestBall}
                                           />
                                           {cardStatus[0]?.win.valid && (
@@ -513,7 +549,7 @@ export default function Player() {
                                              <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
                                           )}
                                        </div>
-                                       {cardStatus[1]?.win.cellsAway === 1 && (
+                                       {hasCalledBalls && cardStatus[1]?.win.cellsAway === 1 && (
                                           <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
                                     </div>
@@ -524,7 +560,7 @@ export default function Player() {
                                              markedCells={markedCells[1] || []}
                                              calledNumbers={room.calledNumbers || []}
                                              onToggleCell={(num) => toggleCell(1, num)}
-                                             readOnly={room.status !== 'playing'}
+                                             readOnly={!isPlayingOrClaimPause}
                                              highlightLatest={latestBall}
                                           />
                                           {cardStatus[1]?.win.valid && (
@@ -541,8 +577,13 @@ export default function Player() {
                                  {/* Card 1 - Top Center */}
                                  <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
                                     <div className="flex items-center justify-between w-full max-w-[280px] px-1 shrink-0 h-3.5 mb-0.5">
-                                       <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
-                                       {cardStatus[0]?.win.cellsAway === 1 && (
+                                       <div className="flex items-center gap-1">
+                                          <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                          {isCardInDikitFight(0) && (
+                                             <span className="bg-[#0D9488] text-white text-[6px] font-black px-1 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                          )}
+                                       </div>
+                                       {hasCalledBalls && cardStatus[0]?.win.cellsAway === 1 && (
                                           <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
                                     </div>
@@ -553,7 +594,7 @@ export default function Player() {
                                              markedCells={markedCells[0] || []}
                                              calledNumbers={room.calledNumbers || []}
                                              onToggleCell={(num) => toggleCell(0, num)}
-                                             readOnly={room.status !== 'playing'}
+                                             readOnly={!isPlayingOrClaimPause}
                                              highlightLatest={latestBall}
                                           />
                                           {cardStatus[0]?.win.valid && (
@@ -566,11 +607,16 @@ export default function Player() {
                                  {/* Cards 2 & 3 - Bottom Row */}
                                  <div className="w-full flex-1 grid grid-cols-2 gap-1 min-h-0 overflow-hidden">
                                     {[1, 2].map((idx) => {
-                                       const isNearWin = cardStatus[idx]?.win.cellsAway === 1;
+                                       const isNearWin = hasCalledBalls && cardStatus[idx]?.win.cellsAway === 1;
                                        return (
                                           <div key={idx} className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 overflow-hidden">
                                              <div className="flex items-center justify-between w-full px-1 shrink-0 h-3.5 mb-0.5">
-                                                <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
+                                                <div className="flex items-center gap-1">
+                                                   <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
+                                                   {isCardInDikitFight(idx) && (
+                                                      <span className="bg-[#0D9488] text-white text-[6px] font-black px-1 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                                   )}
+                                                </div>
                                                 {isNearWin && (
                                                    <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
                                                 )}
@@ -582,7 +628,7 @@ export default function Player() {
                                                       markedCells={markedCells[idx] || []}
                                                       calledNumbers={room.calledNumbers || []}
                                                       onToggleCell={(num) => toggleCell(idx, num)}
-                                                      readOnly={room.status !== 'playing'}
+                                                      readOnly={!isPlayingOrClaimPause}
                                                       highlightLatest={latestBall}
                                                    />
                                                    {cardStatus[idx]?.win.valid && (
@@ -600,11 +646,16 @@ export default function Player() {
                            {cards.length === 4 && (
                               <div className="w-full h-full max-w-[480px] grid grid-cols-2 grid-rows-2 gap-1 p-0.5 min-h-0 overflow-hidden">
                                  {cards.map((card, idx) => {
-                                    const isNearWin = cardStatus[idx]?.win.cellsAway === 1;
+                                    const isNearWin = hasCalledBalls && cardStatus[idx]?.win.cellsAway === 1;
                                     return (
                                        <div key={idx} className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 overflow-hidden">
                                           <div className="flex items-center justify-between w-full px-1 shrink-0 h-3.5 mb-0.5">
-                                             <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
+                                             <div className="flex items-center gap-1">
+                                                <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
+                                                {isCardInDikitFight(idx) && (
+                                                   <span className="bg-[#0D9488] text-white text-[6px] font-black px-1 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                                )}
+                                             </div>
                                              {isNearWin && (
                                                 <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
                                              )}
@@ -616,7 +667,7 @@ export default function Player() {
                                                    markedCells={markedCells[idx] || []}
                                                    calledNumbers={room.calledNumbers || []}
                                                    onToggleCell={(num) => toggleCell(idx, num)}
-                                                   readOnly={room.status !== 'playing'}
+                                                   readOnly={!isPlayingOrClaimPause}
                                                    highlightLatest={latestBall}
                                                 />
                                                 {cardStatus[idx]?.win.valid && (
@@ -640,21 +691,37 @@ export default function Player() {
                </motion.div>
             )}
             {activeTab === 'pattern' && (
-               <motion.div key="pattern" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="flex-1 flex flex-col items-center justify-center p-8 gap-8">
-                  <div className="text-center">
-                     <h3 className="text-xs font-black text-[#A19B91] uppercase tracking-[0.3em] mb-2">Winning Pattern</h3>
-                     <p className="text-2xl font-black text-[#EA580C] uppercase tracking-tighter italic">{room.mode}</p>
+               <motion.div key="pattern" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="flex-1 flex flex-col items-center p-4 sm:p-6 gap-4 sm:gap-6 overflow-y-auto custom-scrollbar">
+                  <div className="text-center shrink-0 pt-2">
+                     <h3 className="text-xs font-black text-[#A19B91] uppercase tracking-[0.3em] mb-1">Winning Patterns</h3>
+                     <div className="flex items-center justify-center gap-2">
+                        <p className="text-2xl font-black text-[#EA580C] uppercase tracking-tighter italic">{room.mode === 'Bingo' ? 'Standard Bingo' : room.mode}</p>
+                        {!room.hidePattern && room.mode === 'Bingo' && (
+                           <span className="text-[10px] font-black uppercase bg-[#0D9488]/10 text-[#0D9488] px-2.5 py-0.5 rounded-full">
+                              {room.patterns.length} Active
+                           </span>
+                        )}
+                     </div>
                   </div>
                   {!room.hidePattern ? (
-                    <div className="bg-white p-8 rounded-[40px] border-4 border-[#E8E2D9] shadow-xl">
-                       <PatternVisualizer patterns={room.patterns} className="scale-[2] origin-center" />
+                    <div className="bg-white p-4 sm:p-6 rounded-[28px] sm:rounded-[36px] border-4 border-[#E8E2D9] shadow-lg w-full max-w-xl">
+                       {room.mode === 'Bingo' ? (
+                          <PatternVisualizer patterns={room.patterns} size="md" />
+                       ) : (
+                          <div className="py-8 text-center">
+                             <div className="text-3xl font-display text-[#EA580C] uppercase italic">{room.mode}</div>
+                             <p className="text-xs font-bold text-[#7A746B] uppercase tracking-widest mt-2">
+                                {room.mode === 'Blackout' ? 'Mark all 25 squares to win!' : 'Mark any 2 adjacent horizontal numbers!'}
+                             </p>
+                          </div>
+                       )}
                     </div>
                   ) : (
-                    <div className="bg-white p-12 rounded-[40px] border-4 border-dashed border-[#E8E2D9] flex flex-col items-center gap-4 text-[#DED9D1]">
-                       <Eye size={64} className="opacity-20" /><span className="text-xs font-black uppercase tracking-[0.4em]">Mystery Pattern</span>
+                    <div className="bg-white p-10 rounded-[36px] border-4 border-dashed border-[#E8E2D9] flex flex-col items-center gap-4 text-[#C5BFB6] w-full max-w-sm">
+                       <Eye size={56} className="opacity-30" /><span className="text-xs font-black uppercase tracking-[0.4em]">Mystery Pattern</span>
                     </div>
                   )}
-                  {room.prizeText && <div className="bg-[#FACC15]/20 px-6 py-4 rounded-2xl border-2 border-[#FACC15] text-center"><p className="text-[10px] font-black text-[#854D0E] uppercase tracking-widest mb-1">Prize</p><p className="text-xl font-black text-[#854D0E]">{room.prizeText}</p></div>}
+                  {room.prizeText && <div className="bg-[#FACC15]/20 px-6 py-4 rounded-2xl border-2 border-[#FACC15] text-center w-full max-w-sm shrink-0"><p className="text-[10px] font-black text-[#854D0E] uppercase tracking-widest mb-1">Prize</p><p className="text-xl font-black text-[#854D0E]">{room.prizeText}</p></div>}
                </motion.div>
             )}
             {activeTab === 'history' && (
@@ -714,8 +781,7 @@ export default function Player() {
                      <div className="text-4xl font-display tabular-nums relative z-10">{cards.length}</div>
                      <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider relative z-10">My Cards</div>
                   </div>
-                  <div className="bg-white p-6 rounded-[40px] border-4 border-[#E8E2D9] shadow-inner relative overflow-hidden">
-                     <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/asfalt-dark.png')] pointer-events-none" />
+                  <div className="bg-white p-6 rounded-[40px] border-4 border-[#E8E2D9] shadow-inner relative overflow-hidden paper-texture">
                      <div className="flex items-center gap-3 mb-6 relative z-10">
                         <Trophy size={20} className="text-[#FACC15]" />
                         <h4 className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Hall of Fame</h4>
@@ -743,12 +809,38 @@ export default function Player() {
 
          <AnimatePresence>
             {room.status === 'next_round' && (
-               <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className="absolute inset-0 z-40 bg-[#FAF7F2] p-6 flex flex-col gap-6 overflow-y-auto">
+               <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className="absolute inset-0 z-40 bg-[#FAF7F2] p-6 flex flex-col gap-5 overflow-y-auto custom-scrollbar">
                   <div className="text-center pt-4"><Trophy size={48} className="text-[#FACC15] mx-auto mb-2" /><h2 className="text-3xl font-black uppercase tracking-tighter italic">Round Complete!</h2><p className="text-xs font-black text-[#A19B91] uppercase tracking-widest mt-1">Next round starts in <Countdown endsAt={room.nextRoundEndsAt} /></p></div>
-                  <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-6 shadow-sm"><h3 className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest mb-4 text-center">Prepare your cards</h3><div className="space-y-3">{cards.map((_, i) => (<button key={i} onClick={() => toggleRoundChoice(i)} className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${roundChoices[i] ? 'bg-[#EA580C]/10 border-[#EA580C] text-[#EA580C]' : 'bg-[#FAF7F2] border-white text-[#7A746B]'}`}><div className="flex items-center gap-3"><span className="text-sm font-black uppercase tracking-widest">Card {i + 1}</span>{roundChoices[i] && <span className="text-[10px] font-black bg-[#EA580C] text-white px-2 py-0.5 rounded-full uppercase">NEW</span>}</div><div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${roundChoices[i] ? 'bg-[#EA580C] border-[#EA580C] text-white' : 'bg-white border-[#E8E2D9]'}`}>{roundChoices[i] && <Plus size={16} strokeWidth={4} />}</div></button>))}</div></div>
-                  <button onClick={applyRoundChoices} disabled={Object.keys(roundChoices).length === 0} className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${Object.keys(roundChoices).length > 0 ? 'bg-[#3D3A35] text-white' : 'hidden'}`}>Confirm Changes</button>
-                  {Object.keys(roundChoices).length === 0 && (<button onClick={() => setPlayerReady()} disabled={me.isReady} className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${!me.isReady ? 'bg-[#0D9488] text-white shadow-[0_6px_0_#0F766E]' : 'bg-white border-4 border-[#0D9488] text-[#0D9488]'}`}>{!me.isReady ? "I'm Ready" : "Waiting for others..."}</button>)}
-                  <p className="text-center text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">{Object.keys(roundChoices).length > 0 ? 'Cards will be refreshed' : 'Keeping current cards'}</p>
+                  {cards.length > 0 ? (
+                     <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-6 shadow-sm">
+                        <h3 className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest mb-4 text-center">Prepare your cards</h3>
+                        <div className="space-y-3">
+                           {cards.map((_, i) => (
+                              <button key={i} onClick={() => toggleRoundChoice(i)} className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${roundChoices[i] ? 'bg-[#EA580C]/10 border-[#EA580C] text-[#EA580C]' : 'bg-[#FAF7F2] border-white text-[#7A746B]'}`}>
+                                 <div className="flex items-center gap-3"><span className="text-sm font-black uppercase tracking-widest">Card {i + 1}</span>{roundChoices[i] && <span className="text-[10px] font-black bg-[#EA580C] text-white px-2 py-0.5 rounded-full uppercase">NEW</span>}</div>
+                                 <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${roundChoices[i] ? 'bg-[#EA580C] border-[#EA580C] text-white' : 'bg-white border-[#E8E2D9]'}`}>{roundChoices[i] && <Plus size={16} strokeWidth={4} />}</div>
+                              </button>
+                           ))}
+                        </div>
+                     </div>
+                  ) : (
+                     <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-6 shadow-sm text-center">
+                        <h3 className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest mb-3">Join the Next Round?</h3>
+                        <div className="grid grid-cols-4 gap-2 max-w-[260px] mx-auto">
+                           {[1, 2, 3, 4].map(num => (
+                              <button key={num} type="button" onClick={() => setCardQuantity(num)} className="py-2.5 rounded-xl bg-[#FAF7F2] border-2 border-[#E8E2D9] hover:border-[#EA580C] hover:bg-[#EA580C] hover:text-white font-display text-lg text-[#3D3A35] transition-all">
+                                 {num}
+                              </button>
+                           ))}
+                        </div>
+                     </div>
+                  )}
+                  {Object.values(roundChoices).some(Boolean) ? (
+                     <button onClick={applyRoundChoices} className="w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 bg-[#3D3A35] text-white">Confirm Changes</button>
+                  ) : (
+                     <button onClick={() => setPlayerReady()} disabled={me.isReady} className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${!me.isReady ? 'bg-[#0D9488] text-white shadow-[0_6px_0_#0F766E]' : 'bg-white border-4 border-[#0D9488] text-[#0D9488]'}`}>{!me.isReady ? "I'm Ready" : "Waiting for others..."}</button>
+                  )}
+                  <p className="text-center text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">{Object.values(roundChoices).some(Boolean) ? 'Selected cards will be refreshed' : cards.length > 0 ? 'Keeping current cards' : 'Watching as Spectator'}</p>
                </motion.div>
             )}
          </AnimatePresence>
@@ -783,9 +875,9 @@ export default function Player() {
       </AnimatePresence>
 
       {claimAlert && !winner && room.status === 'paused' && (
-         <div className="fixed top-14 left-4 right-4 z-40 bg-[#3D3A35] text-white p-3 rounded-2xl shadow-2xl border-2 border-[#EA580C] flex items-center justify-between gap-3 animate-pulse">
+         <div className="fixed top-16 sm:top-[4.5rem] left-3 right-3 sm:left-4 sm:right-4 z-40 bg-[#3D3A35] text-white p-3 rounded-2xl shadow-2xl border-2 border-[#EA580C] flex items-center justify-between gap-3 max-w-lg mx-auto">
             <div className="flex items-center gap-3 min-w-0">
-               <Loader className="w-6 h-6 text-[#FACC15] animate-spin shrink-0" />
+               <Loader className="w-5 h-5 text-[#FACC15] animate-spin shrink-0" />
                <div className="min-w-0">
                   <div className="text-[10px] font-black uppercase tracking-widest text-[#EA580C]">
                      Bingo Claim In Progress
@@ -795,7 +887,7 @@ export default function Player() {
                   </div>
                </div>
             </div>
-            {winningCardIdx !== -1 && !room.claims?.some((c: any) => c.playerId === me.id) && (
+            {winningCardIdx !== -1 && (
                <button
                  onClick={() => setShowClaimConfirm(true)}
                  className="bg-[#EA580C] text-white px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider shrink-0 shadow-lg hover:brightness-110 active:scale-95"
@@ -808,27 +900,44 @@ export default function Player() {
 
       <AnimatePresence>
          {dikitAlert && (
-            <motion.div initial={{ y: -100, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="fixed top-14 left-4 right-4 z-[55] bg-[#0D9488] text-white p-4 rounded-2xl shadow-2xl border-2 border-white flex flex-col gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-               <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Trophy size={24} /></div>
+            <motion.div initial={{ y: -100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="fixed top-16 sm:top-[4.5rem] left-3 right-3 sm:left-4 sm:right-4 max-w-md mx-auto z-[55] bg-[#0D9488] text-white p-4 rounded-2xl shadow-2xl border-2 border-white flex flex-col gap-3 max-h-[70vh] overflow-y-auto custom-scrollbar">
+               <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Trophy size={22} /></div>
                   <div className="flex-1 min-w-0">
                      <div className="text-[10px] font-black uppercase tracking-widest opacity-80">
-                        {dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Hit!'}
+                        {dikitAlert.length > 1 ? 'MULTIPLE DIKIT WINS!' : 'Dikit Sidebet Hit!'}
                      </div>
                      <div className="text-lg font-black truncate leading-tight">
                         {dikitAlert.map((w: any) => w.playerName).join(' & ')}
                      </div>
-                     <div className="text-[9px] font-bold uppercase tracking-widest opacity-70 mt-0.5">
-                        Game resuming in <Countdown endsAt={room.dikitEndsAt} />
+                     <div className="text-[9px] font-bold uppercase tracking-widest opacity-75 mt-0.5">
+                        Sidebet winner announced · Game continues
                      </div>
                   </div>
-                  <button onClick={() => dismissDikit()} className="text-white/50 hover:text-white shrink-0">
+                  <button onClick={() => dismissDikit()} className="text-white/60 hover:text-white shrink-0 p-1">
                      <Plus size={20} className="rotate-45" />
                   </button>
                </div>
-               <div className="flex gap-4 overflow-x-auto w-full pb-2 snap-x">
+               <div className="flex gap-3 overflow-x-auto w-full pb-1 snap-x custom-scrollbar justify-center">
                   {dikitAlert.map((alert: any, aIdx: number) => (
-                     <div key={aIdx} className="bg-white/10 p-4 rounded-2xl border border-white/20 shrink-0 snap-center"><div className="text-center text-xs font-bold mb-2">{alert.playerName}</div><div className="grid grid-cols-5 gap-1">{alert.card.map((row: any)=> row.map((num: any, idx: number) => { const called = num === 0 || room.calledNumbers.includes(num); return (<div key={idx} className={`w-6 h-6 flex items-center justify-center font-black text-[8px] rounded-md border ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>{num === 0 ? 'FR' : num}</div>)}))}</div></div>
+                     <div key={alert.id || aIdx} className="bg-white/10 p-3 rounded-2xl border border-white/20 shrink-0 snap-center">
+                        <div className="text-center text-xs font-bold mb-1.5">
+                           {alert.playerName} <span className="opacity-75">· Card {(alert.cardIndex ?? 0) + 1}</span>
+                        </div>
+                        <div className="grid grid-cols-5 gap-1">
+                           {['B','I','N','G','O'].map(l => (
+                              <div key={l} className="text-center font-black text-[8px] text-white/75">{l}</div>
+                           ))}
+                           {alert.card.map((row: number[], rIdx: number) => row.map((num: number, cIdx: number) => {
+                              const called = num === 0 || room.calledNumbers.includes(num);
+                              return (
+                                 <div key={`${rIdx}-${cIdx}`} className={`w-6 h-6 flex items-center justify-center font-black text-[8px] rounded-md border ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>
+                                    {num === 0 ? 'FR' : num}
+                                 </div>
+                              );
+                           }))}
+                        </div>
+                     </div>
                   ))}
                </div>
             </motion.div>
@@ -836,13 +945,13 @@ export default function Player() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {winner && room.status !== 'next_round' && (
+        {winner && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-[60] p-4 sm:p-6">
-             <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-white rounded-[40px] border-[8px] border-[#FACC15] w-full max-w-md p-6 sm:p-8 shadow-2xl text-center relative overflow-hidden flex flex-col max-h-[90vh]">
+             <motion.div initial={{scale:0.85, y:40}} animate={{scale:1, y:0}} className="bg-white rounded-[36px] border-[8px] border-[#FACC15] w-full max-w-md p-5 sm:p-7 shadow-2xl text-center relative overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/10 to-transparent opacity-50 pointer-events-none" />
                 <div className="relative z-10 flex flex-col min-h-0 flex-1">
-                  <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#FACC15] to-[#EA580C] rounded-full flex items-center justify-center mb-3 shadow-xl shrink-0">
-                    <Trophy className="text-white" size={32} />
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto bg-gradient-to-br from-[#FACC15] to-[#EA580C] rounded-full flex items-center justify-center mb-3 shadow-xl shrink-0">
+                    <Trophy className="text-white" size={30} />
                   </div>
                   
                   <h2 className="text-3xl sm:text-4xl font-display text-[#3D3A35] mb-1 uppercase italic tracking-tighter shrink-0">
@@ -860,22 +969,22 @@ export default function Player() {
                       const isMe = w.playerId === me?.id;
                       return (
                         <div key={w.id || wIdx} className={`p-3 rounded-2xl border-2 shadow-sm ${isMe ? 'bg-[#0D9488]/5 border-[#0D9488]' : 'bg-[#FAF7F2] border-[#E8E2D9]'}`}>
-                          <div className="flex items-center justify-between mb-1.5 px-1">
-                            <span className="text-xs font-black text-[#3D3A35] flex items-center gap-1.5">
-                              {w.playerName} {isMe && <span className="text-[9px] bg-[#0D9488] text-white px-1.5 py-0.2 rounded-full font-bold">YOU</span>}
+                          <div className="flex items-center justify-between gap-2 mb-1.5 px-1">
+                            <span className="text-xs font-black text-[#3D3A35] flex items-center gap-1.5 truncate">
+                              {w.playerName} {isMe && <span className="text-[9px] bg-[#0D9488] text-white px-1.5 py-0.5 rounded-full font-bold">YOU</span>}
                             </span>
-                            <span className="text-[10px] font-bold text-[#EA580C] bg-[#EA580C]/10 px-2 py-0.5 rounded-full">
-                              Card {(w.cardIndex ?? 0) + 1} • {w.pattern || 'Bingo'}
+                            <span className="text-[10px] font-bold text-[#EA580C] bg-[#EA580C]/10 px-2 py-0.5 rounded-full shrink-0">
+                              Card {(w.cardIndex ?? 0) + 1} · {w.pattern || 'Bingo'}
                             </span>
                           </div>
                           <div className="grid grid-cols-5 gap-1 mx-auto max-w-[200px]">
                             {['B','I','N','G','O'].map(l => (
-                              <div key={l} className="text-center font-black text-[9px] text-[#A19B91]">{l}</div>
+                              <div key={l} className="text-center font-black text-[9px] text-[#EA580C]">{l}</div>
                             ))}
-                            {w.card.map((row: any) => row.map((num: any, idx: number) => {
+                            {w.card.map((row: number[], rIdx: number) => row.map((num: number, cIdx: number) => {
                               const called = num === 0 || (room.calledNumbers || []).includes(num);
                               return (
-                                <div key={idx} className={`aspect-square flex items-center justify-center font-display text-[10px] rounded-md border transition-all ${
+                                <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-display text-[10px] rounded-md border transition-all ${
                                   num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-sm font-bold' : 'bg-white border-[#E8E2D9] text-[#A19B91]'
                                 }`}>
                                   {num === 0 ? 'FR' : num}
