@@ -240,7 +240,8 @@ export default function Player() {
   }, [cardStatus, room?.status, winningCardIdx, nearWinAlert, hasCalledBalls]);
 
   const handleClaim = () => {
-    if (winningCardIdx !== -1 && room?.status === 'playing') {
+    const canClaim = room?.status === 'playing' || (room?.status === 'paused' && ((room.claims?.length || 0) > 0 || (room.verifiedWinners?.length || 0) > 0));
+    if (winningCardIdx !== -1 && canClaim) {
        claimBingo(winningCardIdx, markedCells[winningCardIdx] || []);
        setShowClaimConfirm(false);
     }
@@ -762,10 +763,10 @@ export default function Player() {
       </nav>
 
       <AnimatePresence>
-         {room.status === 'playing' && (winningCardIdx !== -1 || dikitCardIdx !== -1) && activeTab === 'cards' && (
+         {(room.status === 'playing' || (room.status === 'paused' && ((room.claims?.length || 0) > 0 || (room.verifiedWinners?.length || 0) > 0))) && (winningCardIdx !== -1 || dikitCardIdx !== -1) && activeTab === 'cards' && (
             <motion.div initial={{ y: 100, scale: 0.8 }} animate={{ y: 0, scale: 1 }} exit={{ y: 100, scale: 0.8 }} className="fixed bottom-20 left-4 right-4 z-40 flex flex-col gap-2">
-               {dikitCardIdx !== -1 && (<button onClick={handleDikitClaim} className="w-full bg-[#0D9488] text-white py-3 rounded-2xl font-black text-lg uppercase tracking-[0.1em] shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none">Dikit Hit!</button>)}
-               {winningCardIdx !== -1 && (<button onClick={() => setShowClaimConfirm(true)} className="w-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white py-5 rounded-[24px] font-black text-2xl uppercase tracking-[0.15em] shadow-[0_8px_0_#9A3412] active:translate-y-[6px] active:shadow-none animate-bounce">BINGO AVAILABLE!</button>)}
+               {dikitCardIdx !== -1 && room.status === 'playing' && (<button onClick={handleDikitClaim} className="w-full bg-[#0D9488] text-white py-3 rounded-2xl font-black text-lg uppercase tracking-[0.1em] shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none">Dikit Hit!</button>)}
+               {winningCardIdx !== -1 && (<button onClick={() => setShowClaimConfirm(true)} className="w-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white py-5 rounded-[24px] font-black text-2xl uppercase tracking-[0.15em] shadow-[0_8px_0_#9A3412] active:translate-y-[6px] active:shadow-none animate-bounce">{room.status === 'paused' ? 'I ALSO HAVE BINGO!' : 'BINGO AVAILABLE!'}</button>)}
             </motion.div>
          )}
       </AnimatePresence>
@@ -781,9 +782,27 @@ export default function Player() {
          )}
       </AnimatePresence>
 
-      {claimAlert && !winner && (
-         <div className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-50 p-6">
-            <div className="text-white text-center flex flex-col items-center"><Loader className="w-16 h-16 text-[#FACC15] animate-spin mb-6" /><h2 className="text-4xl font-black uppercase tracking-tighter italic mb-4">Bingo Claim!</h2><p className="text-xl font-bold opacity-80 mb-12">{claimAlert.playerId === me.id ? "Checking your card..." : `${claimAlert.playerName} is claiming a win!`}</p><div className="bg-white/10 px-8 py-3 rounded-full text-xs font-black uppercase tracking-[0.4em] border border-white/20">Verification in progress</div></div>
+      {claimAlert && !winner && room.status === 'paused' && (
+         <div className="fixed top-14 left-4 right-4 z-40 bg-[#3D3A35] text-white p-3 rounded-2xl shadow-2xl border-2 border-[#EA580C] flex items-center justify-between gap-3 animate-pulse">
+            <div className="flex items-center gap-3 min-w-0">
+               <Loader className="w-6 h-6 text-[#FACC15] animate-spin shrink-0" />
+               <div className="min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-[#EA580C]">
+                     Bingo Claim In Progress
+                  </div>
+                  <div className="text-sm font-bold truncate">
+                     {claimAlert.playerId === me.id ? "Host is verifying your card..." : `${claimAlert.playerName} called Bingo!`}
+                  </div>
+               </div>
+            </div>
+            {winningCardIdx !== -1 && !room.claims?.some((c: any) => c.playerId === me.id) && (
+               <button
+                 onClick={() => setShowClaimConfirm(true)}
+                 className="bg-[#EA580C] text-white px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider shrink-0 shadow-lg hover:brightness-110 active:scale-95"
+               >
+                 I Also Won!
+               </button>
+            )}
          </div>
       )}
 
@@ -818,13 +837,60 @@ export default function Player() {
 
       <AnimatePresence>
         {winner && room.status !== 'next_round' && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-[60] p-6">
-             <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-white rounded-[48px] border-[8px] border-[#FACC15] w-full max-w-sm p-10 shadow-2xl text-center relative overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/10 to-transparent opacity-50" />
-                <div className="relative z-10 flex flex-col min-h-0">
-                  <div className="w-24 h-24 mx-auto bg-[#FACC15] rounded-full flex items-center justify-center mb-6 shadow-xl shrink-0"><Trophy className="text-white" size={48} /></div>
-                  {winner.some((w: any) => w.playerId === me?.id) ? (<><h2 className="text-5xl font-display text-[#3D3A35] mb-2 uppercase italic tracking-tighter shrink-0">YOU WON!</h2><p className="text-xl text-[#7A746B] font-bold mb-10 leading-tight shrink-0">Congratulations!</p></>) : (<><h2 className="text-5xl font-display text-[#3D3A35] mb-2 uppercase italic tracking-tighter shrink-0">{winner.length > 1 ? 'WINNERS!' : 'ROUND OVER'}</h2><p className="text-xl text-[#7A746B] font-bold mb-4 leading-tight shrink-0"><span className="font-bold text-[#EA580C]">{winner.map((w: any) => w.playerName).join(', ')}</span> claimed Bingo.</p><div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar mb-8"><div className="flex flex-col gap-4">{winner.map((w: any, wIdx: number) => (<div key={wIdx} className="bg-[#FAF7F2] p-4 rounded-3xl border-2 border-[#E8E2D9] shadow-inner"><div className="text-sm font-black text-[#3D3A35] mb-2">{w.playerName}</div><div className="grid grid-cols-5 gap-1 mx-auto max-w-[200px]">{w.card.map((row: any)=> row.map((num: any, idx: number) => { const called = num === 0 || room.calledNumbers.includes(num); return (<div key={idx} className={`aspect-square flex items-center justify-center font-display text-[10px] rounded-md border transition-all ${num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C]' : 'bg-white border-[#E8E2D9] text-[#DED9D1]'}`}>{num === 0 ? 'FR' : num}</div>)}))}</div></div>))}</div></div></>)}
-                  <button onClick={dismissWinner} className="w-full py-5 bg-[#3D3A35] text-white rounded-[24px] font-black text-lg uppercase tracking-widest hover:bg-black active:scale-95 transition-all shadow-xl shrink-0 mt-auto">Awesome</button>
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-[60] p-4 sm:p-6">
+             <motion.div initial={{scale:0.8, y:50}} animate={{scale:1, y:0}} className="bg-white rounded-[40px] border-[8px] border-[#FACC15] w-full max-w-md p-6 sm:p-8 shadow-2xl text-center relative overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/10 to-transparent opacity-50 pointer-events-none" />
+                <div className="relative z-10 flex flex-col min-h-0 flex-1">
+                  <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#FACC15] to-[#EA580C] rounded-full flex items-center justify-center mb-3 shadow-xl shrink-0">
+                    <Trophy className="text-white" size={32} />
+                  </div>
+                  
+                  <h2 className="text-3xl sm:text-4xl font-display text-[#3D3A35] mb-1 uppercase italic tracking-tighter shrink-0">
+                    {winner.some((w: any) => w.playerId === me?.id)
+                      ? (winner.length > 1 ? 'YOU & OTHERS WON!' : 'YOU WON!')
+                      : (winner.length > 1 ? `${winner.length} BINGO WINNERS!` : 'BINGO WINNER!')}
+                  </h2>
+                  <p className="text-xs sm:text-sm font-bold text-[#7A746B] mb-3 shrink-0">
+                    <span className="font-black text-[#EA580C]">{winner.map((w: any) => w.playerName).join(', ')}</span>
+                  </p>
+
+                  {/* Winning Bingo Cards Display */}
+                  <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar mb-4 space-y-3 pr-1">
+                    {winner.map((w: any, wIdx: number) => {
+                      const isMe = w.playerId === me?.id;
+                      return (
+                        <div key={w.id || wIdx} className={`p-3 rounded-2xl border-2 shadow-sm ${isMe ? 'bg-[#0D9488]/5 border-[#0D9488]' : 'bg-[#FAF7F2] border-[#E8E2D9]'}`}>
+                          <div className="flex items-center justify-between mb-1.5 px-1">
+                            <span className="text-xs font-black text-[#3D3A35] flex items-center gap-1.5">
+                              {w.playerName} {isMe && <span className="text-[9px] bg-[#0D9488] text-white px-1.5 py-0.2 rounded-full font-bold">YOU</span>}
+                            </span>
+                            <span className="text-[10px] font-bold text-[#EA580C] bg-[#EA580C]/10 px-2 py-0.5 rounded-full">
+                              Card {(w.cardIndex ?? 0) + 1} • {w.pattern || 'Bingo'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-5 gap-1 mx-auto max-w-[200px]">
+                            {['B','I','N','G','O'].map(l => (
+                              <div key={l} className="text-center font-black text-[9px] text-[#A19B91]">{l}</div>
+                            ))}
+                            {w.card.map((row: any) => row.map((num: any, idx: number) => {
+                              const called = num === 0 || (room.calledNumbers || []).includes(num);
+                              return (
+                                <div key={idx} className={`aspect-square flex items-center justify-center font-display text-[10px] rounded-md border transition-all ${
+                                  num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-sm font-bold' : 'bg-white border-[#E8E2D9] text-[#A19B91]'
+                                }`}>
+                                  {num === 0 ? 'FR' : num}
+                                </div>
+                              );
+                            }))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <button onClick={dismissWinner} className="w-full py-4 bg-[#3D3A35] text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-black active:scale-95 transition-all shadow-xl shrink-0 mt-auto">
+                    Awesome
+                  </button>
                 </div>
              </motion.div>
           </motion.div>

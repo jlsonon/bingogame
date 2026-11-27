@@ -75,6 +75,8 @@ export default function Host() {
   const callNextBall = useGameStore(s => s.callNextBall);
   const updateSettings = useGameStore(s => s.updateSettings);
   const verifyClaim = useGameStore(s => s.verifyClaim);
+  const settleMultiBingo = useGameStore(s => s.settleMultiBingo);
+  const multiBingoPending = useGameStore(s => s.multiBingoPending);
   const dismissWinner = useGameStore(s => s.dismissWinner);
   const dismissDikit = useGameStore(s => s.dismissDikit);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
@@ -746,6 +748,76 @@ export default function Host() {
 
       {room.claims.length > 0 && !winner && (
         <div className="fixed inset-0 bg-[#3D3A35]/80 backdrop-blur-md flex justify-center items-center z-50 p-4"><div className="bg-white rounded-[48px] w-full max-w-xl overflow-hidden shadow-2xl flex flex-col border-[8px] border-[#EA580C]"><div className="bg-[#EA580C] text-white p-8 text-center relative"><div className="absolute top-4 right-6 bg-white/20 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest">Claim {room.verifiedWinners?.length + 1 || 1} of {(room.claims.length || 0) + (room.verifiedWinners?.length || 0)}</div><h2 className="text-5xl font-black uppercase tracking-tighter italic drop-shadow-md mb-2">Bingo Claim!</h2><p className="text-xl font-bold opacity-90">{room.claims[0].playerName} called Bingo</p></div><div className="p-8 overflow-y-auto flex flex-col items-center gap-8"><div className="bg-[#FAF7F2] p-8 rounded-[40px] border-4 border-[#E8E2D9] shadow-inner scale-110"><div className="grid grid-cols-5 gap-2">{['B','I','N','G','O'].map(l => <div key={l} className="text-center font-black text-[#A19B91] text-xl mb-2">{l}</div>)}{room.claims[0].card.map((row: any)=> row.map((num: any, idx: number) => { const called = num === 0 || room.calledNumbers.includes(num); return (<div key={idx} className={`w-14 h-14 flex items-center justify-center font-black text-xl rounded-xl border-2 transition-all ${num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-lg scale-105' : 'bg-white border-[#E8E2D9] text-[#DED9D1]'}`}>{num === 0 ? 'FR' : num}</div>) }))}</div></div><div className="w-full bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9] flex justify-between items-center px-8"><div className="flex flex-col"><span className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">Claimed Pattern</span><span className="text-2xl font-black text-[#EA580C] uppercase italic leading-none">{room.claims[0].pattern}</span></div><Trophy className="text-[#EA580C]" size={40} /></div></div><div className="p-8 bg-[#FAF7F2] border-t-4 border-[#E8E2D9] flex gap-4"><button onClick={() => verifyClaim(room.claims[0].id, false)} className="flex-1 py-5 bg-white border-4 border-[#E8E2D9] text-[#7A746B] rounded-[24px] font-black text-lg uppercase tracking-widest active:translate-y-1 transition-all">Reject</button><button onClick={() => verifyClaim(room.claims[0].id, true)} className="flex-1 py-5 bg-[#0D9488] text-white rounded-[24px] font-black text-2xl uppercase tracking-widest shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all">Verify & Win</button></div></div></div>)}
+
+      {(multiBingoPending || room.multiBingoPending) && (room.verifiedWinners?.length || 0) >= 3 && !winner && (
+        <div className="fixed inset-0 bg-[#3D3A35]/85 backdrop-blur-md flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-[40px] w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col border-[8px] border-[#FACC15] max-h-[90vh]">
+            <div className="bg-gradient-to-r from-[#EA580C] to-[#FACC15] text-white p-6 sm:p-8 text-center relative shrink-0">
+              <span className="text-[10px] font-black uppercase tracking-[0.3em] bg-black/20 px-3 py-1 rounded-full inline-block mb-2">
+                Multiple Winners Detected
+              </span>
+              <h2 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter italic drop-shadow-md">
+                3+ Bingo Winners Tie!
+              </h2>
+              <p className="text-sm sm:text-base font-bold opacity-90 mt-1">
+                {room.verifiedWinners.length} players achieved Bingo on this call. Choose to Settle or Continue:
+              </p>
+            </div>
+
+            {/* Grid of All Verified Winning Cards */}
+            <div className="p-6 overflow-y-auto flex-1 min-h-0 bg-[#FAF7F2]">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {room.verifiedWinners.map((w: any, idx: number) => (
+                  <div key={w.id || idx} className="bg-white p-4 rounded-3xl border-2 border-[#E8E2D9] shadow-sm flex flex-col items-center">
+                    <div className="w-full flex items-center justify-between mb-2">
+                      <span className="font-black text-sm text-[#3D3A35] truncate">{w.playerName}</span>
+                      <span className="text-[10px] font-bold text-[#EA580C] bg-[#EA580C]/10 px-2 py-0.5 rounded-full">
+                        Card {(w.cardIndex ?? 0) + 1}
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-bold text-[#7A746B] uppercase tracking-wider mb-2">
+                      Pattern: <span className="text-[#EA580C] font-black">{w.pattern || 'Bingo'}</span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1 w-full max-w-[200px]">
+                      {['B','I','N','G','O'].map(l => (
+                        <div key={l} className="text-center font-black text-[10px] text-[#A19B91]">{l}</div>
+                      ))}
+                      {w.card.map((row: any) => row.map((num: any, cIdx: number) => {
+                        const called = num === 0 || (room.calledNumbers || []).includes(num);
+                        return (
+                          <div key={cIdx} className={`aspect-square flex items-center justify-center font-display text-xs rounded-lg border transition-all ${
+                            num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-sm font-bold' : 'bg-white border-[#E8E2D9] text-[#A19B91]'
+                          }`}>
+                            {num === 0 ? 'FR' : num}
+                          </div>
+                        );
+                      }))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Settle vs Continue Controls */}
+            <div className="p-6 bg-white border-t-4 border-[#E8E2D9] flex flex-col sm:flex-row gap-4 shrink-0">
+              <button
+                onClick={() => settleMultiBingo('continue')}
+                className="flex-1 py-4 px-6 bg-[#FAF7F2] border-4 border-[#E8E2D9] text-[#7A746B] hover:text-[#3D3A35] rounded-2xl font-black text-base uppercase tracking-wider active:translate-y-1 transition-all flex items-center justify-center gap-2"
+              >
+                <Play size={20} fill="currentColor" />
+                <span>Continue (Break Tie)</span>
+              </button>
+              <button
+                onClick={() => settleMultiBingo('settle')}
+                className="flex-1 py-4 px-6 bg-[#0D9488] text-white rounded-2xl font-black text-xl uppercase tracking-wider shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 size={24} />
+                <span>Settle ({room.verifiedWinners.length} Winners)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>{dikitAlert && (<motion.div initial={{ x: 300, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 300, opacity: 0 }} className="fixed bottom-6 right-6 z-[55] bg-[#0D9488] text-white p-6 rounded-[32px] shadow-2xl border-4 border-white flex flex-col items-center gap-4 w-96 max-h-[80vh] overflow-y-auto custom-scrollbar"><div className="text-center"><div className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80 mb-1">{dikitAlert.length > 1 ? 'MULTIPLE SIDEQUEST WINS!' : 'Sidequest Win!'}</div><div className="text-2xl font-black italic">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div></div><div className="flex gap-4 overflow-x-auto w-full pb-2 px-2 snap-x">{dikitAlert.map((alert: any, aIdx: number) => (<div key={aIdx} className="bg-white/10 p-4 rounded-2xl border border-white/20 shrink-0 snap-center"><div className="text-center text-xs font-bold mb-2">{alert.playerName}</div><div className="grid grid-cols-5 gap-1">{alert.card.map((row: any)=> row.map((num: any, idx: number) => { const called = num === 0 || room.calledNumbers.includes(num); return (<div key={idx} className={`w-8 h-8 flex items-center justify-center font-black text-[10px] rounded-lg border ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>{num === 0 ? 'FR' : num}</div>) }))}</div></div>))}</div><button onClick={dismissDikit} className="text-xs font-black uppercase tracking-widest bg-white/20 hover:bg-white/30 px-6 py-2 rounded-full transition-all mt-2">Dismiss</button></motion.div>)}</AnimatePresence>
 

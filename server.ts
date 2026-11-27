@@ -88,6 +88,8 @@ interface Room {
   dikitWinners: any[];
   dikitFight?: DikitFightState | null;
   verifiedWinners: any[];
+  multiBingoPending?: boolean;
+  tiedWinners?: any[];
   stats: {
     totalCardsSold: number;
     totalPlayersJoined: number;
@@ -339,6 +341,8 @@ function prepareNextRound(code: string, io: Server, autoStart = false) {
   room.dikitFight = null;
   delete pendingDikitClaims[code];
   room.verifiedWinners = [];
+  room.multiBingoPending = false;
+  room.tiedWinners = [];
   room.nextRoundEndsAt = undefined;
   room.roundNumber += 1;
   room.roundName = `Round ${room.roundNumber}`;
@@ -623,6 +627,8 @@ io.on("connection", (socket: Socket) => {
         dikitWinners: [],
         dikitFight: null,
         verifiedWinners: [],
+        multiBingoPending: false,
+        tiedWinners: [],
         stats: {
           totalCardsSold: 0,
           totalPlayersJoined: 1, // Host counts as first player
@@ -914,6 +920,8 @@ io.on("connection", (socket: Socket) => {
          room.claims = [];
          room.dikitWinners = [];
          room.verifiedWinners = [];
+         room.multiBingoPending = false;
+         room.tiedWinners = [];
          room.nextRoundEndsAt = undefined;
          if (nextRoundTimers[code]) {
            clearTimeout(nextRoundTimers[code]);
@@ -936,11 +944,19 @@ io.on("connection", (socket: Socket) => {
       const code = normalizeCode(data.code);
       const room = rooms[code];
       const player = room ? Object.values(room.players).find(p => p.socketId === socket.id) : null;
-      if (room && player && room.status === 'playing') {
+      if (room && player && (room.status === 'playing' || room.status === 'paused')) {
         if (!room.calledNumbers || room.calledNumbers.length === 0) {
           socket.emit("claim_rejected", { message: "No balls have been called yet" });
           return;
         }
+
+        // Avoid duplicate claim for the same player & card
+        const alreadyClaimed = room.claims.some(c => c.playerId === player.id && c.cardIndex === data.cardIndex) ||
+                               room.verifiedWinners.some(w => w.playerId === player.id && w.cardIndex === data.cardIndex);
+        if (alreadyClaimed) {
+          return;
+        }
+
         const card = player.activeCards[data.cardIndex];
         const markedCells = Array.isArray(data.markedCells) ? data.markedCells.filter(Number.isInteger) : [];
         if (!isValidCard(card)) return;
@@ -1096,6 +1112,17 @@ io.on("connection", (socket: Socket) => {
              
              if (room.claims.length === 0) {
                  if (room.verifiedWinners.length > 0) {
+                    // 3 or more winners: host chooses to Settle or Continue!
+                    if (room.verifiedWinners.length >= 3) {
+                       room.multiBingoPending = true;
+                       io.to(code).emit("multi_bingo_choice_needed", {
+                          winners: room.verifiedWinners
+                       });
+                       io.to(code).emit("room_updated", room);
+                       return;
+                    }
+
+                    // 1 or 2 winners: normal finish
                     // Check if Dikit Fight is currently active!
                     if (room.dikitFight && room.dikitFight.status === 'active') {
                        room.dikitFight.roundBingoPending = true;
@@ -1133,6 +1160,59 @@ io.on("connection", (socket: Socket) => {
                  }
              }
              io.to(code).emit("room_updated", room);
+          }
+       }
+    });
+
+    socket.on("settle_multi_bingo", (data: { code: string, action: 'settle' | 'continue' }) => {
+       const code = normalizeCode(data.code);
+       const room = rooms[code];
+       const host = room?.players[room.hostId];
+       if (room && host?.socketId === socket.id && room.multiBingoPending) {
+          room.multiBingoPending = false;
+
+          if (data.action === 'settle') {
+             // Conclude round awarding all 3+ winners!
+             if (room.dikitFight && room.dikitFight.status === 'active') {
+                room.dikitFight.roundBingoPending = true;
+                room.status = 'playing';
+                io.to(code).emit("bingo_won_dikit_fight_continues", {
+                   bingoWinners: room.verifiedWinners,
+                   dikitContenders: room.dikitFight.contenders
+                });
+                io.to(code).emit("room_updated", room);
+                if (room.autoCallSpeed > 0) {
+                   startAutoCaller(code, io);
+                }
+             } else if (dikitGraceTimers[code]) {
+                room.status = 'playing';
+                io.to(code).emit("bingo_won_dikit_grace", {
+                   bingoWinners: room.verifiedWinners
+                });
+                io.to(code).emit("room_updated", room);
+             } else {
+                room.stats.gamesPlayed += 1;
+                room.status = 'next_round';
+                room.nextRoundEndsAt = Date.now() + 20_000;
+                
+                if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
+                nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 20_000);
+                
+                io.to(code).emit("winners_announced", room.verifiedWinners);
+                io.to(code).emit("room_updated", room);
+             }
+          } else if (data.action === 'continue') {
+             // Host chose to Continue! Keep drawing balls to break the tie
+             room.tiedWinners = [...room.verifiedWinners];
+             room.verifiedWinners = [];
+             room.status = 'playing';
+             io.to(code).emit("multi_bingo_continued", {
+                previousTiedWinners: room.tiedWinners
+             });
+             io.to(code).emit("room_updated", room);
+             if (room.autoCallSpeed > 0) {
+                startAutoCaller(code, io);
+             }
           }
        }
     });

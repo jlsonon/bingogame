@@ -56,6 +56,8 @@ export interface Room {
   dikitWinners: any[];
   dikitFight?: DikitFightState | null;
   verifiedWinners: any[];
+  multiBingoPending?: boolean;
+  tiedWinners?: any[];
   stats: {
     totalCardsSold: number;
     totalPlayersJoined: number;
@@ -93,6 +95,7 @@ interface GameState {
   callNextBall: () => void;
   updateSettings: (settings: any) => void;
   verifyClaim: (claimId: string, isValid: boolean) => void;
+  settleMultiBingo: (action: 'settle' | 'continue') => void;
 
   // Player actions
   updateMyCards: (cards: number[][][]) => void;
@@ -109,6 +112,7 @@ interface GameState {
   claimAlert: any | null;
   dikitAlert: any[] | null;
   dikitFight: DikitFightState | null;
+  multiBingoPending: boolean;
   winner: any[] | null;
   emotes: Emote[];
   nearWinAlert: { playerName: string, patternName: string } | null;
@@ -154,6 +158,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   claimAlert: null,
   dikitAlert: null,
   dikitFight: null,
+  multiBingoPending: false,
   winner: null,
   globalPatterns: [],
   emotes: [],
@@ -186,6 +191,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         claimAlert: roundChanged ? null : get().claimAlert,
         dikitAlert: roundChanged ? null : get().dikitAlert,
         dikitFight: roundChanged ? null : (room.dikitFight || null),
+        multiBingoPending: roundChanged ? false : Boolean(room.multiBingoPending),
         nearWinAlert: roundChanged ? null : get().nearWinAlert
       });
     });
@@ -229,8 +235,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       }, 7000);
     });
 
+    newSocket.on("multi_bingo_choice_needed", () => {
+      set({ multiBingoPending: true });
+    });
+
+    newSocket.on("multi_bingo_continued", () => {
+      set({ multiBingoPending: false, claimAlert: null });
+    });
+
     newSocket.on("winners_announced", (claims: any[]) => {
-      set({ winner: claims, claimAlert: null });
+      set({ winner: claims, claimAlert: null, multiBingoPending: false });
     });
 
     newSocket.on("claim_rejected", () => {
@@ -517,6 +531,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (socket && room) {
        socket.emit("verify_claim", { code: room.id, claimId, isValid });
        set({ claimAlert: null });
+    }
+  },
+
+  settleMultiBingo: (action: 'settle' | 'continue') => {
+    const { socket, room } = get();
+    if (socket && room) {
+       socket.emit("settle_multi_bingo", { code: room.id, action });
+       if (action === 'continue') {
+          set({ multiBingoPending: false, claimAlert: null });
+       }
     }
   },
 
