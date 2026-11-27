@@ -264,7 +264,7 @@ function resolveDikitFight(code: string, io: Server, room: Room, winners: DikitF
     room.nextRoundEndsAt = Date.now() + 20_000;
 
     if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
-    nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 20_000);
+    nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io, true), 20_000);
 
     io.to(code).emit("winners_announced", room.verifiedWinners);
   }
@@ -330,7 +330,7 @@ function startAutoCaller(code: string, io: Server) {
   }, room.autoCallSpeed * 1000);
 }
 
-function prepareNextRound(code: string, io: Server, autoStart = false) {
+function prepareNextRound(code: string, io: Server, autoStart = true) {
   const room = rooms[code];
   if (!room || room.status !== 'next_round') return;
   room.status = autoStart ? 'playing' : 'waiting';
@@ -1067,8 +1067,9 @@ io.on("connection", (socket: Socket) => {
               room.status = 'next_round';
               room.nextRoundEndsAt = Date.now() + 20_000;
               if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
-              nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 20_000);
+              nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io, true), 20_000);
               io.to(code).emit("winners_announced", room.verifiedWinners);
+              io.to(code).emit("room_updated", room);
             }
           } else if (pending.claims.length >= 3) {
             // 3 OR MORE TIED ON SAME BALL -> START DIKIT FIGHT!
@@ -1155,7 +1156,7 @@ io.on("connection", (socket: Socket) => {
                        room.nextRoundEndsAt = Date.now() + 20_000;
                        
                        if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
-                       nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 20_000);
+                       nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io, true), 20_000);
                        
                        io.to(code).emit("winners_announced", room.verifiedWinners);
                     }
@@ -1218,7 +1219,7 @@ io.on("connection", (socket: Socket) => {
                 room.nextRoundEndsAt = Date.now() + 20_000;
                 
                 if (nextRoundTimers[code]) clearTimeout(nextRoundTimers[code]);
-                nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io), 20_000);
+                nextRoundTimers[code] = setTimeout(() => prepareNextRound(code, io, true), 20_000);
                 
                 io.to(code).emit("winners_announced", room.verifiedWinners);
                 io.to(code).emit("room_updated", room);
@@ -1271,7 +1272,7 @@ io.on("connection", (socket: Socket) => {
       const room = rooms[code];
       const host = room?.players[room.hostId];
       if (room && host?.socketId === socket.id && room.status === 'next_round') {
-        prepareNextRound(code, io);
+        prepareNextRound(code, io, true);
       }
     });
 

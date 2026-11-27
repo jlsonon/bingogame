@@ -8,6 +8,16 @@ import { getBallLetter } from '../lib/bingo';
 import { Trophy, Users, PlayCircle, Monitor, Eye, Settings2 } from 'lucide-react';
 import { SOUNDS, playSound, playVoiceBall } from '../lib/sounds';
 
+function Countdown({ endsAt }: { endsAt?: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.ceil(((endsAt || now) - now) / 1000));
+  return <span className="tabular-nums">{seconds}s</span>;
+}
+
 // Deterministic mini-card patterns for the verification slot animation (avoids Math.random in render)
 const SLOT_MOCK_CARDS: boolean[][] = [
   [true, false, true, false, false, false, true, false, true, false, true, false, true, false, true, false, false, true, false, false, true, false, false, true, false],
@@ -853,9 +863,13 @@ export default function Display() {
                   <motion.div
                     animate={{ y: [0, 6, 0] }}
                     transition={{ repeat: Infinity, duration: 2 }}
-                    className="text-white/50 font-black uppercase tracking-[0.5em] text-xs mt-4 shrink-0"
+                    className="bg-white/10 border border-white/20 px-6 py-2.5 rounded-full text-white font-black uppercase tracking-[0.3em] text-xs sm:text-sm mt-4 shrink-0"
                   >
-                    Awaiting Host for Next Round
+                    {room.status === 'next_round' ? (
+                      <>Next Round Auto-Starting in <span className="text-[#FACC15]"><Countdown endsAt={room.nextRoundEndsAt} /></span></>
+                    ) : (
+                      'Awaiting Next Round'
+                    )}
                   </motion.div>
                 </motion.div>
               )}

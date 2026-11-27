@@ -959,9 +959,14 @@ export default function Player() {
                       ? (winner.length > 1 ? 'YOU & OTHERS WON!' : 'YOU WON!')
                       : (winner.length > 1 ? `${winner.length} BINGO WINNERS!` : 'BINGO WINNER!')}
                   </h2>
-                  <p className="text-xs sm:text-sm font-bold text-[#7A746B] mb-3 shrink-0">
+                  <p className="text-xs sm:text-sm font-bold text-[#7A746B] mb-2 shrink-0">
                     <span className="font-black text-[#EA580C]">{winner.map((w: any) => w.playerName).join(', ')}</span>
                   </p>
+                  {room.status === 'next_round' && (
+                    <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-3 px-3 py-1 rounded-full bg-[#FAF7F2] border border-[#E8E2D9] text-[10px] font-black uppercase tracking-widest text-[#7A746B] shrink-0">
+                      Next round auto-starting in <span className="text-[#EA580C]"><Countdown endsAt={room.nextRoundEndsAt} /></span>
+                    </div>
+                  )}
 
                   {/* Winning Bingo Cards Display */}
                   <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar mb-4 space-y-3 pr-1">
