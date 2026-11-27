@@ -1,5 +1,61 @@
 export type GameMode = 'Bingo' | 'Dikit' | 'Blackout';
 
+export interface PricingConfig {
+  cardPrice: number;
+  bundle2Price: number;
+  bundle4Price: number;
+  dikitPrize: number;
+  bingoPrize: number;
+}
+
+export function calculateCardsCost(cardCount: number, pricing?: Partial<PricingConfig>): number {
+  const count = Math.max(0, Math.floor(cardCount || 0));
+  if (count === 0) return 0;
+
+  const single = Math.max(0, Number(pricing?.cardPrice) || 0);
+  const b2Raw = Math.max(0, Number(pricing?.bundle2Price) || 0);
+  const b4Raw = Math.max(0, Number(pricing?.bundle4Price) || 0);
+
+  const bundle2 = b2Raw > 0 ? b2Raw : single * 2;
+  const bundle4 = b4Raw > 0 ? b4Raw : bundle2 * 2;
+
+  if (count === 1) return single;
+  if (count === 2) return bundle2;
+  if (count === 3) return bundle2 + single;
+  if (count === 4) return bundle4;
+
+  const fours = Math.floor(count / 4);
+  const rem = count % 4;
+  return fours * bundle4 + calculateCardsCost(rem, pricing);
+}
+
+export function calculateTotalCollected(
+  players: Record<string, { activeCards?: any[] }>,
+  pricing?: Partial<PricingConfig>
+): number {
+  return Object.values(players || {}).reduce((sum, p) => {
+    const count = p.activeCards?.length || 0;
+    return sum + calculateCardsCost(count, pricing);
+  }, 0);
+}
+
+export function hasCardPricing(pricing?: Partial<PricingConfig>): boolean {
+  return (
+    (Number(pricing?.cardPrice) || 0) > 0 ||
+    (Number(pricing?.bundle2Price) || 0) > 0 ||
+    (Number(pricing?.bundle4Price) || 0) > 0
+  );
+}
+
+export function formatPeso(amount: number): string {
+  const safe = Number.isFinite(amount) ? amount : 0;
+  const isWhole = Math.abs(safe - Math.round(safe)) < 0.005;
+  const formatted = isWhole
+    ? Math.round(safe).toLocaleString('en-PH')
+    : safe.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `₱${formatted}`;
+}
+
 export interface BingoPattern {
   id: string;
   name: string;

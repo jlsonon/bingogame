@@ -4,8 +4,8 @@ import { useGameStore, type Player } from '../store/gameStore';
 import { PatternVisualizer } from '../components/PatternVisualizer';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { getBallLetter } from '../lib/bingo';
-import { Trophy, Users, PlayCircle, Monitor, Eye, Settings2 } from 'lucide-react';
+import { getBallLetter, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
+import { Trophy, Users, PlayCircle, Monitor, Eye, Settings2, Coins } from 'lucide-react';
 import { SOUNDS, playSound, playVoiceBall } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
@@ -244,6 +244,11 @@ export default function Display() {
   const joinUrl = `${window.location.origin}/?code=${room.id}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&bgcolor=FAF7F2&color=3D3A35`;
   const connectedPlayers = Object.values(room.players).filter((p: Player) => p.connected);
+  const pricingEnabled = hasCardPricing(room);
+  const totalCollected = room.stats?.totalPotCollected ?? calculateTotalCollected(room.players, room);
+  const dikitPrize = room.dikitPrize || 0;
+  const bingoPrize = room.bingoPrize || 0;
+  const showFinanceBar = pricingEnabled || totalCollected > 0 || dikitPrize > 0 || bingoPrize > 0;
 
   if (room.status === 'waiting') {
     return (
@@ -268,8 +273,42 @@ export default function Display() {
             </div>
           </div>
 
+          {/* Card Pricing & Prizes Banner (shown whenever Host configures prices or prizes) */}
+          {showFinanceBar && (
+            <div className="w-full bg-white rounded-3xl border-4 border-[#E8E2D9] px-5 py-3 shadow-md flex flex-wrap items-center justify-between gap-3 shrink-0">
+              {pricingEnabled && (
+                <div className="flex flex-wrap items-center gap-2 text-xs lg:text-sm font-black text-[#3D3A35]">
+                  <span className="text-[10px] uppercase tracking-widest text-[#A19B91] mr-1 flex items-center gap-1">
+                    <Coins size={14} className="text-[#EA580C]" />
+                    Cards:
+                  </span>
+                  <span className="bg-[#FAF7F2] border border-[#E8E2D9] px-2.5 py-1 rounded-xl tabular-nums">1 for {formatPeso(calculateCardsCost(1, room))}</span>
+                  <span className="bg-[#FAF7F2] border border-[#E8E2D9] px-2.5 py-1 rounded-xl tabular-nums">2 for {formatPeso(calculateCardsCost(2, room))}</span>
+                  <span className="bg-[#FAF7F2] border border-[#E8E2D9] px-2.5 py-1 rounded-xl tabular-nums">4 for {formatPeso(calculateCardsCost(4, room))}</span>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2 ml-auto">
+                {totalCollected > 0 && (
+                  <span className="bg-[#3D3A35] text-white px-3 py-1 rounded-xl text-xs lg:text-sm font-black tabular-nums">
+                    Pot: {formatPeso(totalCollected)}
+                  </span>
+                )}
+                {dikitPrize > 0 && (
+                  <span className="bg-[#0D9488]/15 text-[#0D9488] px-3 py-1 rounded-xl text-xs lg:text-sm font-black tabular-nums">
+                    ⚔️ Dikit: {formatPeso(dikitPrize)}
+                  </span>
+                )}
+                {bingoPrize > 0 && (
+                  <span className="bg-[#EA580C]/15 text-[#EA580C] px-3 py-1 rounded-xl text-xs lg:text-sm font-black tabular-nums">
+                    🏆 Bingo: {formatPeso(bingoPrize)}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Main 2-Column Lobby Area (Fits cleanly within 720p, 900p, 1080p) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 w-full flex-1 min-h-0 max-h-[600px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 w-full flex-1 min-h-0 max-h-[540px]">
             <div className="bg-white rounded-[40px] lg:rounded-[48px] p-6 lg:p-8 border-4 border-[#E8E2D9] shadow-xl flex flex-col items-center justify-center text-center min-h-0">
               <h3 className="text-lg lg:text-xl font-black uppercase tracking-tight mb-4 shrink-0">Scan to Join</h3>
               <div className="bg-[#FAF7F2] p-4 lg:p-5 rounded-[32px] border-4 border-white shadow-inner mb-4 shrink-0">
@@ -497,6 +536,30 @@ export default function Display() {
                       </div>
                     )}
                   </div>
+                  {showFinanceBar && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      {totalCollected > 0 && (
+                        <span className="bg-[#3D3A35] text-white px-3 py-1 rounded-xl text-xs font-black tabular-nums">
+                          Pot: {formatPeso(totalCollected)}
+                        </span>
+                      )}
+                      {dikitPrize > 0 && (
+                        <span className="bg-[#0D9488]/15 text-[#0D9488] border border-[#0D9488]/25 px-3 py-1 rounded-xl text-xs font-black tabular-nums">
+                          ⚔️ Dikit: {formatPeso(dikitPrize)}
+                        </span>
+                      )}
+                      {bingoPrize > 0 && (
+                        <span className="bg-[#EA580C]/15 text-[#EA580C] border border-[#EA580C]/25 px-3 py-1 rounded-xl text-xs font-black tabular-nums">
+                          🏆 Bingo: {formatPeso(bingoPrize)}
+                        </span>
+                      )}
+                      {pricingEnabled && (
+                        <span className="text-[10px] font-bold text-[#A19B91] ml-1 tabular-nums">
+                          Cards: 1={formatPeso(calculateCardsCost(1, room))} · 2={formatPeso(calculateCardsCost(2, room))} · 4={formatPeso(calculateCardsCost(4, room))}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h3 className="text-xs font-black text-[#A19B91] uppercase tracking-[0.2em] mb-2.5">Previous Numbers</h3>
@@ -633,7 +696,13 @@ export default function Display() {
                 {dikitAlert.length > 1 ? 'MULTIPLE DIKIT WINS!' : 'Dikit Sidebet Hit!'}
               </div>
               <div className="text-4xl lg:text-5xl font-display italic tracking-tighter">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-75 mt-1 italic">Sidebet Winner · Game Continues</div>
+              {dikitPrize > 0 && (
+                <div className="inline-block mt-2 bg-white text-[#0D9488] px-4 py-1 rounded-full text-sm font-black tabular-nums shadow-md">
+                  ⚔️ Prize: {formatPeso(dikitPrize)}
+                  {dikitAlert.length > 1 && ` (${formatPeso(dikitPrize / dikitAlert.length)} each)`}
+                </div>
+              )}
+              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-75 mt-1.5 italic">Sidebet Winner · Game Continues</div>
             </div>
             <div className="flex gap-5 overflow-x-auto w-full pb-2 px-2 scrollbar-hide justify-center">
               {dikitAlert.map((alert: any, aIdx: number) => (
@@ -782,6 +851,17 @@ export default function Display() {
                       {winner.length > 1 ? `${winner.length} WINNERS!` : 'BINGO!'}
                     </h2>
                   </div>
+
+                  {bingoPrize > 0 && (
+                    <div className="mb-4 bg-[#FACC15] text-[#854D0E] px-6 py-1.5 rounded-full font-display text-xl lg:text-2xl tracking-wide shadow-xl shrink-0 tabular-nums">
+                      🏆 PRIZE: {formatPeso(bingoPrize)}
+                      {winner.length > 1 && (
+                        <span className="font-sans text-xs lg:text-sm font-black ml-2 uppercase">
+                          ({formatPeso(bingoPrize / winner.length)} each)
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap justify-center gap-4 mb-6 shrink-0">
                     {winner.map((w: any, idx: number) => {

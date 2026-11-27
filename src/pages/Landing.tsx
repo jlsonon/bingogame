@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { motion } from 'framer-motion';
-import { Dices, PlayCircle, Settings2, Users, Loader } from 'lucide-react';
+import { PlayCircle, Users, Loader } from 'lucide-react';
+import { calculateCardsCost, formatPeso, hasCardPricing } from '../lib/bingo';
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
 
@@ -80,6 +81,9 @@ export default function Landing() {
     }
   };
 
+  const matchedRoom = publicRooms.find(r => r.id === joinCode.trim().toUpperCase()) || (publicRooms.length === 1 ? publicRooms[0] : null);
+  const matchedPricing = matchedRoom && hasCardPricing(matchedRoom) ? matchedRoom : null;
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#FAF7F2]">
       {/* Decorative background balls */}
@@ -141,18 +145,30 @@ export default function Landing() {
                   <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                      <label className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest ml-1">Buy Cards</label>
                      <div className="flex gap-1 sm:gap-1.5 flex-1">
-                        {[0, 1, 2, 3, 4].map(num => (
-                           <button
-                             key={num}
-                             onClick={() => setCardCount(num)}
-                             className={`flex-1 min-w-0 py-2 rounded-xl font-display text-lg sm:text-xl border-2 transition-all ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
-                           >
-                             {num === 0 ? '👀' : num}
-                           </button>
-                        ))}
+                        {[0, 1, 2, 3, 4].map(num => {
+                           const price = matchedPricing && num > 0 ? calculateCardsCost(num, matchedPricing) : 0;
+                           return (
+                              <button
+                                key={num}
+                                onClick={() => setCardCount(num)}
+                                className={`flex-1 min-w-0 py-1.5 rounded-xl border-2 transition-all flex flex-col items-center justify-center leading-none gap-0.5 ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
+                              >
+                                <span className="font-display text-lg sm:text-xl leading-none">{num === 0 ? '👀' : num}</span>
+                                {matchedPricing && num > 0 && (
+                                   <span className={`text-[8px] font-black leading-none tabular-nums ${cardCount === num ? 'text-[#FACC15]' : 'text-[#A19B91]'}`}>
+                                      {formatPeso(price)}
+                                   </span>
+                                )}
+                              </button>
+                           );
+                        })}
                      </div>
                      <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-wider text-center">
-                        {cardCount === 0 ? 'Spectator Mode (No Cards)' : 'Select card count'}
+                        {cardCount === 0
+                           ? 'Spectator Mode (No Cards)'
+                           : matchedPricing
+                             ? `Total: ${formatPeso(calculateCardsCost(cardCount, matchedPricing))}`
+                             : 'Select card count'}
                      </span>
                   </div>
               </div>
@@ -181,9 +197,13 @@ export default function Landing() {
                          }}
                          className="w-full flex items-center justify-between bg-white border border-[#DED9D1] p-3 rounded-xl hover:border-[#0D9488] hover:bg-[#F3EFE9] transition-colors text-left"
                       >
-                         <div>
+                         <div className="min-w-0">
                             <div className="text-sm font-black text-[#3D3A35] uppercase tracking-widest">{room.id}</div>
-                            <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Host: {room.hostName} · {room.mode}</div>
+                            <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider truncate">
+                              Host: {room.hostName} · {room.mode}
+                              {hasCardPricing(room) && ` · ${formatPeso(calculateCardsCost(1, room))}/card`}
+                              {room.bingoPrize > 0 && ` · 🏆 ${formatPeso(room.bingoPrize)}`}
+                            </div>
                          </div>
                          <div className="flex items-center gap-1.5 bg-[#0D9488]/10 text-[#0D9488] px-2 py-1 rounded-full">
                             <span className="w-1.5 h-1.5 bg-[#0D9488] rounded-full animate-pulse" />

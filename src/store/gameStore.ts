@@ -42,6 +42,11 @@ export interface Room {
   players: Record<string, Player>;
   hostId: string;
   prizeText: string;
+  cardPrice: number;
+  bundle2Price: number;
+  bundle4Price: number;
+  dikitPrize: number;
+  bingoPrize: number;
   roundName: string;
   roundNumber: number;
   autoCallSpeed: number;
@@ -60,6 +65,7 @@ export interface Room {
   tiedWinners?: any[];
   stats: {
     totalCardsSold: number;
+    totalPotCollected: number;
     totalPlayersJoined: number;
     gamesPlayed: number;
     winners: { name: string, pattern: string, round: number, time: number }[];

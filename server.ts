@@ -5,7 +5,7 @@ import fs from "fs";
 import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
 import { createServer as createViteServer } from "vite";
-import { checkValidWin, checkDikitSidequest, countDikitPairs, generateRandomCard, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
+import { checkValidWin, checkDikitSidequest, countDikitPairs, generateRandomCard, calculateTotalCollected, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { NATURAL_VOICE_MAP } from "./src/lib/voices";
 import { z } from "zod";
@@ -18,6 +18,11 @@ const SettingsSchema = z.object({
   voiceId: z.string().max(64).optional(),
   roundName: z.string().max(40).optional(),
   prizeText: z.string().max(80).optional(),
+  cardPrice: z.number().min(0).max(1_000_000).optional(),
+  bundle2Price: z.number().min(0).max(1_000_000).optional(),
+  bundle4Price: z.number().min(0).max(1_000_000).optional(),
+  dikitPrize: z.number().min(0).max(10_000_000).optional(),
+  bingoPrize: z.number().min(0).max(10_000_000).optional(),
   patterns: z.array(z.any()).optional(),
   hidePattern: z.boolean().optional()
 });
@@ -74,6 +79,11 @@ interface Room {
   players: Record<string, Player>; // sessionId -> Player
   hostId: string;
   prizeText: string;
+  cardPrice: number;
+  bundle2Price: number;
+  bundle4Price: number;
+  dikitPrize: number;
+  bingoPrize: number;
   roundName: string;
   roundNumber: number;
   autoCallSpeed: number; // in seconds, 0 means manual
@@ -92,11 +102,20 @@ interface Room {
   tiedWinners?: any[];
   stats: {
     totalCardsSold: number;
+    totalPotCollected: number;
     totalPlayersJoined: number;
     gamesPlayed: number;
     winners: { name: string, pattern: string, round: number, time: number }[];
     startTime: number;
   };
+}
+
+function recalculateRoomFinances(room: Room) {
+  room.stats.totalCardsSold = Object.values(room.players).reduce(
+    (sum, p) => sum + (p.activeCards?.length || 0),
+    0
+  );
+  room.stats.totalPotCollected = calculateTotalCollected(room.players, room);
 }
 
 const rooms: Record<string, Room> = {};
@@ -360,6 +379,7 @@ function prepareNextRound(code: string, io: Server, autoStart = true) {
     clearTimeout(nextRoundTimers[code]);
     delete nextRoundTimers[code];
   }
+  recalculateRoomFinances(room);
   io.to(code).emit("room_updated", room);
   if (autoStart && room.autoCallSpeed > 0) {
     startAutoCaller(code, io);
@@ -552,7 +572,12 @@ async function startServer() {
         status: r.status,
         players: Object.values(r.players).filter(p => p.connected).length,
         mode: r.mode,
-        hostName: r.players[r.hostId]?.nickname || 'Unknown'
+        hostName: r.players[r.hostId]?.nickname || 'Unknown',
+        cardPrice: r.cardPrice || 0,
+        bundle2Price: r.bundle2Price || 0,
+        bundle4Price: r.bundle4Price || 0,
+        dikitPrize: r.dikitPrize || 0,
+        bingoPrize: r.bingoPrize || 0
       }))
       .filter(r => r.players > 0);
     res.json(activeRooms);
@@ -615,6 +640,11 @@ io.on("connection", (socket: Socket) => {
         players: {},
         hostId: sessionId,
         prizeText: '',
+        cardPrice: 0,
+        bundle2Price: 0,
+        bundle4Price: 0,
+        dikitPrize: 0,
+        bingoPrize: 0,
         roundName: 'Round 1',
         roundNumber: 1,
         autoCallSpeed: 0,
@@ -631,6 +661,7 @@ io.on("connection", (socket: Socket) => {
         tiedWinners: [],
         stats: {
           totalCardsSold: 0,
+          totalPotCollected: 0,
           totalPlayersJoined: 1, // Host counts as first player
           gamesPlayed: 0,
           winners: [],
@@ -707,7 +738,7 @@ io.on("connection", (socket: Socket) => {
         markedCells
       };
 
-      room.stats.totalCardsSold = Object.values(room.players).reduce((sum, p) => sum + (p.activeCards?.length || 0), 0);
+      recalculateRoomFinances(room);
       registerSessionSocket(io, sessionId, socket.id);
       socket.join(code);
       io.to(code).emit("room_updated", room);
@@ -777,8 +808,8 @@ io.on("connection", (socket: Socket) => {
         if (!['waiting', 'next_round'].includes(room.status)) return;
         player.activeCards = data.cards;
         
-        // Update statistics
-        room.stats.totalCardsSold = Object.values(room.players).reduce((sum, p) => sum + p.activeCards.length, 0);
+        // Update statistics & collected pot
+        recalculateRoomFinances(room);
         
         io.to(code).emit("room_updated", room);
       }
@@ -845,6 +876,12 @@ io.on("connection", (socket: Socket) => {
         if (settings.voiceId) room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
         if (typeof settings.roundName === 'string') room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
         if (typeof settings.prizeText === 'string') room.prizeText = sanitizeText(settings.prizeText, '', 80);
+        if (typeof settings.cardPrice === 'number' && Number.isFinite(settings.cardPrice)) room.cardPrice = Math.max(0, settings.cardPrice);
+        if (typeof settings.bundle2Price === 'number' && Number.isFinite(settings.bundle2Price)) room.bundle2Price = Math.max(0, settings.bundle2Price);
+        if (typeof settings.bundle4Price === 'number' && Number.isFinite(settings.bundle4Price)) room.bundle4Price = Math.max(0, settings.bundle4Price);
+        if (typeof settings.dikitPrize === 'number' && Number.isFinite(settings.dikitPrize)) room.dikitPrize = Math.max(0, settings.dikitPrize);
+        if (typeof settings.bingoPrize === 'number' && Number.isFinite(settings.bingoPrize)) room.bingoPrize = Math.max(0, settings.bingoPrize);
+        recalculateRoomFinances(room);
         if (settings.patterns) {
           room.patterns = sanitizePatterns(settings.patterns);
           let patternsChanged = false;
@@ -941,6 +978,7 @@ io.on("connection", (socket: Socket) => {
            player.activeCards.forEach((_, i) => { resetMarked[i] = [0]; });
            player.markedCells = resetMarked;
          });
+         recalculateRoomFinances(room);
          stopAutoCaller(code);
          io.to(code).emit("room_updated", room);
        }

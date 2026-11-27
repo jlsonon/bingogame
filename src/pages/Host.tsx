@@ -2,10 +2,10 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { PatternVisualizer } from '../components/PatternVisualizer';
-import { Play, Square, Settings, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX } from 'lucide-react';
+import { Play, Square, Settings, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX, Coins } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin } from '../lib/bingo';
+import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
 import { SOUNDS, playSound, playVoiceBall, previewVoice } from '../lib/sounds';
 import { NATURAL_VOICES } from '../lib/voices';
 
@@ -278,6 +278,13 @@ export default function Host() {
 
   if (!room) return null;
 
+  const totalCollected = room.stats?.totalPotCollected ?? calculateTotalCollected(room.players, room);
+  const dikitPrize = room.dikitPrize || 0;
+  const bingoPrize = room.bingoPrize || 0;
+  const totalPrizes = dikitPrize + bingoPrize;
+  const potBalance = totalCollected - totalPrizes;
+  const pricingEnabled = hasCardPricing(room);
+
   const joinUrl = `${window.location.origin}/?code=${room.id}`;
   const displayUrl = `${window.location.origin}/display/${room.id}`;
 
@@ -426,20 +433,29 @@ export default function Host() {
            <div className="mt-auto pt-4 border-t-2 border-[#FAF7F2]">
              <div className="bg-[#FAF7F2] rounded-2xl p-4 border-2 border-[#E8E2D9] space-y-4">
                <div>
-                 <div className="text-[10px] font-black uppercase tracking-widest text-[#0D9488] mb-1.5 flex items-center justify-between">
+                 <div className="text-[10px] font-black uppercase tracking-widest text-[#0D9488] mb-1.5 flex items-center justify-between gap-1">
                    <span>⚔️ Dikit Winners:</span>
-                   {room.dikitWinners && room.dikitWinners.length > 0 && (
-                     <span className="text-[9px] bg-[#0D9488]/15 text-[#0D9488] px-1.5 py-0.5 rounded font-black">
-                       {room.dikitWinners.length}
-                     </span>
-                   )}
+                   <div className="flex items-center gap-1">
+                     {dikitPrize > 0 && (
+                       <span className="text-[9px] bg-[#0D9488] text-white px-1.5 py-0.5 rounded font-black tabular-nums">
+                         {room.dikitWinners && room.dikitWinners.length > 1
+                           ? `${formatPeso(dikitPrize / room.dikitWinners.length)} ea`
+                           : formatPeso(dikitPrize)}
+                       </span>
+                     )}
+                     {room.dikitWinners && room.dikitWinners.length > 0 && (
+                       <span className="text-[9px] bg-[#0D9488]/15 text-[#0D9488] px-1.5 py-0.5 rounded font-black">
+                         {room.dikitWinners.length}
+                       </span>
+                     )}
+                   </div>
                  </div>
                  {room.dikitWinners && room.dikitWinners.length > 0 ? (
                    <div className="space-y-1">
                      {room.dikitWinners.map((w: any, idx: number) => (
                        <div key={w.id || idx} className="bg-white px-2.5 py-1.5 rounded-xl border border-[#E8E2D9] flex items-center justify-between text-xs">
                          <span className="font-black text-[#3D3A35] truncate">{w.playerName || w.name}</span>
-                         <span className="text-[10px] font-bold text-[#0D9488] bg-[#0D9488]/10 px-1.5 py-0.5 rounded">Card {(w.cardIndex ?? 0) + 1}</span>
+                         <span className="text-[10px] font-bold text-[#0D9488] bg-[#0D9488]/10 px-1.5 py-0.5 rounded shrink-0">Card {(w.cardIndex ?? 0) + 1}</span>
                        </div>
                      ))}
                    </div>
@@ -449,13 +465,22 @@ export default function Host() {
                </div>
 
                <div className="pt-2 border-t border-[#E8E2D9]">
-                 <div className="text-[10px] font-black uppercase tracking-widest text-[#EA580C] mb-1.5 flex items-center justify-between">
+                 <div className="text-[10px] font-black uppercase tracking-widest text-[#EA580C] mb-1.5 flex items-center justify-between gap-1">
                    <span>🏆 Bingo Winners:</span>
-                   {room.verifiedWinners && room.verifiedWinners.length > 0 && (
-                     <span className="text-[9px] bg-[#EA580C]/15 text-[#EA580C] px-1.5 py-0.5 rounded font-black">
-                       {room.verifiedWinners.length}
-                     </span>
-                   )}
+                   <div className="flex items-center gap-1">
+                     {bingoPrize > 0 && (
+                       <span className="text-[9px] bg-[#EA580C] text-white px-1.5 py-0.5 rounded font-black tabular-nums">
+                         {room.verifiedWinners && room.verifiedWinners.length > 1
+                           ? `${formatPeso(bingoPrize / room.verifiedWinners.length)} ea`
+                           : formatPeso(bingoPrize)}
+                       </span>
+                     )}
+                     {room.verifiedWinners && room.verifiedWinners.length > 0 && (
+                       <span className="text-[9px] bg-[#EA580C]/15 text-[#EA580C] px-1.5 py-0.5 rounded font-black">
+                         {room.verifiedWinners.length}
+                       </span>
+                     )}
+                   </div>
                  </div>
                  {room.verifiedWinners && room.verifiedWinners.length > 0 ? (
                    <div className="space-y-1">
@@ -591,7 +616,64 @@ export default function Host() {
         </section>
 
         <section className="bg-white border-t-2 lg:border-t-0 lg:border-l-2 border-[#E8E2D9] flex flex-col lg:overflow-hidden min-h-0">
-           <div className="p-5 xl:p-6 border-b-2 border-[#FAF7F2] bg-[#FAF7F2]/30 shrink-0"><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-3">Session Stats</h3><div className="grid grid-cols-2 gap-3"><div className="bg-white p-3.5 rounded-2xl border-2 border-[#E8E2D9] shadow-sm"><Ticket size={18} className="text-[#EA580C] mb-1.5" /><div className="text-2xl font-display tabular-nums">{room.stats.totalCardsSold}</div><div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Cards Sold</div></div><div className="bg-white p-3.5 rounded-2xl border-2 border-[#E8E2D9] shadow-sm"><Users size={18} className="text-[#0D9488] mb-1.5" /><div className="text-2xl font-display tabular-nums">{Object.values(room.players).length}</div><div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider">Players</div></div></div></div>
+           <div className="p-5 xl:p-6 border-b-2 border-[#FAF7F2] bg-[#FAF7F2]/30 shrink-0 space-y-3">
+             <div className="flex items-center justify-between">
+               <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">Session Stats</h3>
+               <button
+                 type="button"
+                 onClick={() => setShowSettings(true)}
+                 className="text-[9px] font-black uppercase text-[#EA580C] bg-[#EA580C]/10 hover:bg-[#EA580C]/20 px-2 py-0.5 rounded-full transition-colors"
+               >
+                 Edit Prices
+               </button>
+             </div>
+             <div className="grid grid-cols-2 gap-3">
+               <div className="bg-white p-3 rounded-2xl border-2 border-[#E8E2D9] shadow-sm">
+                 <Ticket size={16} className="text-[#EA580C] mb-1" />
+                 <div className="text-2xl font-display tabular-nums leading-none">{room.stats.totalCardsSold}</div>
+                 <div className="text-[9px] font-bold text-[#A19B91] uppercase tracking-wider mt-0.5">Cards Sold</div>
+               </div>
+               <div className="bg-white p-3 rounded-2xl border-2 border-[#E8E2D9] shadow-sm">
+                 <Users size={16} className="text-[#0D9488] mb-1" />
+                 <div className="text-2xl font-display tabular-nums leading-none">{Object.values(room.players).length}</div>
+                 <div className="text-[9px] font-bold text-[#A19B91] uppercase tracking-wider mt-0.5">Players</div>
+               </div>
+             </div>
+             <div className="bg-white p-3.5 rounded-2xl border-2 border-[#E8E2D9] shadow-sm space-y-2">
+               <div className="flex items-center justify-between">
+                 <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-wider flex items-center gap-1.5">
+                   <Coins size={13} className="text-[#EA580C]" />
+                   Pot Collected
+                 </span>
+                 <span className="text-xl font-display text-[#3D3A35] tabular-nums leading-none">{formatPeso(totalCollected)}</span>
+               </div>
+               {pricingEnabled && (
+                 <div className="text-[9px] font-bold text-[#A19B91] flex flex-wrap gap-x-2 gap-y-0.5">
+                   <span>1: {formatPeso(calculateCardsCost(1, room))}</span>
+                   <span>· 2: {formatPeso(calculateCardsCost(2, room))}</span>
+                   <span>· 4: {formatPeso(calculateCardsCost(4, room))}</span>
+                 </div>
+               )}
+               <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-[#FAF7F2]">
+                 <div className="bg-[#0D9488]/10 px-2.5 py-1.5 rounded-xl">
+                   <div className="text-[8px] font-black text-[#0D9488] uppercase tracking-wider">⚔️ Dikit Prize</div>
+                   <div className="text-sm font-display text-[#0D9488] tabular-nums">{dikitPrize > 0 ? formatPeso(dikitPrize) : 'Not set'}</div>
+                 </div>
+                 <div className="bg-[#EA580C]/10 px-2.5 py-1.5 rounded-xl">
+                   <div className="text-[8px] font-black text-[#EA580C] uppercase tracking-wider">🏆 Bingo Prize</div>
+                   <div className="text-sm font-display text-[#EA580C] tabular-nums">{bingoPrize > 0 ? formatPeso(bingoPrize) : 'Not set'}</div>
+                 </div>
+               </div>
+               {(totalCollected > 0 || totalPrizes > 0) && (
+                 <div className="flex items-center justify-between text-[10px] pt-1 border-t border-[#FAF7F2]">
+                   <span className="font-bold text-[#7A746B] uppercase tracking-wider">Balance</span>
+                   <span className={`font-black tabular-nums ${potBalance >= 0 ? 'text-[#0D9488]' : 'text-[#EF4444]'}`}>
+                     {potBalance >= 0 ? `+${formatPeso(potBalance)}` : `-${formatPeso(Math.abs(potBalance))}`}
+                   </span>
+                 </div>
+               )}
+             </div>
+           </div>
            <div className="flex-1 p-5 xl:p-6 overflow-y-auto custom-scrollbar bg-[#FAF7F2] min-h-[200px]">
              <div className="flex justify-between items-center mb-4">
                 <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">God View (Live Boards)</h3>
@@ -673,7 +755,125 @@ export default function Host() {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
            <div className="bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl relative border-4 border-[#3D3A35]">
               <div className="flex justify-between items-center mb-8"><h2 className="text-3xl font-black uppercase tracking-tighter">Room Config</h2><button onClick={() => setShowSettings(false)} className="text-[#A19B91] hover:text-[#3D3A35]"><Plus size={24} className="rotate-45" /></button></div>
-              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar"><div className="grid grid-cols-2 gap-4"><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Round Name</label><input value={room.roundName} onChange={e => updateSettings({ roundName: e.target.value })} className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none" maxLength={40} /></div><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Prize Info</label><input value={room.prizeText} onChange={e => updateSettings({ prizeText: e.target.value })} placeholder="Optional prize" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]" maxLength={80} /></div></div><div className="space-y-1.5"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Game Mode</label><div className="flex gap-2">{['Bingo', 'Blackout', 'Dikit'].map(m => (<button key={m} onClick={() => updateSettings({ mode: m })} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${room.mode === m ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#A19B91]'}`}>{m === 'Bingo' ? 'Standard' : m}</button>))}</div></div>
+              <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Round Name</label>
+                    <input value={room.roundName} onChange={e => updateSettings({ roundName: e.target.value })} className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none" maxLength={40} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Prize Note</label>
+                    <input value={room.prizeText} onChange={e => updateSettings({ prizeText: e.target.value })} placeholder="Optional note" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]" maxLength={80} />
+                  </div>
+                </div>
+
+                {/* Card Pricing & Custom Round Prizes (₱) */}
+                <div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest flex items-center gap-1.5">
+                      <Coins size={13} className="text-[#EA580C]" />
+                      Card Pricing &amp; Prizes (₱)
+                    </span>
+                    <span className="text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full tabular-nums">
+                      Pot: {formatPeso(totalCollected)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-[#7A746B] uppercase tracking-wider ml-1">1 Card (₱)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                        value={room.cardPrice || ''}
+                        onChange={e => updateSettings({ cardPrice: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] focus:border-[#0D9488] outline-none tabular-nums"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-[#7A746B] uppercase tracking-wider ml-1">Bundle of 2 (₱)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder={room.cardPrice ? `${room.cardPrice * 2}` : '0'}
+                        value={room.bundle2Price || ''}
+                        onChange={e => updateSettings({ bundle2Price: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] focus:border-[#0D9488] outline-none tabular-nums"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-[#7A746B] uppercase tracking-wider ml-1">Bundle of 4 (₱)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder={room.bundle2Price ? `${room.bundle2Price * 2}` : room.cardPrice ? `${room.cardPrice * 4}` : '0'}
+                        value={room.bundle4Price || ''}
+                        onChange={e => updateSettings({ bundle4Price: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] focus:border-[#0D9488] outline-none tabular-nums"
+                      />
+                    </div>
+                  </div>
+
+                  {pricingEnabled && (
+                    <div className="bg-white rounded-xl border border-[#E8E2D9] px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-[#7A746B]">
+                      <span>1 Card: <strong className="text-[#3D3A35]">{formatPeso(calculateCardsCost(1, room))}</strong></span>
+                      <span>2 Cards: <strong className="text-[#3D3A35]">{formatPeso(calculateCardsCost(2, room))}</strong></span>
+                      <span>3 Cards: <strong className="text-[#3D3A35]">{formatPeso(calculateCardsCost(3, room))}</strong></span>
+                      <span>4 Cards: <strong className="text-[#3D3A35]">{formatPeso(calculateCardsCost(4, room))}</strong></span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#E8E2D9]">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-[#0D9488] uppercase tracking-wider ml-1">⚔️ Dikit Prize (₱)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                        value={room.dikitPrize || ''}
+                        onChange={e => updateSettings({ dikitPrize: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#0D9488]/40 font-black text-sm text-[#0D9488] focus:border-[#0D9488] outline-none tabular-nums"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-[#EA580C] uppercase tracking-wider ml-1">🏆 Bingo Prize (₱)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                        value={room.bingoPrize || ''}
+                        onChange={e => updateSettings({ bingoPrize: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#EA580C]/40 font-black text-sm text-[#EA580C] focus:border-[#EA580C] outline-none tabular-nums"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-[#E8E2D9] px-3 py-2 flex items-center justify-between text-[10px]">
+                    <span className="font-bold text-[#7A746B]">
+                      Prizes: <strong className="text-[#3D3A35] tabular-nums">{formatPeso(totalPrizes)}</strong>
+                    </span>
+                    <span className={`font-black tabular-nums ${potBalance >= 0 ? 'text-[#0D9488]' : 'text-[#EF4444]'}`}>
+                      Balance: {potBalance >= 0 ? `+${formatPeso(potBalance)}` : `-${formatPeso(Math.abs(potBalance))}`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Game Mode</label>
+                  <div className="flex gap-2">
+                    {['Bingo', 'Blackout', 'Dikit'].map(m => (
+                      <button key={m} onClick={() => updateSettings({ mode: m })} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${room.mode === m ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#A19B91]'}`}>
+                        {m === 'Bingo' ? 'Standard' : m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                   {room.mode === "Bingo" && (
                     <div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]">
                       <div className="space-y-2">
@@ -889,7 +1089,12 @@ export default function Host() {
                 3+ Bingo Winners Tie!
               </h2>
               <p className="text-sm sm:text-base font-bold opacity-90 mt-1">
-                {room.verifiedWinners.length} cards achieved Bingo on this call. Choose to Settle or Continue:
+                {room.verifiedWinners.length} cards achieved Bingo on this call.
+                {bingoPrize > 0 && (
+                  <span className="ml-1.5 inline-block bg-black/20 px-2.5 py-0.5 rounded-full">
+                    Prize: {formatPeso(bingoPrize)} ({formatPeso(bingoPrize / room.verifiedWinners.length)} each)
+                  </span>
+                )}
               </p>
             </div>
 
@@ -961,6 +1166,12 @@ export default function Host() {
                 {dikitAlert.length > 1 ? 'MULTIPLE DIKIT WINS!' : 'Dikit Sidebet Win!'}
               </div>
               <div className="text-xl sm:text-2xl font-black italic">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div>
+              {dikitPrize > 0 && (
+                <div className="inline-block mt-1.5 bg-white text-[#0D9488] px-3 py-0.5 rounded-full text-xs font-black tabular-nums shadow-sm">
+                  Prize: {formatPeso(dikitPrize)}
+                  {dikitAlert.length > 1 && ` (${formatPeso(dikitPrize / dikitAlert.length)} each)`}
+                </div>
+              )}
             </div>
             <div className="flex gap-3 overflow-x-auto w-full pb-2 px-1 snap-x custom-scrollbar justify-center">
               {dikitAlert.map((alert: any, aIdx: number) => (
@@ -1023,9 +1234,15 @@ export default function Host() {
                 <h2 className="text-4xl sm:text-5xl font-display text-[#3D3A35] mb-1 uppercase italic tracking-tighter shrink-0">
                   {winner.length > 1 ? `${winner.length} BINGO WINNERS!` : 'BINGO WINNER!'}
                 </h2>
-                <p className="text-lg sm:text-2xl font-black text-[#0D9488] mb-4 leading-tight shrink-0">
+                <p className="text-lg sm:text-2xl font-black text-[#0D9488] mb-2 leading-tight shrink-0">
                   {winner.map((w: any) => w.playerName).join(', ')}
                 </p>
+                {bingoPrize > 0 && (
+                  <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-2.5 px-4 py-1 rounded-full bg-[#EA580C]/10 border border-[#EA580C]/30 text-sm font-black text-[#EA580C] tabular-nums shrink-0">
+                    🏆 Prize: {formatPeso(bingoPrize)}
+                    {winner.length > 1 && <span className="text-xs font-bold">({formatPeso(bingoPrize / winner.length)} each)</span>}
+                  </div>
+                )}
                 {room.status === 'next_round' && (
                   <p className="text-[11px] font-black uppercase tracking-widest text-[#A19B91] mb-3 shrink-0">
                     Next round starts in <Countdown endsAt={room.nextRoundEndsAt} />
