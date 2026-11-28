@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
+import { io as createSocketClient } from "socket.io-client";
 import { checkValidWin, checkDikitSidequest, countDikitPairs, generateRandomCard, calculateTotalCollected, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { DEFAULT_VOICE_ID, NATURAL_VOICE_MAP, resolveVoiceId } from "./src/lib/voices";
@@ -231,8 +232,133 @@ function registerSessionSocket(io: Server, sessionId: string, socketId: string) 
   sessionSockets[sessionId] = socketId;
 }
 
+// --- WEBSITE PATTERN SYNC CONFIG ---
+const SYNC_CONFIG_FILE = path.join(DATA_DIR, "sync-config.json");
+interface SyncConfig {
+  syncUrl: string;
+  lastSyncedAt: number | null;
+}
+let syncConfig: SyncConfig = {
+  syncUrl: (process.env.BINGO_SYNC_URL || "").trim(),
+  lastSyncedAt: null,
+};
+
+function loadSyncConfig() {
+  try {
+    if (fs.existsSync(SYNC_CONFIG_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(SYNC_CONFIG_FILE, "utf-8"));
+      if (parsed && typeof parsed.syncUrl === "string") {
+        syncConfig = {
+          syncUrl: parsed.syncUrl.trim(),
+          lastSyncedAt: typeof parsed.lastSyncedAt === "number" ? parsed.lastSyncedAt : null,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Could not load sync-config.json:", err);
+  }
+}
+
+function saveSyncConfig() {
+  try {
+    fs.writeFileSync(SYNC_CONFIG_FILE, JSON.stringify(syncConfig, null, 2));
+  } catch (err) {
+    console.warn("Could not save sync-config.json:", err);
+  }
+}
+
+function normalizeWebsiteOrigin(rawUrl: string): string | null {
+  try {
+    const trimmed = rawUrl.trim();
+    if (!trimmed) return null;
+    const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(withProto);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function mergePatternsIntoLibrary(incoming: any[], ioServer?: Server): { added: number; updated: number; total: number } {
+  let added = 0;
+  let updated = 0;
+  if (!Array.isArray(incoming)) {
+    return { added: 0, updated: 0, total: globalPatternLibrary.length };
+  }
+  for (const raw of incoming) {
+    const sanitized = sanitizeCustomPattern(raw);
+    if (!sanitized) continue;
+    const idx = globalPatternLibrary.findIndex(p => p.id === sanitized.id);
+    if (idx !== -1) {
+      globalPatternLibrary[idx] = sanitized;
+      updated++;
+    } else {
+      globalPatternLibrary.push(sanitized);
+      added++;
+    }
+  }
+  if (added > 0 || updated > 0) {
+    saveGlobalPatterns();
+    if (ioServer) {
+      ioServer.emit("global_patterns_updated", globalPatternLibrary);
+    }
+  }
+  return { added, updated, total: globalPatternLibrary.length };
+}
+
+async function fetchRemoteWebsitePatterns(origin: string): Promise<BingoPattern[]> {
+  // 1. Try fast HTTP JSON endpoint (/api/patterns) first
+  try {
+    const res = await fetch(`${origin}/api/patterns`, {
+      signal: AbortSignal.timeout(5000),
+      headers: { Accept: "application/json" },
+    });
+    if (res.ok) {
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          return data;
+        }
+      }
+    }
+  } catch {
+    // Fall back to Socket.IO below
+  }
+
+  // 2. Fallback: pull directly over Socket.IO (works even on older website builds)
+  return new Promise<BingoPattern[]>((resolve, reject) => {
+    const client = createSocketClient(origin, {
+      timeout: 5500,
+      reconnection: false,
+      transports: ["websocket", "polling"],
+    });
+    let settled = false;
+    const finish = (err: Error | null, patterns?: BingoPattern[]) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { client.close(); } catch {}
+      if (err) reject(err);
+      else resolve(patterns || []);
+    };
+    const timer = setTimeout(() => finish(new Error(`Timed out connecting to ${origin}`)), 6500);
+
+    client.on("connect", () => {
+      client.emit("get_global_patterns", (patterns: BingoPattern[]) => {
+        finish(null, Array.isArray(patterns) ? patterns : []);
+      });
+    });
+    client.on("connect_error", (err: Error) => {
+      finish(new Error(`Could not connect to ${origin}: ${err.message}`));
+    });
+  });
+}
+
 loadGlobalPatterns();
 loadHOF();
+loadSyncConfig();
 // ----------------------------------
 
 function generateRoomCode(): string {
@@ -507,6 +633,7 @@ function emitRoom(io: Server, code: string) {
 
 async function startServer() {
   const app = express();
+  app.use(express.json({ limit: "1mb" }));
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
@@ -653,6 +780,70 @@ async function startServer() {
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.get("/api/patterns", (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json(globalPatternLibrary);
+  });
+
+  app.get("/api/sync-patterns/config", (req, res) => {
+    res.json({
+      syncUrl: syncConfig.syncUrl,
+      lastSyncedAt: syncConfig.lastSyncedAt,
+      patternCount: globalPatternLibrary.length,
+    });
+  });
+
+  app.post("/api/sync-patterns", async (req, res) => {
+    try {
+      // Direct JSON import (e.g., pasted or imported from website Copy Patterns)
+      if (Array.isArray(req.body?.patterns)) {
+        const result = mergePatternsIntoLibrary(req.body.patterns, io);
+        syncConfig.lastSyncedAt = Date.now();
+        saveSyncConfig();
+        return res.json({
+          ok: true,
+          mode: "import",
+          ...result,
+          patterns: globalPatternLibrary,
+        });
+      }
+
+      const requestedUrl = typeof req.body?.url === "string" ? req.body.url : syncConfig.syncUrl;
+      const origin = normalizeWebsiteOrigin(requestedUrl || "");
+      if (!origin) {
+        return res.status(400).json({ ok: false, error: "Please enter a valid website URL (e.g. https://your-site.up.railway.app)" });
+      }
+
+      // Prevent syncing with self
+      const selfHost = req.headers.host ? `http://${req.headers.host}` : `http://localhost:${PORT}`;
+      if (origin === selfHost || origin === `http://localhost:${PORT}` || origin === `http://127.0.0.1:${PORT}`) {
+        return res.status(400).json({ ok: false, error: "Enter your live hosted website URL, not localhost." });
+      }
+
+      syncConfig.syncUrl = origin;
+      saveSyncConfig();
+
+      const remotePatterns = await fetchRemoteWebsitePatterns(origin);
+      const result = mergePatternsIntoLibrary(remotePatterns, io);
+      syncConfig.lastSyncedAt = Date.now();
+      saveSyncConfig();
+
+      return res.json({
+        ok: true,
+        mode: "website",
+        syncUrl: origin,
+        fetched: remotePatterns.length,
+        ...result,
+        patterns: globalPatternLibrary,
+      });
+    } catch (err: any) {
+      return res.status(502).json({
+        ok: false,
+        error: err?.message || "Could not reach website to sync patterns",
+      });
+    }
   });
 
   app.get("/api/rooms", (req, res) => {
@@ -1458,6 +1649,25 @@ io.on("connection", (socket: Socket) => {
   httpServer.listen(PORT, "0.0.0.0", () => {
     const lan = getLanNetworkInfo(PORT);
     console.log(`Lucky Bingo server running on http://localhost:${PORT} (Wi-Fi LAN: ${lan.lanUrl})`);
+
+    // Background auto-sync from live website when online (silently skipped on offline Wi-Fi)
+    if (syncConfig.syncUrl) {
+      const origin = normalizeWebsiteOrigin(syncConfig.syncUrl);
+      if (origin) {
+        fetchRemoteWebsitePatterns(origin)
+          .then((remote) => {
+            const res = mergePatternsIntoLibrary(remote, io);
+            syncConfig.lastSyncedAt = Date.now();
+            saveSyncConfig();
+            if (res.added > 0 || res.updated > 0) {
+              console.log(`Auto-synced ${res.added} new / ${res.updated} updated custom patterns from ${origin}`);
+            }
+          })
+          .catch(() => {
+            // Expected when running 100% offline on local Wi-Fi
+          });
+      }
+    }
   });
 }
 

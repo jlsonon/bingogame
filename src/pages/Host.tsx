@@ -2,13 +2,13 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { PatternVisualizer, PatternThumb, getPatternDisplayCells } from '../components/PatternVisualizer';
-import { Play, Square, Settings, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX, Coins, Swords, Pencil, Trash2, Wifi } from 'lucide-react';
+import { Play, Square, Settings, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX, Coins, Swords, Pencil, Trash2, Wifi, RefreshCw, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
 import { SOUNDS, playSound, playVoiceBall, previewVoice } from '../lib/sounds';
 import { NATURAL_VOICES, resolveVoiceId } from '../lib/voices';
-import { useLanJoinBase, copyTextSafe } from '../lib/lan';
+import { useLanJoinBase, copyTextSafe, isLocalhostOrigin } from '../lib/lan';
 
 const DELETED_PATTERN_IDENTIFIERS = new Set([
   'letter-x', 'letter-t', 'letter-l', 'dikit',
@@ -106,6 +106,11 @@ export default function Host() {
   const [customCells, setCustomCells] = useState<number[]>([12]);
   const [activeCustomId, setActiveCustomId] = useState<string>(() => `custom-${Date.now()}`);
   const [saveFeedback, setSaveFeedback] = useState<string>('');
+  const [syncUrl, setSyncUrl] = useState<string>('');
+  const [syncingWebsite, setSyncingWebsite] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string>('');
+  const [showImportBox, setShowImportBox] = useState(false);
+  const [importText, setImportText] = useState('');
   const resetConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -157,6 +162,17 @@ export default function Host() {
       if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
     };
   }, []);
+
+  // Load saved website pattern-sync URL when Settings opens
+  useEffect(() => {
+    if (!showSettings) return;
+    fetch('/api/sync-patterns/config')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.syncUrl) setSyncUrl(prev => prev || data.syncUrl);
+      })
+      .catch(() => {});
+  }, [showSettings]);
 
   // Automatic Natural Voice Calling & Ball Reveal on Ball Call
   useEffect(() => {
@@ -415,6 +431,84 @@ export default function Host() {
     }
     if (activeCustomId === id) {
       startNewCustomPattern();
+    }
+  };
+
+  const activateSyncedPatterns = (syncedPatterns: BingoPattern[]) => {
+    if (!Array.isArray(syncedPatterns) || syncedPatterns.length === 0) return;
+    const map = new Map<string, BingoPattern>();
+    room.patterns.forEach(p => map.set(p.id, p));
+    syncedPatterns.forEach(p => {
+      if (p && p.id && !isDeletedPattern(p)) map.set(p.id, p);
+    });
+    updateSettings({ patterns: Array.from(map.values()) });
+  };
+
+  const handleSyncFromWebsite = async () => {
+    if (!syncUrl.trim()) {
+      setSyncStatus('Enter your live website URL first.');
+      return;
+    }
+    setSyncingWebsite(true);
+    setSyncStatus('');
+    try {
+      const res = await fetch('/api/sync-patterns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: syncUrl.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setSyncStatus(data?.error || 'Could not reach website.');
+      } else {
+        if (data.syncUrl) setSyncUrl(data.syncUrl);
+        if (Array.isArray(data.patterns)) activateSyncedPatterns(data.patterns);
+        setSyncStatus(
+          data.fetched > 0
+            ? `Synced ${data.fetched} custom pattern${data.fetched === 1 ? '' : 's'}! Auto-sync enabled.`
+            : 'Connected to website, but it has 0 saved custom patterns right now.'
+        );
+      }
+    } catch {
+      setSyncStatus('Sync failed (check internet connection & URL).');
+    } finally {
+      setSyncingWebsite(false);
+    }
+  };
+
+  const handleCopyPatternsBackup = async () => {
+    const customOnly = libraryPatterns.filter(p => p.type === 'custom');
+    const ok = await copyTextSafe(JSON.stringify(customOnly, null, 2));
+    setSyncStatus(
+      ok
+        ? `Copied ${customOnly.length} custom pattern${customOnly.length === 1 ? '' : 's'} to clipboard!`
+        : 'Could not copy to clipboard.'
+    );
+  };
+
+  const handleImportPatternsJson = async () => {
+    try {
+      const parsed = JSON.parse(importText.trim());
+      if (!Array.isArray(parsed)) {
+        setSyncStatus('Paste a valid JSON array of patterns.');
+        return;
+      }
+      const res = await fetch('/api/sync-patterns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patterns: parsed }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setSyncStatus(data?.error || 'Import failed.');
+      } else {
+        if (Array.isArray(data.patterns)) activateSyncedPatterns(data.patterns);
+        setImportText('');
+        setShowImportBox(false);
+        setSyncStatus(`Imported ${data.added + data.updated} custom pattern${data.added + data.updated === 1 ? '' : 's'}!`);
+      }
+    } catch {
+      setSyncStatus('Invalid JSON — copy patterns from your website first.');
     }
   };
 
@@ -1107,6 +1201,77 @@ export default function Host() {
                             )}
                           </button>
                         </div>
+                      </div>
+
+                      <div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">Website Pattern Sync</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={handleCopyPatternsBackup}
+                              className="text-[10px] font-black uppercase text-[#3D3A35] bg-white hover:bg-[#E8E2D9] border border-[#DED9D1] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1"
+                              title="Copy all custom patterns as JSON backup"
+                            >
+                              <Copy size={11} />Copy Backup
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowImportBox(v => !v)}
+                              className="text-[10px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1"
+                              title="Import custom patterns JSON"
+                            >
+                              <Upload size={11} />Import
+                            </button>
+                          </div>
+                        </div>
+
+                        {isLocalhostOrigin() && (
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              value={syncUrl}
+                              onChange={e => setSyncUrl(e.target.value)}
+                              placeholder="https://your-site.up.railway.app"
+                              aria-label="Live Website URL for auto-syncing custom patterns"
+                              className="flex-1 min-w-0 bg-white px-3 py-2 rounded-xl border-2 border-[#E8E2D9] font-semibold text-xs text-[#3D3A35] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none"
+                            />
+                            <button
+                              type="button"
+                              disabled={syncingWebsite}
+                              onClick={handleSyncFromWebsite}
+                              className="px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] disabled:opacity-60 text-white font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0 transition-colors"
+                            >
+                              <RefreshCw size={12} className={syncingWebsite ? 'animate-spin' : ''} />
+                              {syncingWebsite ? 'Syncing...' : 'Sync Now'}
+                            </button>
+                          </div>
+                        )}
+
+                        {showImportBox && (
+                          <div className="space-y-2 pt-1">
+                            <textarea
+                              value={importText}
+                              onChange={e => setImportText(e.target.value)}
+                              rows={3}
+                              placeholder="Paste patterns JSON copied from your website..."
+                              className="w-full bg-white p-2.5 rounded-xl border-2 border-[#E8E2D9] font-mono text-[11px] text-[#3D3A35] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleImportPatternsJson}
+                              className="w-full py-2 rounded-xl bg-[#3D3A35] hover:bg-black text-white font-black text-[10px] uppercase tracking-wider transition-colors"
+                            >
+                              Import Custom Patterns
+                            </button>
+                          </div>
+                        )}
+
+                        {syncStatus && (
+                          <p className="text-[11px] font-bold text-[#0F766E] bg-[#0D9488]/10 px-3 py-1.5 rounded-xl">
+                            {syncStatus}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
