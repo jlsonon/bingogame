@@ -5,7 +5,7 @@ import { PatternVisualizer } from '../components/PatternVisualizer';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { getBallLetter, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
-import { Trophy, Users, PlayCircle, Monitor, Eye, Coins, Volume2, VolumeX } from 'lucide-react';
+import { Trophy, Users, PlayCircle, Monitor, Eye, Coins, Volume2, VolumeX, Loader, Swords } from 'lucide-react';
 import { SOUNDS, playSound, playVoiceBall } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
@@ -47,6 +47,7 @@ export default function Display() {
   const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [audioGateDismissed, setAudioGateDismissed] = useState(false);
+  const [qrFailed, setQrFailed] = useState(false);
   const [revealedBall, setRevealedBall] = useState<number | null>(() => latestBall || null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -241,8 +242,8 @@ export default function Display() {
           return;
         }
         const particleCount = 50 * (timeLeft / duration);
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }, disableForReducedMotion: true });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }, disableForReducedMotion: true });
       }, 250);
     }
     return () => {
@@ -264,9 +265,37 @@ export default function Display() {
   const bingoPrize = room.bingoPrize || 0;
   const showFinanceBar = pricingEnabled || totalCollected > 0 || dikitPrize > 0 || bingoPrize > 0;
 
+  const offlineBanner = !socket?.connected ? (
+    <div role="status" className="fixed top-3 left-1/2 -translate-x-1/2 z-[140] bg-[#EA580C] text-white px-5 py-2 rounded-full shadow-2xl border-2 border-white flex items-center gap-2 text-xs font-black uppercase tracking-wider">
+      <Loader size={14} className="animate-spin" />
+      <span>Connection lost — reconnecting TV display...</span>
+    </div>
+  ) : null;
+
+  const audioGateModal = !audioEnabled && !audioGateDismissed ? (
+    <div className="fixed inset-0 z-[100] bg-[#3D3A35]/70 backdrop-blur-md flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="TV Display Audio Setup">
+      <div className="bg-white rounded-[36px] border-4 border-[#3D3A35] p-8 max-w-md w-full text-center shadow-2xl flex flex-col gap-4">
+        <div className="w-16 h-16 mx-auto bg-[#EA580C]/10 text-[#EA580C] rounded-2xl flex items-center justify-center">
+          <Monitor size={36} />
+        </div>
+        <div>
+          <h2 className="text-2xl font-display uppercase tracking-tight text-[#3D3A35]">TV Display Sound</h2>
+          <p className="text-sm font-medium text-[#6B655D] mt-1">Enable voice calling on this TV, or run silent if the Host device is announcing.</p>
+        </div>
+        <button type="button" onClick={enableAudio} className="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white px-6 py-4 rounded-2xl font-black text-lg shadow-[0_5px_0_#9A3412] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2.5 uppercase tracking-wider">
+          <Volume2 size={22} />Enable TV Announcer
+        </button>
+        <button type="button" onClick={() => setAudioGateDismissed(true)} className="w-full bg-[#FAF7F2] hover:bg-[#E8E2D9] border-2 border-[#DED9D1] text-[#3D3A35] px-6 py-3.5 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+          <VolumeX size={18} />Silent TV (Display Only)
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (room.status === 'waiting') {
     return (
-      <div className="h-screen max-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col overflow-hidden relative p-5 sm:p-6 lg:p-8 paper-texture">
+      <div className="min-h-screen lg:h-screen lg:max-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col lg:overflow-hidden relative p-5 sm:p-6 lg:p-8 paper-texture">
+        {offlineBanner}
         {audioGateDismissed && (
           <button
             type="button"
@@ -319,13 +348,13 @@ export default function Display() {
                   </span>
                 )}
                 {dikitPrize > 0 && (
-                  <span className="bg-[#0D9488]/15 text-[#0D9488] px-3 py-1 rounded-xl text-xs lg:text-sm font-black tabular-nums">
-                    ⚔️ Dikit: {formatPeso(dikitPrize)}
+                  <span className="bg-[#0D9488]/15 text-[#0F766E] px-3 py-1 rounded-xl text-xs lg:text-sm font-black tabular-nums inline-flex items-center gap-1.5">
+                    <Swords size={14} aria-hidden="true" /> Dikit: {formatPeso(dikitPrize)}
                   </span>
                 )}
                 {bingoPrize > 0 && (
-                  <span className="bg-[#EA580C]/15 text-[#EA580C] px-3 py-1 rounded-xl text-xs lg:text-sm font-black tabular-nums">
-                    🏆 Bingo: {formatPeso(bingoPrize)}
+                  <span className="bg-[#EA580C]/15 text-[#C2410C] px-3 py-1 rounded-xl text-xs lg:text-sm font-black tabular-nums inline-flex items-center gap-1.5">
+                    <Trophy size={14} aria-hidden="true" /> Bingo: {formatPeso(bingoPrize)}
                   </span>
                 )}
               </div>
@@ -333,11 +362,18 @@ export default function Display() {
           )}
 
           {/* Main 2-Column Lobby Area (Fits cleanly within 720p, 900p, 1080p) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 w-full flex-1 min-h-0 max-h-[540px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 w-full flex-1 min-h-0 lg:max-h-[540px]">
             <div className="bg-white rounded-[40px] lg:rounded-[48px] p-6 lg:p-8 border-4 border-[#E8E2D9] shadow-xl flex flex-col items-center justify-center text-center min-h-0">
               <h3 className="text-lg lg:text-xl font-black uppercase tracking-tight mb-4 shrink-0">Scan to Join</h3>
               <div className="bg-[#FAF7F2] p-4 lg:p-5 rounded-[32px] border-4 border-white shadow-inner mb-4 shrink-0">
-                <img src={qrUrl} alt="Join QR" className="w-44 h-44 lg:w-56 lg:h-56 xl:w-64 xl:h-64 mix-blend-multiply" />
+                {qrFailed ? (
+                  <div className="w-44 h-44 lg:w-56 lg:h-56 xl:w-64 xl:h-64 flex flex-col items-center justify-center p-4 text-center">
+                    <span className="text-xs font-bold uppercase tracking-widest text-[#6B655D] mb-2">Join at</span>
+                    <span className="text-sm font-black text-[#3D3A35] break-all">{window.location.host}</span>
+                  </div>
+                ) : (
+                  <img src={qrUrl} alt="Join QR" onError={() => setQrFailed(true)} className="w-44 h-44 lg:w-56 lg:h-56 xl:w-64 xl:h-64 mix-blend-multiply" />
+                )}
               </div>
               <div className="space-y-1 shrink-0">
                 <p className="text-xs lg:text-sm font-bold text-[#6B655D] uppercase tracking-widest">Or enter code</p>
@@ -381,31 +417,14 @@ export default function Display() {
           </div>
         </div>
 
-        {!audioEnabled && !audioGateDismissed && (
-          <div className="fixed inset-0 z-[100] bg-[#3D3A35]/70 backdrop-blur-md flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="TV Display Audio Setup">
-            <div className="bg-white rounded-[36px] border-4 border-[#3D3A35] p-8 max-w-md w-full text-center shadow-2xl flex flex-col gap-4">
-              <div className="w-16 h-16 mx-auto bg-[#EA580C]/10 text-[#EA580C] rounded-2xl flex items-center justify-center">
-                <Monitor size={36} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-display uppercase tracking-tight text-[#3D3A35]">TV Display Sound</h2>
-                <p className="text-sm font-medium text-[#6B655D] mt-1">Enable voice calling on this TV, or run silent if the Host device is announcing.</p>
-              </div>
-              <button type="button" onClick={enableAudio} className="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white px-6 py-4 rounded-2xl font-black text-lg shadow-[0_5px_0_#9A3412] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2.5 uppercase tracking-wider">
-                <Volume2 size={22} />Enable TV Announcer
-              </button>
-              <button type="button" onClick={() => setAudioGateDismissed(true)} className="w-full bg-[#FAF7F2] hover:bg-[#E8E2D9] border-2 border-[#DED9D1] text-[#3D3A35] px-6 py-3.5 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2">
-                <VolumeX size={18} />Silent TV (Display Only)
-              </button>
-            </div>
-          </div>
-        )}
+        {audioGateModal}
       </div>
     );
   }
 
   return (
-    <div className="h-screen max-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col overflow-hidden relative">
+    <div className="min-h-screen lg:h-screen lg:max-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col lg:overflow-hidden relative">
+      {offlineBanner}
       <AnimatePresence>
         {emotes.map((emote) => {
           const randomX = (parseInt(emote.id.replace(/[^0-9]/g, '') || '0') % 80) + 10;
@@ -438,10 +457,10 @@ export default function Display() {
         {showPatternFlash && (
           <motion.div initial={{ opacity: 0, scale: 1.1 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed inset-0 z-[105] bg-[#3D3A35]/95 backdrop-blur-xl flex flex-col items-center justify-center text-white p-8 text-center">
             <div className="mb-6 shrink-0">
-              <div className="text-base lg:text-xl font-black uppercase tracking-[0.4em] text-[#EA580C] mb-2">
+              <div className="text-base lg:text-xl font-black uppercase tracking-[0.35em] text-[#FACC15] mb-2">
                 {room.mode === 'Bingo' ? `${room.patterns.length} Active Winning Patterns` : 'Target Mode'}
               </div>
-              <h2 className="font-display text-6xl lg:text-8xl uppercase tracking-tighter italic">
+              <h2 className="font-display text-6xl lg:text-8xl uppercase tracking-tight">
                 {room.mode === 'Bingo' ? 'Standard Bingo' : room.mode}
               </h2>
             </div>
@@ -450,30 +469,12 @@ export default function Display() {
                 <PatternVisualizer patterns={room.patterns} size="lg" />
               </div>
             )}
-            <div className="mt-8 text-xl font-bold opacity-60 uppercase tracking-widest animate-pulse shrink-0">Round Starting Now</div>
+            <div className="mt-8 text-xl font-bold text-white/80 uppercase tracking-widest animate-pulse shrink-0">Round Starting Now</div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {!audioEnabled && !audioGateDismissed && (
-        <div className="fixed inset-0 z-[100] bg-[#3D3A35]/70 backdrop-blur-md flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="TV Display Audio Setup">
-          <div className="bg-white rounded-[36px] border-4 border-[#3D3A35] p-8 max-w-md w-full text-center shadow-2xl flex flex-col gap-4">
-            <div className="w-16 h-16 mx-auto bg-[#EA580C]/10 text-[#EA580C] rounded-2xl flex items-center justify-center">
-              <Monitor size={36} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-display uppercase tracking-tight text-[#3D3A35]">TV Display Sound</h2>
-              <p className="text-sm font-medium text-[#6B655D] mt-1">Enable voice calling on this TV, or run silent if the Host device is announcing.</p>
-            </div>
-            <button type="button" onClick={enableAudio} className="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white px-6 py-4 rounded-2xl font-black text-lg shadow-[0_5px_0_#9A3412] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2.5 uppercase tracking-wider">
-              <Volume2 size={22} />Enable TV Announcer
-            </button>
-            <button type="button" onClick={() => setAudioGateDismissed(true)} className="w-full bg-[#FAF7F2] hover:bg-[#E8E2D9] border-2 border-[#DED9D1] text-[#3D3A35] px-6 py-3.5 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2">
-              <VolumeX size={18} />Silent TV (Display Only)
-            </button>
-          </div>
-        </div>
-      )}
+      {audioGateModal}
 
       <header className="h-16 lg:h-20 bg-white border-b-4 border-[#E8E2D9] px-6 lg:px-10 flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-4">
@@ -508,35 +509,49 @@ export default function Display() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_380px] gap-4 lg:gap-6 min-h-0 relative overflow-hidden">
-        {room.dikitFight && room.dikitFight.status === 'active' && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-[#0D9488] text-white px-6 py-2.5 rounded-full shadow-2xl border-4 border-white flex items-center gap-3 animate-pulse max-w-[90vw]">
-            <span className="text-xl shrink-0">⚔️</span>
-            <span className="font-black text-sm lg:text-lg uppercase tracking-wider truncate">
-              {room.dikitFight.roundBingoPending
-                ? `BINGO WON! DIKIT FIGHT IN PROGRESS (${room.dikitFight.contenders.map(c => c.playerName).join(' vs ')})`
-                : `DIKIT FIGHT IN PROGRESS: ${room.dikitFight.contenders.map(c => c.playerName).join(' vs ')}`}
-            </span>
+      <main className="flex-1 p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_380px] gap-4 lg:gap-6 min-h-0 relative lg:overflow-hidden">
+        {/* Shared non-colliding top-center alert stack */}
+        {(room.dikitFight?.status === 'active' || nearWinAlert) && (
+          <div className="absolute top-3 inset-x-4 z-30 pointer-events-none flex flex-col items-center gap-2">
+            {room.dikitFight && room.dikitFight.status === 'active' && (
+              <div className="bg-[#0D9488] text-white px-6 py-2 rounded-full shadow-2xl border-4 border-white flex items-center gap-2.5 animate-pulse max-w-[90vw]">
+                <Swords size={18} className="shrink-0" aria-hidden="true" />
+                <span className="font-black text-sm lg:text-base uppercase tracking-wider truncate">
+                  {room.dikitFight.roundBingoPending
+                    ? `BINGO WON! DIKIT FIGHT IN PROGRESS (${room.dikitFight.contenders.map(c => c.playerName).join(' vs ')})`
+                    : `DIKIT FIGHT IN PROGRESS: ${room.dikitFight.contenders.map(c => c.playerName).join(' vs ')}`}
+                </span>
+              </div>
+            )}
+            <AnimatePresence>
+              {nearWinAlert && (
+                <motion.div
+                  initial={{ opacity: 0, y: -16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -16 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex items-center gap-3 bg-[#3D3A35] text-white pl-4 pr-6 py-2 rounded-full shadow-2xl border-2 border-[#FACC15] max-w-[92%]"
+                >
+                  <span className="bg-[#EA580C] text-white px-3 py-0.5 rounded-full font-black text-xs lg:text-sm uppercase tracking-widest shrink-0">
+                    1 Away!
+                  </span>
+                  <span className="text-base lg:text-xl font-black uppercase tracking-tight truncate">{nearWinAlert.playerName}</span>
+                  <span className="text-xs lg:text-sm font-bold text-[#FACC15] uppercase tracking-wider shrink-0">on {nearWinAlert.patternName}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
         <AnimatePresence>
           {nearWinAlert && (
             <motion.div
-              initial={{ opacity: 0, y: -24 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -24 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
-              className="absolute inset-2 z-20 pointer-events-none rounded-[40px] shadow-[inset_0_0_48px_rgba(234,88,12,0.45)] border-4 border-[#EA580C]/70 flex items-start justify-center pt-3"
-            >
-              <div className="relative z-10 flex items-center gap-3 bg-[#3D3A35] text-white pl-4 pr-6 py-2.5 rounded-full shadow-2xl border-2 border-[#FACC15] max-w-[92%]">
-                <span className="bg-[#EA580C] text-white px-3 py-1 rounded-full font-black text-xs lg:text-sm uppercase tracking-widest shrink-0">
-                  1 Away!
-                </span>
-                <span className="text-lg lg:text-2xl font-black uppercase tracking-tight truncate">{nearWinAlert.playerName}</span>
-                <span className="text-xs lg:text-base font-bold text-[#FACC15] uppercase tracking-wider shrink-0">on {nearWinAlert.patternName}</span>
-              </div>
-            </motion.div>
+              className="absolute inset-2 z-20 pointer-events-none rounded-[40px] shadow-[inset_0_0_48px_rgba(234,88,12,0.45)] border-4 border-[#EA580C]/70"
+            />
           )}
         </AnimatePresence>
 
@@ -684,7 +699,14 @@ export default function Display() {
           <div className="bg-white rounded-[36px] p-5 border-4 border-[#E8E2D9] shadow-lg text-center flex flex-col items-center shrink-0">
             <h3 className="text-sm font-black text-[#3D3A35] uppercase tracking-widest mb-3">Scan to Play</h3>
             <div className="bg-[#FAF7F2] p-3 rounded-[24px] border-2 border-[#E8E2D9] mb-3 shadow-inner">
-              <img src={qrUrl} alt="Join QR Code" className="w-36 h-36 xl:w-44 xl:h-44 mix-blend-multiply" />
+              {qrFailed ? (
+                <div className="w-36 h-36 xl:w-44 xl:h-44 flex flex-col items-center justify-center p-3 text-center">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#6B655D] mb-1">Join at</span>
+                  <span className="text-xs font-black text-[#3D3A35] break-all">{window.location.host}</span>
+                </div>
+              ) : (
+                <img src={qrUrl} alt="Join QR Code" onError={() => setQrFailed(true)} className="w-36 h-36 xl:w-44 xl:h-44 mix-blend-multiply" />
+              )}
             </div>
             <p className="text-[#6B655D] font-bold text-[11px] uppercase tracking-wider mb-1">Or enter code on mobile</p>
             <div className="text-3xl xl:text-4xl font-display text-[#EA580C] tracking-[0.2em] leading-none tabular-nums">{room.id}</div>
@@ -695,7 +717,7 @@ export default function Display() {
             <div className="flex items-center justify-between mb-3 shrink-0">
               <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.22em]">Target Patterns</h3>
               {!room.hidePattern && room.mode === 'Bingo' && (
-                <span className="text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 px-2.5 py-0.5 rounded-full uppercase tabular-nums">
+                <span className="text-[10px] font-black text-[#0F766E] bg-[#0D9488]/10 px-2.5 py-0.5 rounded-full uppercase tabular-nums">
                   {room.patterns.length} ON
                 </span>
               )}
@@ -703,10 +725,10 @@ export default function Display() {
             <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col items-center justify-start py-1 px-1">
               {!room.hidePattern ? (
                 room.mode === 'Bingo' ? (
-                  <PatternVisualizer patterns={room.patterns} size="sm" />
+                  <PatternVisualizer patterns={room.patterns} size="tv" />
                 ) : (
                   <div className="my-auto text-center">
-                    <div className="text-3xl font-display text-[#EA580C] uppercase italic">{room.mode}</div>
+                    <div className="text-3xl font-display text-[#EA580C] uppercase">{room.mode}</div>
                     <p className="text-xs font-bold text-[#6B655D] uppercase tracking-wider mt-1">
                       {room.mode === 'Blackout' ? 'Mark all 25 squares' : 'Hit any 2 adjacent numbers'}
                     </p>
@@ -721,7 +743,7 @@ export default function Display() {
             </div>
             <div className="mt-3 pt-3 border-t-2 border-[#FAF7F2] flex items-center justify-between shrink-0">
               <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">Game Mode</span>
-              <span className="text-lg font-display text-[#EA580C] uppercase italic">{room.mode === 'Bingo' ? 'Standard' : room.mode}</span>
+              <span className="text-lg font-display text-[#EA580C] uppercase">{room.mode === 'Bingo' ? 'Standard' : room.mode}</span>
             </div>
           </div>
         </div>
@@ -754,12 +776,12 @@ export default function Display() {
               </div>
               <div className="text-4xl lg:text-5xl font-display italic tracking-tighter">{dikitAlert.map((w: any) => w.playerName).join(' & ')}</div>
               {dikitPrize > 0 && (
-                <div className="inline-block mt-2 bg-white text-[#0D9488] px-4 py-1 rounded-full text-sm font-black tabular-nums shadow-md">
-                  ⚔️ Prize: {formatPeso(dikitPrize)}
+                <div className="inline-flex items-center gap-1.5 mt-2 bg-white text-[#0F766E] px-4 py-1 rounded-full text-sm font-black tabular-nums shadow-md">
+                  <Swords size={14} aria-hidden="true" /> Prize: {formatPeso(dikitPrize)}
                   {dikitAlert.length > 1 && ` (${formatPeso(dikitPrize / dikitAlert.length)} each)`}
                 </div>
               )}
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-75 mt-1.5 italic">Sidebet Winner · Game Continues</div>
+              <div className="text-xs font-black uppercase tracking-[0.26em] text-white/90 mt-1.5">Sidebet Winner · Game Continues</div>
             </div>
             <div className="flex gap-5 overflow-x-auto w-full pb-2 px-2 scrollbar-hide justify-center">
               {dikitAlert.map((alert: any, aIdx: number) => (
@@ -769,7 +791,7 @@ export default function Display() {
                   </div>
                   <div className="grid grid-cols-5 gap-1">
                     {['B', 'I', 'N', 'G', 'O'].map(l => (
-                      <div key={l} className="text-center font-black text-[10px] text-white/75">{l}</div>
+                      <div key={l} className="text-center font-black text-[10px] text-white/85">{l}</div>
                     ))}
                     {alert.card.map((row: number[], rIdx: number) =>
                       row.map((num: number, cIdx: number) => {
@@ -777,11 +799,11 @@ export default function Display() {
                         return (
                           <div
                             key={`${rIdx}-${cIdx}`}
-                            className={`w-9 h-9 flex items-center justify-center font-display text-xs rounded-lg border-2 ${
-                              num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/40'
+                            className={`w-9 h-9 flex items-center justify-center font-display text-xs rounded-lg border-2 tabular-nums ${
+                              num === 0 ? 'bg-[#FACC15] text-[#854D0E] border-[#FACC15]' : called ? 'bg-white text-[#0F766E] border-white shadow-md' : 'bg-[#0F766E] border-white/25 text-white/85'
                             }`}
                           >
-                            {num === 0 ? 'FR' : num}
+                            {num === 0 ? '★' : num}
                           </div>
                         );
                       })
@@ -977,13 +999,13 @@ export default function Display() {
                                   key={`${rIdx}-${cIdx}`}
                                   className={`aspect-square flex items-center justify-center font-display text-base lg:text-lg rounded-xl border-2 transition-all tabular-nums ${
                                     num === 0
-                                      ? 'bg-[#3D3A35] text-white border-[#3D3A35]'
+                                      ? 'bg-[#FACC15] text-[#854D0E] border-[#FACC15]'
                                       : called
                                         ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-md'
                                         : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#7A746B]'
                                   }`}
                                 >
-                                  {num === 0 ? 'FR' : num}
+                                  {num === 0 ? '★' : num}
                                 </div>
                               );
                             })

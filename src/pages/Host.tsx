@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
-import { PatternVisualizer } from '../components/PatternVisualizer';
-import { Play, Square, Settings, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX, Coins } from 'lucide-react';
+import { PatternVisualizer, PatternThumb, getPatternDisplayCells } from '../components/PatternVisualizer';
+import { Play, Square, Settings, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX, Coins, Swords, Pencil, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
@@ -98,11 +98,15 @@ export default function Host() {
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
 
   const [showSettings, setShowSettings] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDeletePatternId, setConfirmDeletePatternId] = useState<string | null>(null);
   const [copyLabel, setCopyLabel] = useState('Copy');
   const [customName, setCustomName] = useState('Custom Pattern');
   const [customCells, setCustomCells] = useState<number[]>([12]);
   const [activeCustomId, setActiveCustomId] = useState<string>(() => `custom-${Date.now()}`);
   const [saveFeedback, setSaveFeedback] = useState<string>('');
+  const resetConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [revealedBall, setRevealedBall] = useState<number | null>(() => latestBall || null);
@@ -137,12 +141,15 @@ export default function Host() {
   // Load voices and enable audio context on first interaction
   useEffect(() => {
     const loadVoices = () => {
+      if (!('speechSynthesis' in window)) return;
       const voices = window.speechSynthesis.getVoices();
       const preferred = voices.find(v => v.name.includes('David') || v.name.includes('Daniel') || v.name.includes('Male'));
       setMaleVoice(preferred || voices[0] || null);
     };
     loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
 
     const unlockAudio = () => {
       if ('speechSynthesis' in window) {
@@ -154,6 +161,8 @@ export default function Host() {
     return () => {
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
+      if (resetConfirmTimerRef.current) clearTimeout(resetConfirmTimerRef.current);
+      if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
     };
   }, []);
 
@@ -248,12 +257,20 @@ export default function Host() {
 
   useEffect(() => {
     if (winner) {
-      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, disableForReducedMotion: true });
     }
   }, [winner]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (showSettings) {
+        if (event.code === 'Escape') {
+          event.preventDefault();
+          setShowSettings(false);
+        }
+        return;
+      }
+
       const target = event.target as HTMLElement | null;
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return;
       
@@ -261,6 +278,7 @@ export default function Host() {
       if (room?.claims?.length > 0 && !winner) {
         if (event.code === 'Enter') verifyClaim(room.claims[0].id, true);
         if (event.code === 'Escape') verifyClaim(room.claims[0].id, false);
+        return;
       }
 
       // Special Host Hotkeys
@@ -291,7 +309,7 @@ export default function Host() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [room, latestBall, callNextBall, updateSettings, verifyClaim, winner]);
+  }, [room, latestBall, callNextBall, updateSettings, verifyClaim, winner, showSettings]);
 
   if (!room) return null;
 
@@ -319,6 +337,36 @@ export default function Host() {
     updateSettings({ patterns: libraryPatterns });
     setSaveFeedback('All patterns activated!');
     setTimeout(() => setSaveFeedback(''), 2500);
+  };
+
+  const clearAllPatterns = () => {
+    updateSettings({ patterns: [] });
+    setSaveFeedback('All patterns cleared');
+    setTimeout(() => setSaveFeedback(''), 2500);
+  };
+
+  const handleResetClick = () => {
+    if (!confirmReset) {
+      setConfirmReset(true);
+      if (resetConfirmTimerRef.current) clearTimeout(resetConfirmTimerRef.current);
+      resetConfirmTimerRef.current = setTimeout(() => setConfirmReset(false), 4000);
+      return;
+    }
+    setConfirmReset(false);
+    if (resetConfirmTimerRef.current) clearTimeout(resetConfirmTimerRef.current);
+    resetGame();
+  };
+
+  const handleDeletePatternClick = (id: string) => {
+    if (confirmDeletePatternId !== id) {
+      setConfirmDeletePatternId(id);
+      if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
+      deleteConfirmTimerRef.current = setTimeout(() => setConfirmDeletePatternId(null), 4000);
+      return;
+    }
+    setConfirmDeletePatternId(null);
+    if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
+    deleteFromLibrary(id);
   };
 
   const togglePattern = (pattern: BingoPattern) => {
@@ -393,7 +441,7 @@ export default function Host() {
   return (
     <div className="min-h-screen lg:h-screen bg-[#FAF7F2] flex flex-col font-sans text-[#3D3A35] lg:overflow-hidden relative">
       {!socket?.connected && (
-         <div className="fixed inset-0 z-[100] bg-[#3D3A35]/80 backdrop-blur-md flex items-center justify-center p-6 text-center">
+         <div role="dialog" aria-modal="true" aria-label="Reconnecting" className="fixed inset-0 z-[100] bg-[#3D3A35]/80 backdrop-blur-md flex items-center justify-center p-6 text-center">
             <div className="bg-white rounded-[32px] p-8 border-4 border-[#0D9488] shadow-2xl max-w-xs">
                <div className="w-12 h-12 border-4 border-[#0D9488] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Reconnecting...</h2>
@@ -460,23 +508,23 @@ export default function Host() {
 
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-[270px_1fr_300px] xl:grid-cols-[310px_1fr_350px] gap-0 lg:overflow-hidden min-h-0">
         <section className="bg-white border-b-2 lg:border-b-0 lg:border-r-2 border-[#E8E2D9] p-5 xl:p-6 flex flex-col gap-5 xl:gap-6 lg:overflow-y-auto custom-scrollbar">
-           <div><h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em] mb-3.5">Game Controls</h3><div className="grid grid-cols-1 gap-3">{room.status === 'waiting' && (<button type="button" onClick={startGame} className="w-full py-5 bg-[#0D9488] text-white rounded-2xl font-black text-xl shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all uppercase tracking-widest flex items-center justify-center gap-3"><Play size={22} fill="currentColor" />Start Round</button>)}{(room.status === 'playing' || room.status === 'paused') && (<div className="flex flex-col gap-3"><div className="grid grid-cols-2 gap-2.5"><button type="button" onClick={pauseGame} disabled={room.status === 'paused'} className={`py-3.5 px-2 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border-2 flex items-center justify-center gap-1.5 ${room.status === 'paused' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#6B655D]' : 'bg-[#EF4444] border-[#EF4444] text-white shadow-[0_4px_0_#B91C1C] active:translate-y-[4px] active:shadow-none'}`}><Square size={14} fill="currentColor" />Pause Calling</button><button type="button" onClick={resumeGame} disabled={room.status === 'playing'} className={`py-3.5 px-2 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border-2 flex items-center justify-center gap-1.5 ${room.status === 'playing' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#6B655D]' : 'bg-[#0D9488] border-[#0D9488] text-white shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none'}`}><Play size={14} fill="currentColor" />Resume</button></div><button type="button" onClick={resetGame} className="w-full py-2.5 bg-[#FAF7F2] border-2 border-[#E8E2D9] text-[#6B655D] rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-[#E8E2D9] hover:text-[#3D3A35] transition-all">Reset Round</button></div>)}{room.status === 'next_round' && (<div className="flex flex-col gap-2.5"><div className="bg-[#FAF7F2] border-2 border-[#FACC15] rounded-2xl p-3 text-center"><div className="text-[11px] font-bold uppercase tracking-wider text-[#6B655D]">Auto-Starting Round {room.roundNumber + 1}</div><div className="text-3xl font-display text-[#EA580C] leading-tight mt-0.5"><Countdown endsAt={room.nextRoundEndsAt} /></div></div><button type="button" onClick={startNextRound} className="w-full py-4 bg-[#FACC15] text-[#854D0E] rounded-2xl font-black text-lg shadow-[0_6px_0_#A16207] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-tight flex flex-col items-center leading-none"><span className="text-[10px] mb-1">Skip Countdown</span>Start Next Round Now</button></div>)}</div></div>
+           <div><h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em] mb-3.5">Game Controls</h3><div className="grid grid-cols-1 gap-3">{room.status === 'waiting' && (<button type="button" onClick={startGame} className="w-full py-5 bg-[#0D9488] text-white rounded-2xl font-black text-xl shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all uppercase tracking-widest flex items-center justify-center gap-3"><Play size={22} fill="currentColor" />Start Round</button>)}{(room.status === 'playing' || room.status === 'paused') && (<div className="flex flex-col gap-3"><div className="grid grid-cols-2 gap-2.5"><button type="button" onClick={pauseGame} disabled={room.status === 'paused'} className={`py-3.5 px-2 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border-2 flex items-center justify-center gap-1.5 ${room.status === 'paused' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#6B655D]' : 'bg-[#EF4444] border-[#EF4444] text-white shadow-[0_4px_0_#B91C1C] active:translate-y-[4px] active:shadow-none'}`}><Square size={14} fill="currentColor" />Pause Calling</button><button type="button" onClick={resumeGame} disabled={room.status === 'playing'} className={`py-3.5 px-2 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border-2 flex items-center justify-center gap-1.5 ${room.status === 'playing' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#6B655D]' : 'bg-[#0D9488] border-[#0D9488] text-white shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none'}`}><Play size={14} fill="currentColor" />Resume</button></div><button type="button" onClick={handleResetClick} className={`w-full py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider border-2 transition-all ${confirmReset ? 'bg-[#B91C1C] border-[#B91C1C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#6B655D] hover:bg-[#E8E2D9] hover:text-[#3D3A35]'}`}>{confirmReset ? 'Tap Again to Reset Round' : 'Reset Round'}</button></div>)}{room.status === 'next_round' && (<div className="flex flex-col gap-2.5"><div className="bg-[#FAF7F2] border-2 border-[#FACC15] rounded-2xl p-3 text-center"><div className="text-[11px] font-bold uppercase tracking-wider text-[#6B655D]">Auto-Starting Round {room.roundNumber + 1}</div><div className="text-3xl font-display text-[#EA580C] leading-tight mt-0.5"><Countdown endsAt={room.nextRoundEndsAt} /></div></div><button type="button" onClick={startNextRound} className="w-full py-4 bg-[#FACC15] text-[#854D0E] rounded-2xl font-black text-lg shadow-[0_6px_0_#A16207] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-tight flex flex-col items-center leading-none"><span className="text-[10px] mb-1">Skip Countdown</span>Start Next Round Now</button></div>)}</div></div>
            <div className="pt-5 border-t-2 border-[#FAF7F2]"><h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em] mb-3.5">Ball Calling</h3><div className="space-y-4"><div className="bg-[#FAF7F2] p-3.5 rounded-2xl border-2 border-[#E8E2D9]"><label htmlFor="autocall-sec" className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider block mb-2">Auto-Call Speed (sec)</label><div className="flex gap-1.5">{[0, 3, 5].map(speed => (<button key={speed} type="button" onClick={() => updateSettings({ autoCallSpeed: speed })} className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${room.autoCallSpeed === speed ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#DED9D1] text-[#6B655D] hover:border-[#6B655D]'}`}>{speed === 0 ? 'Off' : `${speed}s`}</button>))}<input id="autocall-sec" type="number" min="0" placeholder="Sec" value={room.autoCallSpeed || ''} onChange={e => updateSettings({ autoCallSpeed: parseInt(e.target.value) || 0 })} className="w-20 py-2 px-2 text-center rounded-xl text-xs font-bold border-2 bg-white border-[#DED9D1] text-[#3D3A35] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none tabular-nums" /></div></div>{room.status === 'playing' && room.autoCallSpeed === 0 && (<button type="button" onClick={callNextBall} className="w-full py-6 bg-[#3D3A35] hover:bg-black text-white rounded-3xl font-black text-2xl shadow-[0_8px_0_#1C1917] active:translate-y-[8px] active:shadow-none transition-all uppercase tracking-widest flex flex-col items-center justify-center gap-1"><span>Call Ball</span><kbd className="text-[10px] font-semibold tracking-widest bg-white/15 px-2 py-0.5 rounded-md">Space</kbd></button>)}</div></div>
            <div className="mt-auto pt-4 border-t-2 border-[#FAF7F2]">
              <div className="bg-[#FAF7F2] rounded-2xl p-4 border-2 border-[#E8E2D9] space-y-4">
                <div>
-                 <div className="text-[10px] font-black uppercase tracking-widest text-[#0D9488] mb-1.5 flex items-center justify-between gap-1">
-                   <span>⚔️ Dikit Winners:</span>
+                 <div className="text-[10px] font-black uppercase tracking-widest text-[#0F766E] mb-1.5 flex items-center justify-between gap-1">
+                   <span className="inline-flex items-center gap-1.5"><Swords size={12} aria-hidden="true" />Dikit Winners</span>
                    <div className="flex items-center gap-1">
                      {dikitPrize > 0 && (
-                       <span className="text-[9px] bg-[#0D9488] text-white px-1.5 py-0.5 rounded font-black tabular-nums">
+                       <span className="text-[10px] bg-[#0D9488] text-white px-1.5 py-0.5 rounded font-black tabular-nums">
                          {room.dikitWinners && room.dikitWinners.length > 1
                            ? `${formatPeso(dikitPrize / room.dikitWinners.length)} ea`
                            : formatPeso(dikitPrize)}
                        </span>
                      )}
                      {room.dikitWinners && room.dikitWinners.length > 0 && (
-                       <span className="text-[9px] bg-[#0D9488]/15 text-[#0D9488] px-1.5 py-0.5 rounded font-black">
+                       <span className="text-[10px] bg-[#0D9488]/15 text-[#0F766E] px-1.5 py-0.5 rounded font-black">
                          {room.dikitWinners.length}
                        </span>
                      )}
@@ -487,7 +535,7 @@ export default function Host() {
                      {room.dikitWinners.map((w: any, idx: number) => (
                        <div key={w.id || idx} className="bg-white px-2.5 py-1.5 rounded-xl border border-[#E8E2D9] flex items-center justify-between text-xs">
                          <span className="font-black text-[#3D3A35] truncate">{w.playerName || w.name}</span>
-                         <span className="text-[10px] font-bold text-[#0D9488] bg-[#0D9488]/10 px-1.5 py-0.5 rounded shrink-0">Card {(w.cardIndex ?? 0) + 1}</span>
+                         <span className="text-[10px] font-bold text-[#0F766E] bg-[#0D9488]/10 px-1.5 py-0.5 rounded shrink-0">Card {(w.cardIndex ?? 0) + 1}</span>
                        </div>
                      ))}
                    </div>
@@ -497,8 +545,8 @@ export default function Host() {
                </div>
 
                <div className="pt-2 border-t border-[#E8E2D9]">
-                 <div className="text-[10px] font-black uppercase tracking-widest text-[#EA580C] mb-1.5 flex items-center justify-between gap-1">
-                   <span>🏆 Bingo Winners:</span>
+                 <div className="text-[10px] font-black uppercase tracking-widest text-[#C2410C] mb-1.5 flex items-center justify-between gap-1">
+                   <span className="inline-flex items-center gap-1.5"><Trophy size={12} aria-hidden="true" />Bingo Winners</span>
                    <div className="flex items-center gap-1">
                      {bingoPrize > 0 && (
                        <span className="text-[9px] bg-[#EA580C] text-white px-1.5 py-0.5 rounded font-black tabular-nums">
@@ -694,18 +742,18 @@ export default function Host() {
                )}
                <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-[#FAF7F2]">
                  <div className="bg-[#0D9488]/10 px-2.5 py-1.5 rounded-xl">
-                   <div className="text-[9px] font-bold text-[#0D9488] uppercase tracking-wider">⚔️ Dikit Prize</div>
-                   <div className="text-sm font-display text-[#0D9488] tabular-nums">{dikitPrize > 0 ? formatPeso(dikitPrize) : 'Not set'}</div>
+                   <div className="text-[10px] font-bold text-[#0F766E] uppercase tracking-wider flex items-center gap-1"><Swords size={11} aria-hidden="true" />Dikit Prize</div>
+                   <div className="text-sm font-display text-[#0F766E] tabular-nums">{dikitPrize > 0 ? formatPeso(dikitPrize) : 'Not set'}</div>
                  </div>
                  <div className="bg-[#EA580C]/10 px-2.5 py-1.5 rounded-xl">
-                   <div className="text-[9px] font-bold text-[#EA580C] uppercase tracking-wider">🏆 Bingo Prize</div>
-                   <div className="text-sm font-display text-[#EA580C] tabular-nums">{bingoPrize > 0 ? formatPeso(bingoPrize) : 'Not set'}</div>
+                   <div className="text-[10px] font-bold text-[#C2410C] uppercase tracking-wider flex items-center gap-1"><Trophy size={11} aria-hidden="true" />Bingo Prize</div>
+                   <div className="text-sm font-display text-[#C2410C] tabular-nums">{bingoPrize > 0 ? formatPeso(bingoPrize) : 'Not set'}</div>
                  </div>
                </div>
                {(totalCollected > 0 || totalPrizes > 0) && (
                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#FAF7F2]">
                    <span className="font-bold text-[#6B655D] uppercase tracking-wider">Balance</span>
-                   <span className={`font-black tabular-nums ${potBalance >= 0 ? 'text-[#0D9488]' : 'text-[#B91C1C]'}`}>
+                   <span className={`font-black tabular-nums ${potBalance >= 0 ? 'text-[#0F766E]' : 'text-[#B91C1C]'}`}>
                      {potBalance >= 0 ? `+${formatPeso(potBalance)}` : `-${formatPeso(Math.abs(potBalance))}`}
                    </span>
                  </div>
@@ -715,7 +763,7 @@ export default function Host() {
            <div className="flex-1 p-5 xl:p-6 overflow-y-auto custom-scrollbar bg-[#FAF7F2] min-h-[200px]">
              <div className="flex justify-between items-center mb-4">
                 <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em]">Live Player Cards</h3>
-                <div className="text-[10px] font-bold text-[#0D9488] bg-[#0D9488]/12 px-2 py-0.5 rounded-full uppercase">Real-time</div>
+                <div className="text-[10px] font-bold text-[#0F766E] bg-[#0D9488]/12 px-2 py-0.5 rounded-full uppercase">Real-time</div>
              </div>
              <div className="grid grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3">
                {Object.values(room.players).map(p => { 
@@ -730,29 +778,34 @@ export default function Host() {
                      <div key={`${p.id}-${cardIdx}`} className={`flex flex-col bg-white border-2 p-2.5 rounded-2xl shadow-sm transition-all ${isFalseMark ? 'border-[#B91C1C]' : nearWin ? 'border-[#EA580C] shadow-[0_0_15px_rgba(234,88,12,0.25)]' : 'border-[#E8E2D9]'}`}>
                         <div className="flex justify-between items-center gap-1 mb-2">
                            <div className="flex items-center gap-1.5 truncate min-w-0">
-                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white font-display text-[9px] shadow-inner shrink-0" style={{ backgroundColor: p.avatarColor || '#6B655D' }}>
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white font-display text-[10px] shadow-inner shrink-0" style={{ backgroundColor: p.avatarColor || '#6B655D' }}>
                                  {p.nickname.substring(0,2).toUpperCase()}
                               </div>
-                              <span className="font-bold text-[11px] text-[#3D3A35] truncate">{p.nickname}</span>
+                              <span className="font-bold text-[11px] text-[#3D3A35] truncate">
+                                {p.nickname} <span className="text-[#6B655D]">#{cardIdx + 1}</span>
+                              </span>
                            </div>
-                           <div className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight shrink-0 ${isFalseMark ? 'bg-[#B91C1C] text-white' : nearWin ? 'bg-[#EA580C] text-white animate-pulse' : 'bg-[#E8E2D9] text-[#3D3A35]'}`}>
+                           <div className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tight shrink-0 tabular-nums ${isFalseMark ? 'bg-[#B91C1C] text-white' : nearWin ? 'bg-[#EA580C] text-white animate-pulse' : 'bg-[#E8E2D9] text-[#3D3A35]'}`}>
                               {isFalseMark ? 'False' : `${res.cellsAway} Left`}
                            </div>
                         </div>
                         <div className="grid grid-cols-5 gap-0.5 pointer-events-none">
+                           {['B', 'I', 'N', 'G', 'O'].map(letter => (
+                              <div key={letter} className="text-center font-black text-[9px] text-[#C2410C] leading-none pb-0.5">{letter}</div>
+                           ))}
                            {card.map((row: number[], rIdx: number) => row.map((num: number, cIdx: number) => { 
                               const called = num === 0 || room.calledNumbers.includes(num);
                               const isMarked = num === 0 || marked.includes(num);
                               
                               return (
-                                 <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-bold text-[9px] rounded-[4px] border ${
-                                    num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : 
+                                 <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-bold text-[9px] rounded-[4px] border tabular-nums ${
+                                    num === 0 ? 'bg-[#FACC15] text-[#854D0E] border-[#FACC15]' : 
                                     (isMarked && called) ? 'bg-[#0D9488] text-white border-[#0D9488]' : 
                                     (!isMarked && called) ? 'bg-[#0D9488]/20 border-[#0D9488]/35 text-[#3D3A35]' :
-                                    (isMarked && !called) ? 'bg-white border-[#EA580C] text-[#EA580C]' :
+                                    (isMarked && !called) ? 'bg-white border-[#EA580C] text-[#C2410C]' :
                                     'bg-[#FAF7F2] border-[#E8E2D9] text-[#6B655D]'
                                  }`}>
-                                    {num === 0 ? 'FR' : num}
+                                    {num === 0 ? '★' : num}
                                  </div>
                               ) 
                            }))}
@@ -791,7 +844,13 @@ export default function Host() {
       </main>
 
       {showSettings && (
-        <div className="fixed inset-0 bg-[#3D3A35]/60 backdrop-blur-sm flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Room Settings">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}
+          className="fixed inset-0 bg-[#3D3A35]/60 backdrop-blur-sm flex justify-center items-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Room Settings"
+        >
            <div className="bg-white rounded-[32px] w-full max-w-md p-7 sm:p-8 shadow-2xl relative border-4 border-[#3D3A35]">
               <div className="flex justify-between items-center mb-6"><h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">Room Settings</h2><button type="button" onClick={() => setShowSettings(false)} aria-label="Close settings" className="p-1.5 rounded-lg text-[#6B655D] hover:text-[#3D3A35] hover:bg-[#FAF7F2] transition-colors"><Plus size={22} className="rotate-45" /></button></div>
               <div className="space-y-6 max-h-[62vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -820,8 +879,9 @@ export default function Host() {
 
                   <div className="grid grid-cols-3 gap-2.5">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">1 Card (₱)</label>
+                      <label htmlFor="host-price-1" className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">1 Card (₱)</label>
                       <input
+                        id="host-price-1"
                         type="number"
                         min="0"
                         step="1"
@@ -832,8 +892,9 @@ export default function Host() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Bundle of 2 (₱)</label>
+                      <label htmlFor="host-price-2" className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Bundle of 2 (₱)</label>
                       <input
+                        id="host-price-2"
                         type="number"
                         min="0"
                         step="1"
@@ -844,8 +905,9 @@ export default function Host() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Bundle of 4 (₱)</label>
+                      <label htmlFor="host-price-4" className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Bundle of 4 (₱)</label>
                       <input
+                        id="host-price-4"
                         type="number"
                         min="0"
                         step="1"
@@ -868,27 +930,29 @@ export default function Host() {
 
                   <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#E8E2D9]">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-[#0D9488] uppercase tracking-wider ml-1">⚔️ Dikit Prize (₱)</label>
+                      <label htmlFor="host-dikit-prize" className="text-[10px] font-bold text-[#0F766E] uppercase tracking-wider ml-1 inline-flex items-center gap-1"><Swords size={11} aria-hidden="true" />Dikit Prize (₱)</label>
                       <input
+                        id="host-dikit-prize"
                         type="number"
                         min="0"
                         step="1"
                         placeholder="0"
                         value={room.dikitPrize || ''}
                         onChange={e => updateSettings({ dikitPrize: Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#0D9488]/40 font-black text-sm text-[#0D9488] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none tabular-nums"
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#0D9488]/40 font-black text-sm text-[#0F766E] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none tabular-nums"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-[#EA580C] uppercase tracking-wider ml-1">🏆 Bingo Prize (₱)</label>
+                      <label htmlFor="host-bingo-prize" className="text-[10px] font-bold text-[#C2410C] uppercase tracking-wider ml-1 inline-flex items-center gap-1"><Trophy size={11} aria-hidden="true" />Bingo Prize (₱)</label>
                       <input
+                        id="host-bingo-prize"
                         type="number"
                         min="0"
                         step="1"
                         placeholder="0"
                         value={room.bingoPrize || ''}
                         onChange={e => updateSettings({ bingoPrize: Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#EA580C]/40 font-black text-sm text-[#EA580C] placeholder:text-[#7A746B] focus:border-[#EA580C] outline-none tabular-nums"
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#EA580C]/40 font-black text-sm text-[#C2410C] placeholder:text-[#7A746B] focus:border-[#EA580C] outline-none tabular-nums"
                       />
                     </div>
                   </div>
@@ -916,49 +980,68 @@ export default function Host() {
                   {room.mode === "Bingo" && (
                     <div className="space-y-4 pt-4 border-t-2 border-[#FAF7F2]">
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center px-1">
+                        <div className="flex flex-wrap justify-between items-center gap-2 px-1">
                           <div className="flex items-center gap-2">
-                            <label className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">Pattern Library</label>
-                            <span className="text-[10px] font-bold uppercase text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full tabular-nums">
+                            <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">Pattern Library</span>
+                            <span className="text-[10px] font-bold uppercase text-[#0F766E] bg-[#0D9488]/10 px-2 py-0.5 rounded-full tabular-nums">
                               {libraryPatterns.filter(p => room.patterns.some(rp => rp.id === p.id)).length} / {libraryPatterns.length} Active
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={activateAllPatterns}
-                            className="text-[10px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2.5 py-1 rounded-lg transition-all shadow-sm active:scale-95"
-                          >
-                            Activate All
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={clearAllPatterns}
+                              className="text-[10px] font-bold uppercase text-[#6B655D] bg-[#FAF7F2] border border-[#DED9D1] hover:text-[#3D3A35] hover:border-[#6B655D] px-2 py-1 rounded-lg transition-all active:scale-95"
+                            >
+                              Clear All
+                            </button>
+                            <button
+                              type="button"
+                              onClick={activateAllPatterns}
+                              className="text-[10px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2.5 py-1 rounded-lg transition-all shadow-sm active:scale-95"
+                            >
+                              Activate All
+                            </button>
+                          </div>
                         </div>
                         <div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar border-2 border-[#FAF7F2] rounded-2xl p-2 bg-[#FAF7F2]/50">
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {libraryPatterns.map(pattern => {
                               const selected = room.patterns.some(item => item.id === pattern.id);
                               const isPreset = PRESET_PATTERNS.some(p => p.id === pattern.id);
+                              const confirmingDelete = confirmDeletePatternId === pattern.id;
                               return (
-                                <div key={pattern.id} className="relative group">
+                                <div key={pattern.id} className="flex items-stretch gap-1">
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      togglePattern(pattern);
-                                      if (!isPreset) selectCustomPatternToEdit(pattern);
-                                    }}
-                                    className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]" : "bg-white border-[#E8E2D9] text-[#6B655D] hover:border-[#6B655D]"}`}
+                                    aria-pressed={selected}
+                                    onClick={() => togglePattern(pattern)}
+                                    className={`flex-1 min-w-0 px-2.5 py-2 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-sm" : "bg-white border-[#E8E2D9] text-[#3D3A35] hover:border-[#6B655D]"}`}
                                   >
-                                    <span className="truncate block pr-4">{pattern.name}</span>
-                                    {selected && <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full" />}
+                                    <PatternThumb pattern={pattern} active={selected} />
+                                    <span className="truncate flex-1">{pattern.name}</span>
                                   </button>
                                   {!isPreset && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
-                                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-85 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-20 shadow-lg"
-                                      title="Delete Pattern from Library"
-                                      aria-label={`Delete ${pattern.name}`}
-                                    >
-                                      <Plus size={8} className="rotate-45" strokeWidth={5} />
-                                    </button>
+                                    <div className="flex flex-col gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => selectCustomPatternToEdit(pattern)}
+                                        className="flex-1 px-2 rounded-lg bg-white border border-[#DED9D1] text-[#6B655D] hover:text-[#3D3A35] hover:border-[#0D9488] transition-colors flex items-center justify-center"
+                                        title={`Edit ${pattern.name}`}
+                                        aria-label={`Edit ${pattern.name}`}
+                                      >
+                                        <Pencil size={11} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePatternClick(pattern.id)}
+                                        className={`flex-1 px-2 rounded-lg border transition-colors flex items-center justify-center text-[9px] font-black uppercase ${confirmingDelete ? 'bg-[#B91C1C] border-[#B91C1C] text-white' : 'bg-white border-[#DED9D1] text-[#B91C1C] hover:bg-red-50'}`}
+                                        title={confirmingDelete ? `Confirm delete ${pattern.name}` : `Delete ${pattern.name}`}
+                                        aria-label={confirmingDelete ? `Confirm delete ${pattern.name}` : `Delete ${pattern.name}`}
+                                      >
+                                        {confirmingDelete ? 'Sure?' : <Trash2 size={11} />}
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                               );
@@ -1036,8 +1119,8 @@ export default function Host() {
                       </div>
                     </div>
                   )}
-                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider mb-2">Hall Ambience</span><button type="button" onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#6B655D] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? '🔊 Active' : '🔇 Muted'}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex justify-between items-center mb-2"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider">Caller Voice</span><button type="button" onClick={() => previewVoice(room.voiceMode || 'robotic')} className="text-[9px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2 py-0.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1" title="Test selected voice"><Volume2 size={10} />Test</button></div><select value={room.voiceMode || 'robotic'} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 px-1 bg-white rounded-xl text-[10px] font-bold text-[#3D3A35] uppercase border-2 border-[#DED9D1] outline-none cursor-pointer">
-  <option value="robotic">🤖 Robotic (Browser TTS)</option>
+                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider mb-2">Hall Ambience</span><button type="button" onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#6B655D] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? <><Volume2 size={13} />Active</> : <><VolumeX size={13} />Muted</>}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex justify-between items-center mb-2"><label htmlFor="host-voice-select" className="text-xs font-black text-[#3D3A35] uppercase tracking-wider">Caller Voice</label><button type="button" onClick={() => previewVoice(room.voiceMode || 'robotic')} className="text-[10px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2 py-0.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1" title="Test selected voice"><Volume2 size={11} />Test</button></div><select id="host-voice-select" value={room.voiceMode || 'robotic'} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 px-1 bg-white rounded-xl text-[10px] font-bold text-[#3D3A35] uppercase border-2 border-[#DED9D1] outline-none cursor-pointer">
+  <option value="robotic">Robotic (Browser TTS)</option>
   <optgroup label="United States Natural Voices">
     {NATURAL_VOICES.filter(v => v.region === 'United States').map(v => (
       <option key={v.id} value={v.id}>{v.label}</option>
@@ -1062,70 +1145,96 @@ export default function Host() {
                  <div className="pt-4 border-t-2 border-[#FAF7F2]"><div className="flex items-center justify-between bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex flex-col"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider">Mystery Mode</span><span className="text-[11px] font-medium text-[#6B655D]">Hide winning pattern from screens</span></div><button type="button" role="switch" aria-checked={Boolean(room.hidePattern)} aria-label="Toggle Mystery Mode" onClick={() => updateSettings({ hidePattern: !room.hidePattern })} className={`w-14 h-8 rounded-full transition-all relative shrink-0 ${room.hidePattern ? 'bg-[#0D9488]' : 'bg-[#DED9D1]'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${room.hidePattern ? 'left-7' : 'left-1'}`} /></button></div></div>
               </div>
               <div className="pt-5 mt-5 border-t-2 border-[#E8E2D9]">
-                <button type="button" onClick={() => setShowSettings(false)} className="w-full bg-[#3D3A35] hover:bg-black text-white py-4 rounded-2xl font-black text-base uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">Save &amp; Close</button>
+                <button type="button" onClick={() => setShowSettings(false)} className="w-full bg-[#3D3A35] hover:bg-black text-white py-4 rounded-2xl font-black text-base uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">Done</button>
               </div>
            </div>
         </div>
       )}
 
-      {room.claims.length > 0 && !winner && (
+      {room.claims.length > 0 && !winner && (() => {
+        const activeClaim = room.claims[0];
+        const claimedPatternObj = [...room.patterns, ...libraryPatterns].find(
+          p => p.name.toLowerCase() === String(activeClaim.pattern || '').toLowerCase()
+        );
+        const patternCellSet = new Set(
+          claimedPatternObj && claimedPatternObj.match === 'cells'
+            ? getPatternDisplayCells(claimedPatternObj)
+            : []
+        );
+        const claimPlayerMarked: number[] =
+          room.players[activeClaim.playerId]?.markedCells?.[activeClaim.cardIndex ?? 0] || [];
+        return (
         <div className="fixed inset-0 bg-[#3D3A35]/80 backdrop-blur-md flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Verify Bingo Claim">
           <div className="bg-white rounded-[36px] w-full max-w-lg max-h-[92vh] overflow-hidden shadow-2xl flex flex-col border-[6px] border-[#EA580C]">
             <div className="bg-[#EA580C] text-white p-5 sm:p-6 text-center relative shrink-0">
               <div className="inline-block bg-black/20 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest mb-2 tabular-nums">
                 Claim {(room.verifiedWinners?.length || 0) + 1} of {(room.claims.length || 0) + (room.verifiedWinners?.length || 0)}
               </div>
-              <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter italic drop-shadow-md">Bingo Claim!</h2>
-              <p className="text-base sm:text-lg font-bold opacity-95 mt-0.5">{room.claims[0].playerName} called Bingo (Card {(room.claims[0].cardIndex ?? 0) + 1})</p>
+              <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter drop-shadow-md">Bingo Claim!</h2>
+              <p className="text-base sm:text-lg font-bold opacity-95 mt-0.5">{activeClaim.playerName} called Bingo (Card {(activeClaim.cardIndex ?? 0) + 1})</p>
             </div>
             <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 flex flex-col items-center gap-4">
               <div className="bg-[#FAF7F2] p-4 sm:p-5 rounded-[28px] border-4 border-[#E8E2D9] shadow-inner w-full max-w-[300px]">
                 <div className="grid grid-cols-5 gap-1.5">
                   {['B','I','N','G','O'].map(l => (
-                    <div key={l} className="text-center font-black text-[#EA580C] text-base sm:text-lg pb-1">{l}</div>
+                    <div key={l} className="text-center font-black text-[#C2410C] text-base sm:text-lg pb-1">{l}</div>
                   ))}
-                  {room.claims[0].card.map((row: number[], rIdx: number) =>
+                  {activeClaim.card.map((row: number[], rIdx: number) =>
                     row.map((num: number, cIdx: number) => {
+                      const flatIdx = rIdx * 5 + cIdx;
                       const called = num === 0 || room.calledNumbers.includes(num);
+                      const playerMarked = num === 0 || claimPlayerMarked.includes(num);
+                      const inPattern = patternCellSet.has(flatIdx);
                       return (
                         <div
                           key={`${rIdx}-${cIdx}`}
-                          className={`aspect-square flex items-center justify-center font-display text-base sm:text-lg rounded-xl border-2 transition-all tabular-nums ${
+                          className={`aspect-square flex items-center justify-center font-display text-base sm:text-lg rounded-xl border-2 transition-all tabular-nums relative ${
                             num === 0
-                              ? 'bg-[#3D3A35] text-white border-[#3D3A35]'
-                              : called
+                              ? 'bg-[#FACC15] text-[#854D0E] border-[#FACC15]'
+                              : called && playerMarked
                                 ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-md'
-                                : 'bg-white border-[#E8E2D9] text-[#7A746B]'
-                          }`}
+                                : called
+                                  ? 'bg-[#0D9488]/20 text-[#0F766E] border-[#0D9488] border-dashed'
+                                  : 'bg-white border-[#E8E2D9] text-[#7A746B]'
+                          } ${inPattern ? 'ring-2 ring-[#FACC15] ring-offset-1' : ''}`}
                         >
-                          {num === 0 ? 'FR' : num}
+                          {num === 0 ? '★' : num}
                         </div>
                       );
                     })
                   )}
                 </div>
-              </div>
-              <div className="w-full bg-[#FAF7F2] py-3 px-5 rounded-2xl border-2 border-[#E8E2D9] flex justify-between items-center">
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em]">Claimed Pattern</span>
-                  <span className="text-xl font-black text-[#EA580C] uppercase italic leading-tight">{room.claims[0].pattern}</span>
+                <div className="flex items-center justify-center gap-3 mt-3 pt-2 border-t border-[#E8E2D9] text-[10px] font-bold text-[#6B655D]">
+                  <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#0D9488] inline-block" />Marked &amp; Called</span>
+                  <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[#0D9488]/20 border border-dashed border-[#0D9488] inline-block" />Called Only</span>
                 </div>
-                <Trophy className="text-[#EA580C] shrink-0" size={32} />
+              </div>
+              <div className="w-full bg-[#FAF7F2] py-3 px-4 rounded-2xl border-2 border-[#E8E2D9] flex justify-between items-center gap-3">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em]">Claimed Pattern</span>
+                  <span className="text-xl font-black text-[#C2410C] uppercase leading-tight truncate">{activeClaim.pattern}</span>
+                </div>
+                {claimedPatternObj ? (
+                  <PatternVisualizer patterns={[claimedPatternObj]} size="xs" className="shrink-0" />
+                ) : (
+                  <Trophy className="text-[#EA580C] shrink-0" size={32} />
+                )}
               </div>
             </div>
             <div className="p-5 bg-[#FAF7F2] border-t-4 border-[#E8E2D9] flex gap-3 shrink-0">
-              <button type="button" onClick={() => verifyClaim(room.claims[0].id, false)} className="flex-1 py-4 bg-white border-4 border-[#E8E2D9] text-[#6B655D] hover:text-[#3D3A35] hover:border-[#6B655D] rounded-2xl font-black text-base uppercase tracking-wider active:translate-y-1 transition-all flex items-center justify-center gap-2">
+              <button type="button" onClick={() => verifyClaim(activeClaim.id, false)} className="flex-1 py-4 bg-white border-4 border-[#E8E2D9] text-[#6B655D] hover:text-[#3D3A35] hover:border-[#6B655D] rounded-2xl font-black text-base uppercase tracking-wider active:translate-y-1 transition-all flex items-center justify-center gap-2">
                 <span>Reject</span>
                 <kbd className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#FAF7F2] border border-[#DED9D1] text-[#6B655D]">Esc</kbd>
               </button>
-              <button type="button" onClick={() => verifyClaim(room.claims[0].id, true)} className="flex-1 py-4 bg-[#0D9488] hover:bg-[#0F766E] text-white rounded-2xl font-black text-lg sm:text-xl uppercase tracking-wider shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all flex items-center justify-center gap-2">
+              <button type="button" onClick={() => verifyClaim(activeClaim.id, true)} className="flex-1 py-4 bg-[#0D9488] hover:bg-[#0F766E] text-white rounded-2xl font-black text-lg sm:text-xl uppercase tracking-wider shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all flex items-center justify-center gap-2">
                 <span>Verify &amp; Win</span>
                 <kbd className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/20 text-white">Enter</kbd>
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {(multiBingoPending || room.multiBingoPending) && (room.verifiedWinners?.length || 0) >= 3 && !winner && (
         <div className="fixed inset-0 bg-[#3D3A35]/85 backdrop-blur-md flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Multiple Bingo Winners Tie">
@@ -1242,13 +1351,13 @@ export default function Host() {
                             key={`${rIdx}-${cIdx}`}
                             className={`w-7 h-7 flex items-center justify-center font-black text-[10px] rounded-md border ${
                               num === 0
-                                ? 'bg-white text-[#0D9488]'
+                                ? 'bg-[#FACC15] text-[#854D0E] border-[#FACC15]'
                                 : called
-                                  ? 'bg-white text-[#0D9488] shadow-md'
-                                  : 'bg-[#0D9488]/20 border-white/20 text-white/40'
+                                  ? 'bg-white text-[#0F766E] border-white shadow-md'
+                                  : 'bg-[#0F766E] border-white/25 text-white/85'
                             }`}
                           >
-                            {num === 0 ? 'FR' : num}
+                            {num === 0 ? '★' : num}
                           </div>
                         );
                       })
@@ -1257,7 +1366,7 @@ export default function Host() {
                 </div>
               ))}
             </div>
-            <button onClick={dismissDikit} className="text-xs font-black uppercase tracking-widest bg-white/20 hover:bg-white/30 px-6 py-2 rounded-full transition-all">
+            <button type="button" onClick={dismissDikit} className="text-xs font-black uppercase tracking-widest bg-white/20 hover:bg-white/30 px-6 py-2 rounded-full transition-all">
               Dismiss
             </button>
           </motion.div>
@@ -1270,6 +1379,9 @@ export default function Host() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bingo Winner"
             className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-[60] p-4"
           >
             <motion.div
@@ -1282,15 +1394,15 @@ export default function Host() {
                 <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto bg-gradient-to-br from-[#FACC15] to-[#EA580C] rounded-full flex items-center justify-center mb-3 shadow-xl shrink-0">
                   <Trophy className="text-white" size={36} />
                 </div>
-                <h2 className="text-4xl sm:text-5xl font-display text-[#3D3A35] mb-1 uppercase italic tracking-tighter shrink-0">
+                <h2 className="text-4xl sm:text-5xl font-display text-[#3D3A35] mb-1 uppercase tracking-tight shrink-0">
                   {winner.length > 1 ? `${winner.length} BINGO WINNERS!` : 'BINGO WINNER!'}
                 </h2>
-                <p className="text-lg sm:text-2xl font-black text-[#0D9488] mb-2 leading-tight shrink-0">
+                <p className="text-lg sm:text-2xl font-black text-[#0F766E] mb-2 leading-tight shrink-0">
                   {winner.map((w: any) => w.playerName).join(', ')}
                 </p>
                 {bingoPrize > 0 && (
-                  <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-2.5 px-4 py-1 rounded-full bg-[#EA580C]/10 border border-[#EA580C]/30 text-sm font-black text-[#EA580C] tabular-nums shrink-0">
-                    🏆 Prize: {formatPeso(bingoPrize)}
+                  <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-2.5 px-4 py-1 rounded-full bg-[#EA580C]/10 border border-[#EA580C]/30 text-sm font-black text-[#C2410C] tabular-nums shrink-0">
+                    <Trophy size={14} aria-hidden="true" /> Prize: {formatPeso(bingoPrize)}
                     {winner.length > 1 && <span className="text-xs font-bold">({formatPeso(bingoPrize / winner.length)} each)</span>}
                   </div>
                 )}
@@ -1305,13 +1417,13 @@ export default function Host() {
                       <div key={w.id || wIdx} className="bg-[#FAF7F2] p-4 sm:p-5 rounded-[28px] border-2 border-[#E8E2D9] shadow-sm w-full max-w-[260px]">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="text-sm font-black text-[#3D3A35] truncate">{w.playerName}</span>
-                          <span className="text-[10px] font-bold text-[#EA580C] bg-[#EA580C]/10 px-2 py-0.5 rounded-full shrink-0">
+                          <span className="text-[10px] font-bold text-[#C2410C] bg-[#EA580C]/10 px-2 py-0.5 rounded-full shrink-0">
                             Card {(w.cardIndex ?? 0) + 1} · {w.pattern || 'Bingo'}
                           </span>
                         </div>
                         <div className="grid grid-cols-5 gap-1">
                           {['B','I','N','G','O'].map(l => (
-                            <div key={l} className="text-center font-black text-[10px] text-[#EA580C]">{l}</div>
+                            <div key={l} className="text-center font-black text-[10px] text-[#C2410C]">{l}</div>
                           ))}
                           {w.card.map((row: number[], rIdx: number) =>
                             row.map((num: number, cIdx: number) => {
@@ -1321,13 +1433,13 @@ export default function Host() {
                                   key={`${rIdx}-${cIdx}`}
                                   className={`aspect-square flex items-center justify-center font-display text-xs rounded-lg border-2 transition-all tabular-nums ${
                                     num === 0
-                                      ? 'bg-[#3D3A35] text-white border-[#3D3A35]'
+                                      ? 'bg-[#FACC15] text-[#854D0E] border-[#FACC15]'
                                       : called
                                         ? 'bg-[#0D9488] text-white border-[#0D9488]'
                                         : 'bg-white border-[#E8E2D9] text-[#7A746B]'
                                   }`}
                                 >
-                                  {num === 0 ? 'FR' : num}
+                                  {num === 0 ? '★' : num}
                                 </div>
                               );
                             })
@@ -1337,8 +1449,8 @@ export default function Host() {
                     ))}
                   </div>
                 </div>
-                <button onClick={dismissWinner} className="w-full py-4 bg-[#3D3A35] text-white rounded-2xl font-black text-base sm:text-lg uppercase tracking-[0.2em] hover:bg-black active:scale-95 transition-all shadow-xl shrink-0">
-                  Close & Continue
+                <button type="button" onClick={dismissWinner} className="w-full py-4 bg-[#3D3A35] text-white rounded-2xl font-black text-base sm:text-lg uppercase tracking-[0.2em] hover:bg-black active:scale-95 transition-all shadow-xl shrink-0">
+                  Close &amp; Continue
                 </button>
               </div>
             </motion.div>

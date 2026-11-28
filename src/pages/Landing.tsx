@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { motion } from 'framer-motion';
-import { PlayCircle, Users, Loader } from 'lucide-react';
+import { PlayCircle, Users, Loader, Eye, Trophy } from 'lucide-react';
 import { calculateCardsCost, formatPeso, hasCardPricing } from '../lib/bingo';
 
 const COLORS = [
@@ -26,9 +26,11 @@ export default function Landing() {
   const [localColor, setLocalColor] = useState(avatarColor);
   const [joinCode, setJoinCode] = useState(initialCode.toUpperCase());
   const [cardCount, setCardCount] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<'join' | 'host' | null>(null);
   const [error, setError] = useState('');
   const [publicRooms, setPublicRooms] = useState<any[]>([]);
+
+  const isBusy = loadingAction !== null;
 
   useEffect(() => {
     connect();
@@ -44,7 +46,7 @@ export default function Landing() {
       if (!localName.trim()) {
         setLocalName(name);
       }
-      setLoading(true);
+      setLoadingAction('host');
       setError('');
       setProfile(name, localColor);
       const res = await createRoom();
@@ -52,11 +54,11 @@ export default function Landing() {
         navigate(`/host/${res.code}`);
       } else {
         setError(res.error || 'Failed to create room. Please try again.');
-        setLoading(false);
+        setLoadingAction(null);
       }
     } catch (err: any) {
       setError(err?.message || 'Connection error. Please try again.');
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -72,7 +74,7 @@ export default function Landing() {
         return;
       }
 
-      setLoading(true);
+      setLoadingAction('join');
       setError('');
       setProfile(name, localColor);
       localStorage.setItem('bingo_initial_cards', String(cardCount));
@@ -81,11 +83,11 @@ export default function Landing() {
         navigate(`/play/${targetCode}`);
       } else {
         setError('Room not found or disconnected. Check the 4-letter code.');
-        setLoading(false);
+        setLoadingAction(null);
       }
     } catch (err: any) {
       setError(err?.message || 'Connection error. Please try again.');
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -105,9 +107,9 @@ export default function Landing() {
         <div className="text-center mb-5">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#EA580C] text-white shadow-[0_6px_0_#9A3412] transform -rotate-6 mb-3 relative">
             <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-white/30 rounded-2xl pointer-events-none" />
-            <span className="text-3xl font-display italic relative z-10">L</span>
+            <span className="text-3xl font-display relative z-10">L</span>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-display tracking-tight leading-none text-[#3D3A35] mb-1.5 uppercase italic">
+          <h1 className="text-4xl sm:text-5xl font-display tracking-tight leading-none text-[#3D3A35] mb-1.5 uppercase">
             Lucky Bingo
           </h1>
           <p className="text-[#6B655D] text-[11px] font-bold uppercase tracking-[0.25em]">
@@ -115,7 +117,13 @@ export default function Landing() {
           </p>
         </div>
 
-        <div className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!isBusy) handleJoin();
+          }}
+          className="space-y-4"
+        >
           <div className="space-y-1">
             <label htmlFor="nickname-input" className="text-xs font-bold text-[#6B655D] uppercase tracking-wider ml-1 block">
               Your Nickname
@@ -143,7 +151,7 @@ export default function Landing() {
                   aria-label={`Choose ${color.name} avatar color`}
                   aria-pressed={localColor === color.hex}
                   onClick={() => setLocalColor(color.hex)}
-                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-all ${
+                  className={`w-9 h-9 rounded-full transition-all ${
                     localColor === color.hex
                       ? 'scale-110 ring-4 ring-offset-2 ring-[#3D3A35]/35 shadow-md'
                       : 'hover:scale-105'
@@ -190,9 +198,13 @@ export default function Landing() {
                             : 'bg-white border-[#E8E2D9] text-[#3D3A35] hover:border-[#6B655D]'
                         }`}
                       >
-                        <span className="font-display text-lg sm:text-xl leading-none">{num === 0 ? '👀' : num}</span>
+                        {num === 0 ? (
+                          <Eye size={18} strokeWidth={2.4} aria-hidden="true" />
+                        ) : (
+                          <span className="font-display text-lg sm:text-xl leading-none">{num}</span>
+                        )}
                         {matchedPricing && num > 0 && (
-                          <span className={`text-[9px] font-bold leading-none tabular-nums ${cardCount === num ? 'text-[#FACC15]' : 'text-[#6B655D]'}`}>
+                          <span className={`text-[10px] font-bold leading-none tabular-nums ${cardCount === num ? 'text-[#FACC15]' : 'text-[#6B655D]'}`}>
                             {formatPeso(price)}
                           </span>
                         )}
@@ -223,13 +235,16 @@ export default function Landing() {
 
             <button
               id="join-btn"
-              type="button"
-              onClick={() => handleJoin()}
-              disabled={loading}
-              className="w-full bg-[#EA580C] hover:bg-[#DC4E08] text-white py-4 rounded-2xl font-display text-2xl italic transition-all flex items-center justify-center gap-3 shadow-[0_6px_0_#9A3412] active:translate-y-[6px] active:shadow-none touch-manipulation uppercase tracking-widest disabled:opacity-60"
+              type="submit"
+              disabled={isBusy}
+              className="w-full bg-[#EA580C] hover:bg-[#DC4E08] text-white py-4 rounded-2xl font-display text-2xl transition-all flex items-center justify-center gap-3 shadow-[0_6px_0_#9A3412] active:translate-y-[6px] active:shadow-none touch-manipulation uppercase tracking-widest disabled:opacity-60"
             >
-              <PlayCircle size={26} strokeWidth={2.5} />
-              Join Game
+              {loadingAction === 'join' ? (
+                <Loader className="animate-spin" size={24} />
+              ) : (
+                <PlayCircle size={26} strokeWidth={2.5} />
+              )}
+              {loadingAction === 'join' ? 'Joining Room...' : 'Join Game'}
             </button>
           </div>
 
@@ -241,21 +256,28 @@ export default function Landing() {
                   <button
                     key={room.id}
                     type="button"
+                    disabled={isBusy}
                     onClick={() => {
                       setJoinCode(room.id);
                       handleJoin(room.id);
                     }}
-                    className="w-full flex items-center justify-between bg-white border border-[#DED9D1] p-2.5 rounded-xl hover:border-[#0D9488] hover:bg-[#F3EFE9] transition-colors text-left"
+                    className="w-full flex items-center justify-between bg-white border border-[#DED9D1] p-2.5 rounded-xl hover:border-[#0D9488] hover:bg-[#F3EFE9] transition-colors text-left disabled:opacity-60"
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-black text-[#3D3A35] uppercase tracking-widest">{room.id}</div>
-                      <div className="text-[11px] font-semibold text-[#6B655D] truncate">
-                        Host: {room.hostName} · {room.mode}
-                        {hasCardPricing(room) && ` · ${formatPeso(calculateCardsCost(1, room))}/card`}
-                        {room.bingoPrize > 0 && ` · 🏆 ${formatPeso(room.bingoPrize)}`}
+                      <div className="text-[11px] font-semibold text-[#6B655D] truncate flex items-center gap-1">
+                        <span>
+                          Host: {room.hostName} · {room.mode}
+                          {hasCardPricing(room) && ` · ${formatPeso(calculateCardsCost(1, room))}/card`}
+                        </span>
+                        {room.bingoPrize > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-[#C2410C] font-bold shrink-0">
+                            · <Trophy size={11} aria-hidden="true" /> {formatPeso(room.bingoPrize)}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-[#0D9488]/12 text-[#0D9488] px-2.5 py-1 rounded-full shrink-0">
+                    <div className="flex items-center gap-1.5 bg-[#0D9488]/12 text-[#0F766E] px-2.5 py-1 rounded-full shrink-0">
                       <span className="w-1.5 h-1.5 bg-[#0D9488] rounded-full animate-pulse" />
                       <span className="text-xs font-black tabular-nums">{room.players}</span>
                     </div>
@@ -275,13 +297,13 @@ export default function Landing() {
           <button
             type="button"
             onClick={handleHost}
-            disabled={loading}
+            disabled={isBusy}
             className="w-full py-3.5 bg-[#F3EFE9] hover:bg-[#E8E2D9] border-2 border-[#DED9D1] text-[#3D3A35] rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:translate-y-0.5 touch-manipulation uppercase tracking-widest disabled:opacity-60"
           >
-            {loading ? <Loader className="animate-spin text-[#0D9488]" size={18} /> : <Users size={18} />}
-            {loading ? 'Starting Room...' : 'Host New Room'}
+            {loadingAction === 'host' ? <Loader className="animate-spin text-[#0D9488]" size={18} /> : <Users size={18} />}
+            {loadingAction === 'host' ? 'Starting Room...' : 'Host New Room'}
           </button>
-        </div>
+        </form>
       </motion.div>
     </div>
   );

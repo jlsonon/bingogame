@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
+import { MotionConfig } from 'framer-motion';
 import { useGameStore } from './store/gameStore';
 
 import Landing from './pages/Landing';
@@ -16,17 +17,19 @@ export default function App() {
   }, [connect]);
 
   return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans selection:bg-[#EA580C]/20">
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/host/:code" element={<Host />} />
-          <Route path="/host/:code/grid" element={<GodView />} />
-          <Route path="/play/:code" element={<Player />} />
-          <Route path="/display/:code" element={<Display />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
-    </BrowserRouter>
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <div className="min-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans selection:bg-[#EA580C]/20">
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/host/:code" element={<Host />} />
+            <Route path="/host/:code/grid" element={<GodView />} />
+            <Route path="/play/:code" element={<Player />} />
+            <Route path="/display/:code" element={<Display />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+      </BrowserRouter>
+    </MotionConfig>
   );
 }

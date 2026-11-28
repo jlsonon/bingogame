@@ -6,7 +6,7 @@ import { PatternVisualizer } from '../components/PatternVisualizer';
 import { generateRandomCard, checkValidWin, getBallLetter, checkDikitSidequest, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { Plus, Loader, LayoutGrid, Eye, History, Trophy, CheckCircle2, Users, Ticket, Lock, Coins } from 'lucide-react';
+import { Plus, Loader, LayoutGrid, Eye, History, Trophy, CheckCircle2, Users, Ticket, Lock, Coins, Swords, Maximize2, Grid2x2, ChevronLeft, ChevronRight, Pause } from 'lucide-react';
 import { SOUNDS, playSound } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
@@ -49,6 +49,10 @@ export default function Player() {
   const [activeTab, setActiveTab] = useState<'cards' | 'pattern' | 'history' | 'stats'>('cards');
   const [autoMark, setAutoMark] = useState(localStorage.getItem('bingo_auto_mark') === 'true');
   const [showClaimConfirm, setShowClaimConfirm] = useState(false);
+  const [cardViewMode, setCardViewMode] = useState<'grid' | 'focus'>('grid');
+  const [focusedCardIdx, setFocusedCardIdx] = useState(0);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const leaveConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const [roundChoices, setRoundChoices] = useState<Record<number, boolean>>({});
   const [nearWinAlert, setNearWinAlert] = useState<string | null>(null);
@@ -148,12 +152,18 @@ export default function Player() {
       }
       const iWon = winner.some((w: any) => w.playerId === me?.id);
       if (iWon) {
-         confetti({ particleCount: 300, spread: 100, origin: { y: 0.5 } });
+         confetti({ particleCount: 300, spread: 100, origin: { y: 0.5 }, disableForReducedMotion: true });
       } else {
-         confetti({ particleCount: 50, spread: 40, origin: { y: 1 }, colors: ['#94a3b8']});
+         confetti({ particleCount: 50, spread: 40, origin: { y: 1 }, colors: ['#94a3b8'], disableForReducedMotion: true });
       }
     }
   }, [winner, me]);
+
+  useEffect(() => {
+    return () => {
+      if (leaveConfirmTimerRef.current) clearTimeout(leaveConfirmTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('bingo_auto_mark', String(autoMark));
@@ -321,11 +331,46 @@ export default function Player() {
     .map((_, idx) => ((markedCells[idx] || []).some(m => m !== 0 && !calledSet.has(m)) ? idx + 1 : null))
     .filter((n): n is number => n !== null);
 
+  const clearFalseMarks = () => {
+    setMarkedCells(prev => {
+      const cleaned: Record<number, number[]> = {};
+      cards.forEach((_, idx) => {
+        cleaned[idx] = (prev[idx] || [0]).filter(m => m === 0 || calledSet.has(m));
+        if (!cleaned[idx].includes(0)) cleaned[idx].unshift(0);
+      });
+      return cleaned;
+    });
+  };
+
+  const handleLeaveClick = () => {
+    if (!confirmLeave) {
+      setConfirmLeave(true);
+      if (leaveConfirmTimerRef.current) clearTimeout(leaveConfirmTimerRef.current);
+      leaveConfirmTimerRef.current = setTimeout(() => setConfirmLeave(false), 4000);
+      return;
+    }
+    setConfirmLeave(false);
+    if (leaveConfirmTimerRef.current) clearTimeout(leaveConfirmTimerRef.current);
+    leaveRoom();
+    navigate('/');
+  };
+
+  const safeFocusedIdx = cards.length > 0 ? Math.min(focusedCardIdx, cards.length - 1) : 0;
+  const isManualPause = room.status === 'paused' && !claimAlert && (room.claims?.length || 0) === 0;
+  const showClaimBar =
+    (room.status === 'playing' || (room.status === 'paused' && ((room.claims?.length || 0) > 0 || (room.verifiedWinners?.length || 0) > 0))) &&
+    (winningCardIdx !== -1 || dikitCardIdx !== -1) &&
+    activeTab === 'cards';
+
   return (
     <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full bg-[#FAF7F2] flex flex-col font-sans touch-manipulation text-[#3D3A35] select-none overflow-hidden">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {latestBall ? `New ball called: ${getBallLetter(latestBall)} ${latestBall}` : ''}
+      </div>
+
       {/* Offline/Reconnecting Overlay */}
       {!socket?.connected && (
-         <div className="fixed inset-0 z-[200] bg-[#3D3A35]/80 backdrop-blur-md flex items-center justify-center p-6 text-center">
+         <div role="dialog" aria-modal="true" aria-label="Connection Lost" className="fixed inset-0 z-[200] bg-[#3D3A35]/80 backdrop-blur-md flex items-center justify-center p-6 text-center">
             <div className="bg-white rounded-[32px] p-8 border-4 border-[#EA580C] shadow-2xl max-w-xs">
                <Loader className="animate-spin text-[#EA580C] mx-auto mb-4" size={48} />
                <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Connection Lost</h2>
@@ -359,7 +404,7 @@ export default function Player() {
                      {getBallLetter(latestBall)}
                   </div>
                   <div className="flex flex-col leading-none">
-                     <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/90">Latest Call</span>
+                     <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/95">Latest Call</span>
                      <span className="text-2xl font-display leading-none tabular-nums">{latestBall}</span>
                   </div>
                </motion.div>
@@ -376,16 +421,86 @@ export default function Player() {
          </div>
       </div>
 
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="flex-1 flex flex-col overflow-hidden relative min-h-0">
          <AnimatePresence mode="wait">
-            {latestBall && (
-               <div className="sr-only" aria-live="assertive">
-                  New ball called: {getBallLetter(latestBall)} {latestBall}
-               </div>
-            )}
             {activeTab === 'cards' && (
                <motion.div key="cards" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col p-1.5 sm:p-2 gap-1 min-h-0 overflow-hidden">
-                  {isSpectator ? (
+                  {room.status === 'next_round' ? (
+                     <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4 flex flex-col gap-4 max-w-md w-full mx-auto">
+                        <div className="text-center pt-1">
+                           <Trophy size={40} className="text-[#FACC15] mx-auto mb-1.5" />
+                           <h2 className="text-2xl sm:text-3xl font-display uppercase tracking-tight">Round Complete!</h2>
+                           <p className="text-xs font-bold text-[#6B655D] uppercase tracking-widest mt-0.5 tabular-nums">
+                              Next round starts in <span className="text-[#C2410C]"><Countdown endsAt={room.nextRoundEndsAt} /></span>
+                           </p>
+                        </div>
+                        {cards.length > 0 ? (
+                           <div className="bg-white rounded-[28px] border-2 border-[#E8E2D9] p-4 shadow-sm space-y-3">
+                              <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider text-center">
+                                 Tap any card to swap for fresh numbers
+                              </h3>
+                              <div className="space-y-2.5">
+                                 {cards.map((card, i) => (
+                                    <button
+                                       key={i}
+                                       type="button"
+                                       aria-pressed={Boolean(roundChoices[i])}
+                                       onClick={() => toggleRoundChoice(i)}
+                                       className={`w-full p-3 rounded-2xl border-2 flex items-center justify-between gap-3 transition-all text-left ${roundChoices[i] ? 'bg-[#EA580C]/10 border-[#EA580C] text-[#C2410C]' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#3D3A35]'}`}
+                                    >
+                                       <div className="flex items-center gap-3 min-w-0">
+                                          <div className="grid grid-cols-5 gap-[2px] bg-white p-1 rounded-lg border border-[#E8E2D9] shrink-0" aria-hidden="true">
+                                             {card.flat().map((num, idx) => (
+                                                <div
+                                                   key={idx}
+                                                   className={`w-4 h-4 flex items-center justify-center rounded-[2px] text-[8px] font-bold tabular-nums ${num === 0 ? 'bg-[#FACC15] text-[#854D0E]' : 'bg-[#FAF7F2] text-[#3D3A35]'}`}
+                                                >
+                                                   {num === 0 ? '★' : num}
+                                                </div>
+                                             ))}
+                                          </div>
+                                          <div className="min-w-0">
+                                             <div className="text-sm font-black uppercase tracking-wider">Card {i + 1}</div>
+                                             <div className="text-[11px] font-semibold text-[#6B655D]">
+                                                {roundChoices[i] ? 'Will deal new numbers' : 'Keeping these numbers'}
+                                             </div>
+                                          </div>
+                                       </div>
+                                       <span className={`text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full shrink-0 ${roundChoices[i] ? 'bg-[#EA580C] text-white' : 'bg-white border border-[#DED9D1] text-[#6B655D]'}`}>
+                                          {roundChoices[i] ? 'Swap' : 'Keep'}
+                                       </span>
+                                    </button>
+                                 ))}
+                              </div>
+                           </div>
+                        ) : (
+                           <div className="bg-white rounded-[28px] border-2 border-[#E8E2D9] p-5 shadow-sm text-center">
+                              <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-widest mb-3">Join the Next Round?</h3>
+                              <div className="grid grid-cols-4 gap-2 max-w-[280px] mx-auto">
+                                 {[1, 2, 3, 4].map(num => {
+                                    const cost = calculateCardsCost(num, room);
+                                    return (
+                                       <button key={num} type="button" onClick={() => setCardQuantity(num)} className="py-2 px-1 rounded-xl bg-[#FAF7F2] border-2 border-[#E8E2D9] hover:border-[#EA580C] hover:bg-[#EA580C] hover:text-white text-[#3D3A35] transition-all flex flex-col items-center justify-center leading-none gap-0.5">
+                                          <span className="font-display text-lg">{num}</span>
+                                          {pricingEnabled && (
+                                             <span className="text-[10px] font-bold opacity-85 tabular-nums">{formatPeso(cost)}</span>
+                                          )}
+                                       </button>
+                                    );
+                                 })}
+                              </div>
+                           </div>
+                        )}
+                        {Object.values(roundChoices).some(Boolean) ? (
+                           <button type="button" onClick={applyRoundChoices} className="w-full py-4 rounded-[22px] font-black text-base uppercase tracking-widest shadow-xl transition-all active:scale-95 bg-[#3D3A35] text-white shrink-0">Swap Selected Cards</button>
+                        ) : (
+                           <button type="button" onClick={() => setPlayerReady()} disabled={me.isReady} className={`w-full py-4 rounded-[22px] font-black text-base uppercase tracking-widest shadow-xl transition-all active:scale-95 shrink-0 ${!me.isReady ? 'bg-[#0D9488] text-white shadow-[0_6px_0_#0F766E]' : 'bg-white border-4 border-[#0D9488] text-[#0F766E]'}`}>{!me.isReady ? "I'm Ready" : "Waiting for others..."}</button>
+                        )}
+                        <p className="text-center text-xs font-semibold text-[#6B655D] pb-2">
+                           {Object.values(roundChoices).some(Boolean) ? 'Selected cards will get new numbers' : cards.length > 0 ? 'Keeping your current cards · Use tabs below anytime' : 'Watching as Spectator'}
+                        </p>
+                     </div>
+                  ) : isSpectator ? (
                      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-8 text-center gap-5 overflow-y-auto">
                         <div className="w-20 h-20 bg-[#E8E2D9] rounded-[28px] flex items-center justify-center text-[#7A746B] shadow-inner">
                            <Eye size={40} />
@@ -429,21 +544,39 @@ export default function Player() {
                         <AnimatePresence>
                            {nearWinAlert && (
                               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full bg-[#EA580C]/10 border border-[#EA580C]/25 rounded-xl py-1 text-center overflow-hidden shrink-0">
-                                 <span className="text-[10px] font-black text-[#EA580C] uppercase tracking-[0.16em] flex items-center justify-center gap-1.5"><Trophy size={11} />{nearWinAlert}</span>
+                                 <span className="text-[10px] font-black text-[#C2410C] uppercase tracking-[0.16em] flex items-center justify-center gap-1.5"><Trophy size={11} />{nearWinAlert}</span>
                               </motion.div>
                            )}
                         </AnimatePresence>
+                        {isManualPause && (
+                           <div role="status" className="w-full max-w-[440px] mx-auto bg-[#3D3A35] text-white rounded-xl px-3 py-1.5 text-center shrink-0 text-[11px] font-bold flex items-center justify-center gap-1.5">
+                              <Pause size={12} className="text-[#FACC15]" />
+                              <span>Game Paused by Host — waiting to resume</span>
+                           </div>
+                        )}
+                        {room.status === 'waiting' && (
+                           <div role="status" className="w-full max-w-[440px] mx-auto bg-[#0D9488]/10 border border-[#0D9488]/25 text-[#0F766E] rounded-xl px-3 py-1 text-center shrink-0 text-[11px] font-bold">
+                              Waiting for Host to start the round
+                           </div>
+                        )}
                         {falseMarkCardNumbers.length > 0 && (
-                           <div role="status" className="w-full max-w-[440px] mx-auto bg-amber-50 border border-amber-400 text-amber-900 rounded-xl px-3 py-1 text-center shrink-0 text-[11px] font-bold">
-                              Uncalled number marked on Card {falseMarkCardNumbers.join(', ')} — tap orange cell to clear
+                           <div role="status" className="w-full max-w-[440px] mx-auto bg-amber-50 border border-amber-400 text-amber-900 rounded-xl px-2.5 py-1 shrink-0 text-[11px] font-bold flex items-center justify-between gap-2">
+                              <span className="truncate">Uncalled mark on Card {falseMarkCardNumbers.join(', ')}</span>
+                              <button
+                                 type="button"
+                                 onClick={clearFalseMarks}
+                                 className="bg-amber-700 hover:bg-amber-800 text-white px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider shrink-0 active:scale-95"
+                              >
+                                 Clear
+                              </button>
                            </div>
                         )}
                         <div className="flex-1 w-full relative min-h-0 flex flex-col items-center justify-center overflow-hidden">
                             {/* Card Count Selector: unlocked when waiting/next_round, locked and unclickable when game is on */}
-                            <div className={`flex items-center justify-between gap-1.5 bg-white border border-[#E8E2D9] px-2.5 py-1 rounded-xl shrink-0 w-full max-w-[440px] mx-auto mb-1 shadow-sm transition-all ${isGameOn ? 'bg-[#FAF7F2]/90 border-dashed opacity-90' : ''}`}>
+                            <div className={`flex items-center justify-between gap-1.5 bg-white border border-[#E8E2D9] px-2.5 py-1 rounded-xl shrink-0 w-full max-w-[440px] mx-auto mb-1 shadow-sm transition-all ${isGameOn ? 'bg-[#FAF7F2]/90 border-dashed opacity-95' : ''}`}>
                                <div className="flex items-center gap-1.5 min-w-0">
                                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B655D] flex items-center gap-1 shrink-0">
-                                     {isGameOn && <Lock size={10} className="text-[#EA580C]" />}
+                                     {isGameOn && <Lock size={10} className="text-[#C2410C]" />}
                                      Cards:
                                   </span>
                                   <div className="flex gap-1">
@@ -461,9 +594,9 @@ export default function Player() {
                                               className={`${pricingEnabled ? 'px-2 py-0.5 min-w-[38px]' : 'w-7 h-7'} rounded-md border transition-all flex flex-col items-center justify-center leading-none ${cards.length === num ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-sm' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#6B655D]'} ${isGameOn ? 'cursor-not-allowed pointer-events-none' : 'cursor-pointer active:scale-95'}`}
                                               title={isGameOn ? 'Cards are locked during active game' : `Select ${num} card${num > 1 ? 's' : ''}${pricingEnabled ? ` (${formatPeso(cost)})` : ''}`}
                                            >
-                                              <span className="font-display text-xs font-bold leading-none">{num}</span>
+                                              <span className="font-display text-xs leading-none">{num}</span>
                                               {pricingEnabled && (
-                                                 <span className={`text-[9px] font-bold leading-none mt-0.5 tabular-nums ${cards.length === num ? 'text-white/95' : 'text-[#6B655D]'}`}>
+                                                 <span className={`text-[10px] font-bold leading-none mt-0.5 tabular-nums ${cards.length === num ? 'text-white/95' : 'text-[#6B655D]'}`}>
                                                     {formatPeso(cost)}
                                                  </span>
                                               )}
@@ -474,9 +607,21 @@ export default function Player() {
                                </div>
                                <div className="flex items-center gap-1.5 shrink-0">
                                   {pricingEnabled && myCardCost > 0 && (
-                                     <span className="text-[10px] font-black text-[#EA580C] bg-[#EA580C]/10 px-1.5 py-0.5 rounded-md tabular-nums">
+                                     <span className="text-[10px] font-black text-[#C2410C] bg-[#EA580C]/10 px-1.5 py-0.5 rounded-md tabular-nums">
                                         {formatPeso(myCardCost)}
                                      </span>
+                                  )}
+                                  {cards.length >= 2 && (
+                                     <button
+                                        type="button"
+                                        onClick={() => setCardViewMode(m => (m === 'grid' ? 'focus' : 'grid'))}
+                                        aria-pressed={cardViewMode === 'focus'}
+                                        className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md border transition-all flex items-center gap-1 active:scale-95 ${cardViewMode === 'focus' ? 'bg-[#3D3A35] border-[#3D3A35] text-white' : 'bg-[#FAF7F2] border-[#DED9D1] text-[#3D3A35] hover:border-[#6B655D]'}`}
+                                        title={cardViewMode === 'focus' ? 'Switch back to 2×2 grid' : 'Zoom in on one card at a time'}
+                                     >
+                                        {cardViewMode === 'focus' ? <Grid2x2 size={11} /> : <Maximize2 size={11} />}
+                                        <span>{cardViewMode === 'focus' ? 'Grid' : 'Focus'}</span>
+                                     </button>
                                   )}
                                   <button
                                      type="button"
@@ -485,7 +630,7 @@ export default function Player() {
                                         if (isGameOn) return;
                                         setCardQuantity(cards.length || 1);
                                      }}
-                                     className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md transition-all flex items-center gap-1 ${isGameOn ? 'text-[#6B655D] bg-[#F3EFE9] border border-[#E8E2D9] cursor-not-allowed pointer-events-none' : 'text-[#0D9488] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 cursor-pointer active:scale-95'}`}
+                                     className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md transition-all flex items-center gap-1 ${isGameOn ? 'text-[#6B655D] bg-[#F3EFE9] border border-[#E8E2D9] cursor-not-allowed pointer-events-none' : 'text-[#0F766E] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 cursor-pointer active:scale-95'}`}
                                      title={isGameOn ? 'Card numbers are locked during active game' : 'Generate new random card numbers'}
                                   >
                                      {isGameOn ? (
@@ -502,28 +647,102 @@ export default function Player() {
                             {/* Dikit Fight Active Alert Banner */}
                             {room?.dikitFight?.status === "active" && (
                                <div className="w-full max-w-[440px] bg-[#0D9488]/15 border border-[#0D9488]/40 rounded-xl px-2.5 py-1 text-center shrink-0 mb-1 flex items-center justify-between gap-1 shadow-sm">
-                                  <span className="text-[10px] font-black text-[#0D9488] uppercase tracking-wider flex items-center gap-1">
-                                     <span className="text-xs">⚔️</span> DIKIT FIGHT
+                                  <span className="text-[10px] font-black text-[#0F766E] uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                     <Swords size={12} aria-hidden="true" /> DIKIT FIGHT
                                   </span>
                                   <span className="text-[10px] font-bold text-[#3D3A35] truncate max-w-[240px]">
                                      {room.dikitFight.roundBingoPending
-                                        ? "🏆 Bingo Won! Fighting for Dikit..."
+                                        ? "Bingo Won! Fighting for Dikit..."
                                         : room.dikitFight.contenders.map(c => c.playerName).join(" vs ")}
                                   </span>
                                </div>
                             )}
 
+                           {cards.length >= 2 && cardViewMode === 'focus' && (
+                              <div className="w-full h-full max-w-[420px] flex flex-col items-center justify-center min-h-0 overflow-hidden gap-1">
+                                 <div className="flex items-center justify-between gap-1.5 w-full max-w-[360px] shrink-0 px-1">
+                                    <button
+                                       type="button"
+                                       aria-label="Previous card"
+                                       onClick={() => setFocusedCardIdx((safeFocusedIdx - 1 + cards.length) % cards.length)}
+                                       className="w-8 h-8 rounded-lg bg-white border border-[#DED9D1] text-[#3D3A35] flex items-center justify-center active:scale-95 shrink-0"
+                                    >
+                                       <ChevronLeft size={16} />
+                                    </button>
+                                    <div className="flex items-center gap-1 flex-1 justify-center">
+                                       {cards.map((_, idx) => {
+                                          const isNear = hasCalledBalls && cardStatus[idx]?.win.cellsAway === 1;
+                                          const isWin = cardStatus[idx]?.win.valid;
+                                          return (
+                                             <button
+                                                key={idx}
+                                                type="button"
+                                                onClick={() => setFocusedCardIdx(idx)}
+                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-black uppercase transition-all flex items-center gap-1 ${
+                                                   safeFocusedIdx === idx
+                                                      ? 'bg-[#3D3A35] text-white shadow-sm'
+                                                      : isWin
+                                                         ? 'bg-[#EA580C] text-white'
+                                                         : isNear
+                                                            ? 'bg-[#FACC15] text-[#854D0E]'
+                                                            : 'bg-white border border-[#E8E2D9] text-[#6B655D]'
+                                                }`}
+                                             >
+                                                <span>C{idx + 1}</span>
+                                                {isNear && <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />}
+                                             </button>
+                                          );
+                                       })}
+                                    </div>
+                                    <button
+                                       type="button"
+                                       aria-label="Next card"
+                                       onClick={() => setFocusedCardIdx((safeFocusedIdx + 1) % cards.length)}
+                                       className="w-8 h-8 rounded-lg bg-white border border-[#DED9D1] text-[#3D3A35] flex items-center justify-center active:scale-95 shrink-0"
+                                    >
+                                       <ChevronRight size={16} />
+                                    </button>
+                                 </div>
+                                 <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-5">
+                                    <div className="flex items-center gap-1.5">
+                                       <span className="text-[11px] font-bold uppercase tracking-wider text-[#6B655D]">Card {safeFocusedIdx + 1} of {cards.length}</span>
+                                       {isCardInDikitFight(safeFocusedIdx) && (
+                                          <span className="bg-[#0D9488] text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse inline-flex items-center gap-1"><Swords size={10} />In Dikit Fight</span>
+                                       )}
+                                    </div>
+                                    {hasCalledBalls && cardStatus[safeFocusedIdx]?.win.cellsAway === 1 && (
+                                       <span className="bg-[#FACC15] text-[#854D0E] text-[10px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">1 Away</span>
+                                    )}
+                                 </div>
+                                 <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
+                                    <div className="card-fit-square relative flex items-center justify-center">
+                                       <BingoCard
+                                          card={cards[safeFocusedIdx]}
+                                          markedCells={markedCells[safeFocusedIdx] || []}
+                                          calledNumbers={room.calledNumbers || []}
+                                          onToggleCell={(num) => toggleCell(safeFocusedIdx, num)}
+                                          readOnly={!isPlayingOrClaimPause}
+                                          highlightLatest={latestBall}
+                                       />
+                                       {cardStatus[safeFocusedIdx]?.win.valid && (
+                                          <div className="absolute inset-0 border-4 border-[#EA580C] rounded-[8cqw] pointer-events-none animate-pulse z-20" />
+                                       )}
+                                    </div>
+                                 </div>
+                              </div>
+                           )}
+
                            {cards.length === 1 && (
                               <div className="w-full h-full max-w-[420px] flex flex-col items-center justify-center min-h-0 overflow-hidden">
-                                 <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
+                                 <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-5 mb-0.5">
                                     <div className="flex items-center gap-1.5">
-                                       <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B655D]">Card 1</span>
                                        {isCardInDikitFight(0) && (
-                                          <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
+                                          <span className="bg-[#0D9488] text-white text-[10px] font-black px-2 rounded-full uppercase animate-pulse inline-flex items-center gap-1"><Swords size={10} />In Dikit Fight</span>
                                        )}
                                     </div>
                                     {hasCalledBalls && cardStatus[0]?.win.cellsAway === 1 && (
-                                       <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
+                                       <span className="bg-[#FACC15] text-[#854D0E] text-[10px] font-black px-2 rounded-full uppercase animate-pulse">1 Away</span>
                                     )}
                                  </div>
                                  <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
@@ -544,19 +763,19 @@ export default function Player() {
                               </div>
                            )}
 
-                           {cards.length === 2 && (
+                           {cards.length === 2 && cardViewMode === 'grid' && (
                               <div className="w-full h-full max-w-[440px] flex flex-col justify-between items-center gap-1 min-h-0 overflow-hidden">
                                  {/* Card 1 - Above */}
                                  <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
-                                    <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
+                                    <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-5 mb-0.5">
                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B655D]">Card 1</span>
                                           {isCardInDikitFight(0) && (
-                                             <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
+                                             <span className="bg-[#0D9488] text-white text-[10px] font-black px-2 rounded-full uppercase animate-pulse inline-flex items-center gap-1"><Swords size={10} />Fight</span>
                                           )}
                                        </div>
                                        {hasCalledBalls && cardStatus[0]?.win.cellsAway === 1 && (
-                                          <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
+                                          <span className="bg-[#FACC15] text-[#854D0E] text-[10px] font-black px-2 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
                                     </div>
                                     <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
@@ -578,15 +797,15 @@ export default function Player() {
 
                                  {/* Card 2 - Below */}
                                  <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
-                                    <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-4 mb-0.5">
+                                    <div className="flex items-center justify-between w-full max-w-[340px] px-1 shrink-0 h-5 mb-0.5">
                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-[9px] font-black uppercase tracking-widest text-[#7A746B]">Card 2</span>
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B655D]">Card 2</span>
                                           {isCardInDikitFight(1) && (
-                                             <span className="bg-[#0D9488] text-white text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ In Dikit Fight</span>
+                                             <span className="bg-[#0D9488] text-white text-[10px] font-black px-2 rounded-full uppercase animate-pulse inline-flex items-center gap-1"><Swords size={10} />Fight</span>
                                           )}
                                        </div>
                                        {hasCalledBalls && cardStatus[1]?.win.cellsAway === 1 && (
-                                          <span className="bg-[#FACC15] text-[#854D0E] text-[7px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
+                                          <span className="bg-[#FACC15] text-[#854D0E] text-[10px] font-black px-2 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
                                     </div>
                                     <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
@@ -608,19 +827,19 @@ export default function Player() {
                               </div>
                            )}
 
-                           {cards.length === 3 && (
+                           {cards.length === 3 && cardViewMode === 'grid' && (
                               <div className="w-full h-full max-w-[480px] flex flex-col gap-1 min-h-0 overflow-hidden">
                                  {/* Card 1 - Top Center */}
                                  <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 overflow-hidden">
-                                    <div className="flex items-center justify-between w-full max-w-[280px] px-1 shrink-0 h-3.5 mb-0.5">
+                                    <div className="flex items-center justify-between w-full max-w-[280px] px-1 shrink-0 h-4 mb-0.5">
                                        <div className="flex items-center gap-1">
-                                          <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B655D]">Card 1</span>
                                           {isCardInDikitFight(0) && (
-                                             <span className="bg-[#0D9488] text-white text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                             <span className="bg-[#0D9488] text-white text-[10px] font-black px-1.5 rounded-full uppercase animate-pulse inline-flex items-center gap-0.5"><Swords size={9} />Fight</span>
                                           )}
                                        </div>
                                        {hasCalledBalls && cardStatus[0]?.win.cellsAway === 1 && (
-                                          <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
+                                          <span className="bg-[#FACC15] text-[#854D0E] text-[10px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                        )}
                                     </div>
                                     <div className="flex-1 min-h-0 w-full flex items-center justify-center card-fit-wrapper">
@@ -646,15 +865,15 @@ export default function Player() {
                                        const isNearWin = hasCalledBalls && cardStatus[idx]?.win.cellsAway === 1;
                                        return (
                                           <div key={idx} className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 overflow-hidden">
-                                             <div className="flex items-center justify-between w-full px-1 shrink-0 h-3.5 mb-0.5">
+                                             <div className="flex items-center justify-between w-full px-1 shrink-0 h-4 mb-0.5">
                                                 <div className="flex items-center gap-1">
-                                                   <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
+                                                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B655D]">Card {idx + 1}</span>
                                                    {isCardInDikitFight(idx) && (
-                                                      <span className="bg-[#0D9488] text-white text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                                      <span className="bg-[#0D9488] text-white text-[10px] font-black px-1.5 rounded-full uppercase animate-pulse inline-flex items-center gap-0.5"><Swords size={9} />Fight</span>
                                                    )}
                                                 </div>
                                                 {isNearWin && (
-                                                   <span className="bg-[#FACC15] text-[#854D0E] text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
+                                                   <span className="bg-[#FACC15] text-[#854D0E] text-[10px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                                 )}
                                              </div>
                                              <div className="flex-1 min-h-0 min-w-0 w-full h-full flex items-center justify-center card-fit-wrapper">
@@ -679,21 +898,21 @@ export default function Player() {
                               </div>
                            )}
 
-                           {cards.length === 4 && (
+                           {cards.length === 4 && cardViewMode === 'grid' && (
                               <div className="w-full h-full max-w-[480px] grid grid-cols-2 grid-rows-2 gap-1 p-0.5 min-h-0 overflow-hidden">
                                  {cards.map((card, idx) => {
                                     const isNearWin = hasCalledBalls && cardStatus[idx]?.win.cellsAway === 1;
                                     return (
                                        <div key={idx} className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 overflow-hidden">
-                                          <div className="flex items-center justify-between w-full px-1 shrink-0 h-3.5 mb-0.5">
+                                          <div className="flex items-center justify-between w-full px-1 shrink-0 h-4 mb-0.5">
                                              <div className="flex items-center gap-1">
-                                                <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B655D]">Card {idx + 1}</span>
                                                 {isCardInDikitFight(idx) && (
-                                                   <span className="bg-[#0D9488] text-white text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                                   <span className="bg-[#0D9488] text-white text-[10px] font-black px-1.5 rounded-full uppercase animate-pulse inline-flex items-center gap-0.5"><Swords size={9} />Fight</span>
                                                 )}
                                              </div>
                                              {isNearWin && (
-                                                <span className="bg-[#FACC15] text-[#854D0E] text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
+                                                <span className="bg-[#FACC15] text-[#854D0E] text-[10px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                              )}
                                           </div>
                                           <div className="flex-1 min-h-0 min-w-0 w-full h-full flex items-center justify-center card-fit-wrapper">
@@ -893,74 +1112,47 @@ export default function Player() {
                         {hallOfFame.length === 0 && <div className="text-center py-6 text-[#6B655D] font-semibold italic text-xs">Waiting for the first all-time winner!</div>}
                      </div>
                   </div>
-                  <button type="button" onClick={() => { leaveRoom(); navigate('/'); }} className="w-full py-4 mt-2 bg-red-50 text-red-600 border-2 border-red-200 rounded-[24px] font-black text-sm uppercase tracking-widest active:scale-95 transition-all shadow-sm">Leave Room</button>
-               </motion.div>
-            )}
-         </AnimatePresence>
-
-         <AnimatePresence>
-            {room.status === 'next_round' && (
-               <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className="absolute inset-0 z-40 bg-[#FAF7F2] p-6 flex flex-col gap-5 overflow-y-auto custom-scrollbar">
-                  <div className="text-center pt-4"><Trophy size={48} className="text-[#FACC15] mx-auto mb-2" /><h2 className="text-3xl font-black uppercase tracking-tighter italic">Round Complete!</h2><p className="text-xs font-bold text-[#6B655D] uppercase tracking-widest mt-1 tabular-nums">Next round starts in <Countdown endsAt={room.nextRoundEndsAt} /></p></div>
-                  {cards.length > 0 ? (
-                     <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-6 shadow-sm">
-                        <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-widest mb-4 text-center">Tap cards to swap for fresh numbers</h3>
-                        <div className="space-y-3">
-                           {cards.map((_, i) => (
-                              <button key={i} type="button" aria-pressed={Boolean(roundChoices[i])} onClick={() => toggleRoundChoice(i)} className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${roundChoices[i] ? 'bg-[#EA580C]/10 border-[#EA580C] text-[#EA580C]' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#3D3A35]'}`}>
-                                 <span className="text-sm font-black uppercase tracking-widest">Card {i + 1}</span>
-                                 <span className={`text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full ${roundChoices[i] ? 'bg-[#EA580C] text-white' : 'bg-white border border-[#DED9D1] text-[#6B655D]'}`}>
-                                    {roundChoices[i] ? 'Swap' : 'Keep'}
-                                 </span>
-                              </button>
-                           ))}
-                        </div>
-                     </div>
-                  ) : (
-                     <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-6 shadow-sm text-center">
-                        <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-widest mb-3">Join the Next Round?</h3>
-                        <div className="grid grid-cols-4 gap-2 max-w-[280px] mx-auto">
-                           {[1, 2, 3, 4].map(num => {
-                              const cost = calculateCardsCost(num, room);
-                              return (
-                                 <button key={num} type="button" onClick={() => setCardQuantity(num)} className="py-2 px-1 rounded-xl bg-[#FAF7F2] border-2 border-[#E8E2D9] hover:border-[#EA580C] hover:bg-[#EA580C] hover:text-white text-[#3D3A35] transition-all flex flex-col items-center justify-center leading-none gap-0.5">
-                                    <span className="font-display text-lg">{num}</span>
-                                    {pricingEnabled && (
-                                       <span className="text-[10px] font-bold opacity-85 tabular-nums">{formatPeso(cost)}</span>
-                                    )}
-                                 </button>
-                              );
-                           })}
-                        </div>
-                     </div>
-                  )}
-                  {Object.values(roundChoices).some(Boolean) ? (
-                     <button type="button" onClick={applyRoundChoices} className="w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 bg-[#3D3A35] text-white">Swap Selected Cards</button>
-                  ) : (
-                     <button type="button" onClick={() => setPlayerReady()} disabled={me.isReady} className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${!me.isReady ? 'bg-[#0D9488] text-white shadow-[0_6px_0_#0F766E]' : 'bg-white border-4 border-[#0D9488] text-[#0D9488]'}`}>{!me.isReady ? "I'm Ready" : "Waiting for others..."}</button>
-                  )}
-                  <p className="text-center text-xs font-semibold text-[#6B655D]">{Object.values(roundChoices).some(Boolean) ? 'Selected cards will get new numbers' : cards.length > 0 ? 'Keeping your current cards' : 'Watching as Spectator'}</p>
+                  <button
+                     type="button"
+                     onClick={handleLeaveClick}
+                     className={`w-full py-4 mt-2 rounded-[24px] font-black text-sm uppercase tracking-widest active:scale-95 transition-all shadow-sm border-2 ${confirmLeave ? 'bg-[#B91C1C] border-[#B91C1C] text-white' : 'bg-red-50 text-[#B91C1C] border-red-200'}`}
+                  >
+                     {confirmLeave ? 'Tap Again to Leave Room' : 'Leave Room'}
+                  </button>
                </motion.div>
             )}
          </AnimatePresence>
       </main>
 
+      <AnimatePresence>
+         {showClaimBar && (
+            <motion.div
+               initial={{ y: 40, opacity: 0 }}
+               animate={{ y: 0, opacity: 1 }}
+               exit={{ y: 40, opacity: 0 }}
+               className="shrink-0 px-3 pt-1.5 pb-2 bg-[#FAF7F2] border-t border-[#E8E2D9] z-30 flex flex-col gap-1.5 max-w-md w-full mx-auto"
+            >
+               {dikitCardIdx !== -1 && room.status === 'playing' && (
+                  <button type="button" onClick={handleDikitClaim} className="w-full bg-[#0D9488] text-white py-2.5 rounded-2xl font-black text-base uppercase tracking-[0.1em] shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none">
+                     Dikit Hit!
+                  </button>
+               )}
+               {winningCardIdx !== -1 && (
+                  <button type="button" onClick={() => setShowClaimConfirm(true)} className="w-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white py-3.5 rounded-2xl font-black text-xl uppercase tracking-[0.14em] shadow-[0_6px_0_#9A3412] active:translate-y-[5px] active:shadow-none animate-bingo-glow">
+                     {room.status === 'paused' ? 'I ALSO HAVE BINGO!' : 'BINGO AVAILABLE!'}
+                  </button>
+               )}
+            </motion.div>
+         )}
+      </AnimatePresence>
+
       <nav className="h-14 sm:h-16 bg-white border-t-2 border-[#E8E2D9] grid grid-cols-4 gap-1 px-2 shrink-0 z-30 pb-safe relative" aria-label="Player tabs">
          {[{ id: 'cards', icon: LayoutGrid, label: 'Cards' },{ id: 'pattern', icon: Eye, label: 'Pattern' },{ id: 'history', icon: History, label: 'Calls' },{ id: 'stats', icon: Trophy, label: 'Stats' },].map(tab => (
-            <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id as any)} aria-current={activeTab === tab.id ? 'page' : undefined} className={`flex flex-col items-center justify-center gap-0.5 transition-all ${activeTab === tab.id ? 'text-[#EA580C]' : 'text-[#6B655D] hover:text-[#3D3A35]'}`}>
+            <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id as any)} aria-current={activeTab === tab.id ? 'page' : undefined} className={`flex flex-col items-center justify-center gap-0.5 transition-all ${activeTab === tab.id ? 'text-[#C2410C]' : 'text-[#6B655D] hover:text-[#3D3A35]'}`}>
                <tab.icon size={20} strokeWidth={activeTab === tab.id ? 2.75 : 2} /><span className="text-[10px] font-bold uppercase tracking-tight">{tab.label}</span>
             </button>
          ))}
       </nav>
-
-      <AnimatePresence>
-         {(room.status === 'playing' || (room.status === 'paused' && ((room.claims?.length || 0) > 0 || (room.verifiedWinners?.length || 0) > 0))) && (winningCardIdx !== -1 || dikitCardIdx !== -1) && activeTab === 'cards' && (
-            <motion.div initial={{ y: 100, scale: 0.8 }} animate={{ y: 0, scale: 1 }} exit={{ y: 100, scale: 0.8 }} className="fixed bottom-20 left-4 right-4 z-40 flex flex-col gap-2">
-               {dikitCardIdx !== -1 && room.status === 'playing' && (<button type="button" onClick={handleDikitClaim} className="w-full bg-[#0D9488] text-white py-3 rounded-2xl font-black text-lg uppercase tracking-[0.1em] shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none">Dikit Hit!</button>)}
-               {winningCardIdx !== -1 && (<button type="button" onClick={() => setShowClaimConfirm(true)} className="w-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white py-5 rounded-[24px] font-black text-2xl uppercase tracking-[0.15em] shadow-[0_8px_0_#9A3412] active:translate-y-[6px] active:shadow-none animate-bingo-glow">{room.status === 'paused' ? 'I ALSO HAVE BINGO!' : 'BINGO AVAILABLE!'}</button>)}
-            </motion.div>
-         )}
-      </AnimatePresence>
 
       <AnimatePresence>
          {showClaimConfirm && (
@@ -974,11 +1166,11 @@ export default function Player() {
       </AnimatePresence>
 
       {claimAlert && !winner && room.status === 'paused' && (
-         <div className="fixed top-16 sm:top-[4.5rem] left-3 right-3 sm:left-4 sm:right-4 z-40 bg-[#3D3A35] text-white p-3 rounded-2xl shadow-2xl border-2 border-[#EA580C] flex items-center justify-between gap-3 max-w-lg mx-auto">
+         <div className="fixed top-16 sm:top-[4.5rem] left-3 right-3 sm:left-4 sm:right-4 z-40 bg-[#3D3A35] text-white p-3 rounded-2xl shadow-2xl border-2 border-[#FACC15] flex items-center justify-between gap-3 max-w-lg mx-auto">
             <div className="flex items-center gap-3 min-w-0">
                <Loader className="w-5 h-5 text-[#FACC15] animate-spin shrink-0" />
                <div className="min-w-0">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-[#EA580C]">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-[#FACC15]">
                      Bingo Claim In Progress
                   </div>
                   <div className="text-sm font-bold truncate">
@@ -988,6 +1180,7 @@ export default function Player() {
             </div>
             {winningCardIdx !== -1 && (
                <button
+                 type="button"
                  onClick={() => setShowClaimConfirm(true)}
                  className="bg-[#EA580C] text-white px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider shrink-0 shadow-lg hover:brightness-110 active:scale-95"
                >
@@ -1003,19 +1196,19 @@ export default function Player() {
                <div className="flex items-center gap-3">
                   <div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center shrink-0"><Trophy size={22} /></div>
                   <div className="flex-1 min-w-0">
-                     <div className="text-[10px] font-black uppercase tracking-widest opacity-80">
+                     <div className="text-[10px] font-black uppercase tracking-widest text-white/90">
                         {dikitAlert.length > 1 ? 'MULTIPLE DIKIT WINS!' : 'Dikit Sidebet Hit!'}
                      </div>
                      <div className="text-lg font-black truncate leading-tight">
                         {dikitAlert.map((w: any) => w.playerName).join(' & ')}
                      </div>
-                     <div className="text-[9px] font-bold uppercase tracking-widest opacity-75 mt-0.5">
+                     <div className="text-[10px] font-bold uppercase tracking-wider text-white/90 mt-0.5">
                         {dikitPrize > 0
                            ? `Prize: ${formatPeso(dikitPrize)}${dikitAlert.length > 1 ? ` (${formatPeso(dikitPrize / dikitAlert.length)} each)` : ''} · Game continues`
                            : 'Sidebet winner announced · Game continues'}
                      </div>
                   </div>
-                  <button type="button" onClick={() => dismissDikit()} aria-label="Dismiss Dikit announcement" className="text-white/80 hover:text-white shrink-0 p-2 rounded-lg hover:bg-white/10 transition-colors">
+                  <button type="button" onClick={() => dismissDikit()} aria-label="Dismiss Dikit announcement" className="text-white/85 hover:text-white shrink-0 p-2 rounded-lg hover:bg-white/10 transition-colors">
                      <Plus size={20} className="rotate-45" />
                   </button>
                </div>
@@ -1023,17 +1216,17 @@ export default function Player() {
                   {dikitAlert.map((alert: any, aIdx: number) => (
                      <div key={alert.id || aIdx} className="bg-white/10 p-3 rounded-2xl border border-white/20 shrink-0 snap-center">
                         <div className="text-center text-xs font-bold mb-1.5">
-                           {alert.playerName} <span className="opacity-75">· Card {(alert.cardIndex ?? 0) + 1}</span>
+                           {alert.playerName} <span className="opacity-85">· Card {(alert.cardIndex ?? 0) + 1}</span>
                         </div>
                         <div className="grid grid-cols-5 gap-1">
                            {['B','I','N','G','O'].map(l => (
-                              <div key={l} className="text-center font-black text-[8px] text-white/75">{l}</div>
+                              <div key={l} className="text-center font-black text-[10px] text-white/85">{l}</div>
                            ))}
                            {alert.card.map((row: number[], rIdx: number) => row.map((num: number, cIdx: number) => {
                               const called = num === 0 || room.calledNumbers.includes(num);
                               return (
-                                 <div key={`${rIdx}-${cIdx}`} className={`w-6 h-6 flex items-center justify-center font-black text-[8px] rounded-md border ${num === 0 ? 'bg-white text-[#0D9488]' : called ? 'bg-white text-[#0D9488] shadow-md' : 'bg-[#0D9488]/20 border-white/20 text-white/40'}`}>
-                                    {num === 0 ? 'FR' : num}
+                                 <div key={`${rIdx}-${cIdx}`} className={`w-6 h-6 flex items-center justify-center font-black text-[10px] rounded-md border tabular-nums ${num === 0 ? 'bg-[#FACC15] text-[#854D0E] border-[#FACC15]' : called ? 'bg-white text-[#0F766E] border-white shadow-md' : 'bg-[#0F766E] border-white/25 text-white/85'}`}>
+                                    {num === 0 ? '★' : num}
                                  </div>
                               );
                            }))}
@@ -1047,7 +1240,7 @@ export default function Player() {
 
       <AnimatePresence>
         {winner && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-[60] p-4 sm:p-6">
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} role="dialog" aria-modal="true" aria-label="Bingo Winner" className="fixed inset-0 bg-[#3D3A35]/90 backdrop-blur-xl flex justify-center items-center z-[60] p-4 sm:p-6">
              <motion.div initial={{scale:0.85, y:40}} animate={{scale:1, y:0}} className="bg-white rounded-[36px] border-[8px] border-[#FACC15] w-full max-w-md p-5 sm:p-7 shadow-2xl text-center relative overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#FACC15]/10 to-transparent opacity-50 pointer-events-none" />
                 <div className="relative z-10 flex flex-col min-h-0 flex-1">
@@ -1055,23 +1248,23 @@ export default function Player() {
                     <Trophy className="text-white" size={30} />
                   </div>
                   
-                  <h2 className="text-3xl sm:text-4xl font-display text-[#3D3A35] mb-1 uppercase italic tracking-tighter shrink-0">
+                  <h2 className="text-3xl sm:text-4xl font-display text-[#3D3A35] mb-1 uppercase tracking-tight shrink-0">
                     {winner.some((w: any) => w.playerId === me?.id)
                       ? (winner.length > 1 ? 'YOU & OTHERS WON!' : 'YOU WON!')
                       : (winner.length > 1 ? `${winner.length} BINGO WINNERS!` : 'BINGO WINNER!')}
                   </h2>
-                  <p className="text-xs sm:text-sm font-bold text-[#7A746B] mb-2 shrink-0">
-                    <span className="font-black text-[#EA580C]">{winner.map((w: any) => w.playerName).join(', ')}</span>
+                  <p className="text-xs sm:text-sm font-bold text-[#6B655D] mb-2 shrink-0">
+                    <span className="font-black text-[#C2410C]">{winner.map((w: any) => w.playerName).join(', ')}</span>
                   </p>
                   {bingoPrize > 0 && (
-                    <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-2 px-3 py-1 rounded-full bg-[#EA580C]/10 border border-[#EA580C]/30 text-xs font-black text-[#EA580C] tabular-nums shrink-0">
-                      🏆 Prize: {formatPeso(bingoPrize)}
+                    <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-2 px-3 py-1 rounded-full bg-[#EA580C]/10 border border-[#EA580C]/30 text-xs font-black text-[#C2410C] tabular-nums shrink-0">
+                      <Trophy size={13} aria-hidden="true" /> Prize: {formatPeso(bingoPrize)}
                       {winner.length > 1 && <span className="text-[10px] font-bold">({formatPeso(bingoPrize / winner.length)} each)</span>}
                     </div>
                   )}
                   {room.status === 'next_round' && (
-                    <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-3 px-3 py-1 rounded-full bg-[#FAF7F2] border border-[#E8E2D9] text-[10px] font-black uppercase tracking-widest text-[#7A746B] shrink-0">
-                      Next round auto-starting in <span className="text-[#EA580C]"><Countdown endsAt={room.nextRoundEndsAt} /></span>
+                    <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-3 px-3 py-1 rounded-full bg-[#FAF7F2] border border-[#E8E2D9] text-[10px] font-black uppercase tracking-widest text-[#6B655D] shrink-0 tabular-nums">
+                      Next round auto-starting in <span className="text-[#C2410C]"><Countdown endsAt={room.nextRoundEndsAt} /></span>
                     </div>
                   )}
 
@@ -1083,23 +1276,23 @@ export default function Player() {
                         <div key={w.id || wIdx} className={`p-3 rounded-2xl border-2 shadow-sm ${isMe ? 'bg-[#0D9488]/5 border-[#0D9488]' : 'bg-[#FAF7F2] border-[#E8E2D9]'}`}>
                           <div className="flex items-center justify-between gap-2 mb-1.5 px-1">
                             <span className="text-xs font-black text-[#3D3A35] flex items-center gap-1.5 truncate">
-                              {w.playerName} {isMe && <span className="text-[9px] bg-[#0D9488] text-white px-1.5 py-0.5 rounded-full font-bold">YOU</span>}
+                              {w.playerName} {isMe && <span className="text-[10px] bg-[#0D9488] text-white px-1.5 py-0.5 rounded-full font-bold">YOU</span>}
                             </span>
-                            <span className="text-[10px] font-bold text-[#EA580C] bg-[#EA580C]/10 px-2 py-0.5 rounded-full shrink-0">
+                            <span className="text-[10px] font-bold text-[#C2410C] bg-[#EA580C]/10 px-2 py-0.5 rounded-full shrink-0">
                               Card {(w.cardIndex ?? 0) + 1} · {w.pattern || 'Bingo'}
                             </span>
                           </div>
                           <div className="grid grid-cols-5 gap-1 mx-auto max-w-[200px]">
                             {['B','I','N','G','O'].map(l => (
-                              <div key={l} className="text-center font-black text-[9px] text-[#EA580C]">{l}</div>
+                              <div key={l} className="text-center font-black text-[10px] text-[#C2410C]">{l}</div>
                             ))}
                             {w.card.map((row: number[], rIdx: number) => row.map((num: number, cIdx: number) => {
                               const called = num === 0 || (room.calledNumbers || []).includes(num);
                               return (
                                 <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-display text-[10px] rounded-md border transition-all tabular-nums ${
-                                  num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm font-bold' : 'bg-white border-[#E8E2D9] text-[#7A746B]'
+                                  num === 0 ? 'bg-[#FACC15] text-[#854D0E] border-[#FACC15]' : called ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm' : 'bg-white border-[#E8E2D9] text-[#7A746B]'
                                 }`}>
-                                  {num === 0 ? 'FR' : num}
+                                  {num === 0 ? '★' : num}
                                 </div>
                               );
                             }))}
@@ -1109,7 +1302,7 @@ export default function Player() {
                     })}
                   </div>
 
-                  <button onClick={dismissWinner} className="w-full py-4 bg-[#3D3A35] text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-black active:scale-95 transition-all shadow-xl shrink-0 mt-auto">
+                  <button type="button" onClick={dismissWinner} className="w-full py-4 bg-[#3D3A35] text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-black active:scale-95 transition-all shadow-xl shrink-0 mt-auto">
                     Awesome
                   </button>
                 </div>
