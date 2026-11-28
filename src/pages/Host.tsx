@@ -33,20 +33,37 @@ function Countdown({ endsAt }: { endsAt?: number }) {
 
 function PatternGrid({ cells, onToggle }: { cells: number[], onToggle?: (cell: number) => void }) {
   return (
-    <div className="grid grid-cols-5 gap-1">
-      {Array.from({ length: 25 }, (_, i) => {
-        const selected = cells.includes(i);
-        return (
-          <button
-            key={i}
-            type="button"
-            onClick={() => onToggle?.(i)}
-            className={`aspect-square rounded-md border text-[10px] font-black ${selected ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-white border-[#DED9D1] text-[#A19B91]'}`}
-          >
-            {i === 12 ? 'FR' : ''}
-          </button>
-        );
-      })}
+    <div className="bg-[#3D3A35] p-2.5 rounded-2xl shadow-sm w-44">
+      <div className="grid grid-cols-5 gap-1 mb-1">
+        {['B', 'I', 'N', 'G', 'O'].map(letter => (
+          <div key={letter} className="text-center font-display text-xs text-[#FACC15] leading-none">
+            {letter}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-5 gap-1">
+        {Array.from({ length: 25 }, (_, i) => {
+          const selected = cells.includes(i);
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onToggle?.(i)}
+              aria-pressed={selected}
+              aria-label={i === 12 ? 'Free space' : `Cell ${i + 1}`}
+              className={`aspect-square rounded-md border text-[10px] font-black transition-colors ${
+                selected
+                  ? 'bg-[#FACC15] border-[#FACC15] text-[#3D3A35]'
+                  : i === 12
+                    ? 'bg-[#7A746B] border-[#7A746B] text-white'
+                    : 'bg-[#FAF7F2]/15 border-white/15 text-white/70 hover:bg-[#FAF7F2]/30'
+              }`}
+            >
+              {i === 12 ? 'FR' : ''}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -379,8 +396,8 @@ export default function Host() {
          <div className="fixed inset-0 z-[100] bg-[#3D3A35]/80 backdrop-blur-md flex items-center justify-center p-6 text-center">
             <div className="bg-white rounded-[32px] p-8 border-4 border-[#0D9488] shadow-2xl max-w-xs">
                <div className="w-12 h-12 border-4 border-[#0D9488] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-               <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Restoring Link</h2>
-               <p className="text-sm font-bold text-[#7A746B]">Host connection dropped. Attempting to rejoin the booth...</p>
+               <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Reconnecting...</h2>
+               <p className="text-sm font-semibold text-[#6B655D]">Host connection dropped. Rejoining your Bingo room...</p>
             </div>
          </div>
       )}
@@ -388,27 +405,42 @@ export default function Host() {
       <header className="bg-white border-b-2 border-[#E8E2D9] h-16 px-3 sm:px-6 flex items-center justify-between gap-2 sticky top-0 z-20 shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <div className="bg-[#F3EFE9] border border-[#DED9D1] text-[#3D3A35] font-black text-lg sm:text-xl px-3 sm:px-4 py-1.5 rounded-xl tracking-wider tabular-nums flex items-center gap-2 shrink-0">
-            <span className="text-[10px] font-bold text-[#7A746B] uppercase tracking-widest hidden sm:inline">Room</span>
+            <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider hidden sm:inline">Room</span>
             {room.id}
           </div>
           <div className="flex items-center gap-1 sm:gap-1.5">
-             <button onClick={handleCopy} className="p-2 text-[#A19B91] hover:text-[#3D3A35] transition-colors rounded-lg hover:bg-[#FAF7F2]" title={copyLabel}><Copy size={17} /></button>
-             <button onClick={openDisplay} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#0D9488]/10 text-[#0D9488] rounded-lg text-xs font-black uppercase tracking-wider hover:bg-[#0D9488]/20 transition-all" title="Open TV Display">
+             <button
+               type="button"
+               onClick={handleCopy}
+               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                 copyLabel === 'Copied'
+                   ? 'bg-[#0D9488]/15 text-[#0D9488]'
+                   : 'text-[#6B655D] hover:text-[#3D3A35] hover:bg-[#FAF7F2]'
+               }`}
+               title="Copy player join link"
+               aria-label="Copy player join link"
+             >
+               {copyLabel === 'Copied' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+               <span className="hidden lg:inline">{copyLabel === 'Copied' ? 'Copied!' : 'Copy Link'}</span>
+             </button>
+             <button type="button" onClick={openDisplay} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#0D9488]/10 text-[#0D9488] rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#0D9488]/20 transition-all" title="Open TV Display">
                <Monitor size={15} />
                <span className="hidden md:inline">TV Mode</span>
              </button>
              <button 
+               type="button"
                onClick={() => window.open(`${window.location.origin}/host/${room.id}/grid`, '_blank')} 
-               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#EA580C]/10 text-[#EA580C] rounded-lg text-xs font-black uppercase tracking-wider hover:bg-[#EA580C]/20 transition-all"
-               title="Open God View"
+               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#EA580C]/10 text-[#EA580C] rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#EA580C]/20 transition-all"
+               title="Open Live Player Cards Grid"
              >
                <LayoutGrid size={15} />
-               <span className="hidden md:inline">God View</span>
+               <span className="hidden md:inline">Live Cards</span>
              </button>
              <button
+               type="button"
                onClick={() => setAudioEnabled(!audioEnabled)}
-               className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
-                 audioEnabled ? 'bg-[#0D9488]/10 text-[#0D9488] hover:bg-[#0D9488]/20' : 'bg-[#EF4444]/10 text-[#EF4444] hover:bg-[#EF4444]/20'
+               className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                 audioEnabled ? 'bg-[#0D9488]/10 text-[#0D9488] hover:bg-[#0D9488]/20' : 'bg-[#EF4444]/10 text-[#B91C1C] hover:bg-[#EF4444]/20'
                }`}
                title={audioEnabled ? "Caller Voice is ON (Click to Mute)" : "Caller Voice is MUTED (Click to Enable)"}
              >
@@ -419,17 +451,17 @@ export default function Host() {
         </div>
         <div className="flex items-center gap-3 sm:gap-5 shrink-0">
           <div className="hidden sm:flex flex-col items-end leading-none">
-            <span className="text-xs font-black text-[#3D3A35] mb-1">{me?.nickname}</span>
-            <span className="text-[10px] text-[#0D9488] font-bold uppercase flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#0D9488] inline-block animate-pulse" />Host Dashboard</span>
+            <span className="text-xs font-bold text-[#3D3A35] mb-1">{me?.nickname}</span>
+            <span className="text-[11px] text-[#0D9488] font-bold uppercase flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#0D9488] inline-block animate-pulse" />Host Booth</span>
           </div>
-          <button onClick={() => setShowSettings(!showSettings)} className="w-10 h-10 bg-[#F3EFE9] text-[#7A746B] border border-[#DED9D1] rounded-xl flex items-center justify-center hover:bg-[#E8E2D9] transition-colors" title="Room Config"><Settings size={20} /></button>
+          <button type="button" onClick={() => setShowSettings(!showSettings)} className="w-10 h-10 bg-[#F3EFE9] text-[#3D3A35] border border-[#DED9D1] rounded-xl flex items-center justify-center hover:bg-[#E8E2D9] transition-colors" title="Room Settings" aria-label="Room Settings"><Settings size={20} /></button>
         </div>
       </header>
 
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-[270px_1fr_300px] xl:grid-cols-[310px_1fr_350px] gap-0 lg:overflow-hidden min-h-0">
         <section className="bg-white border-b-2 lg:border-b-0 lg:border-r-2 border-[#E8E2D9] p-5 xl:p-6 flex flex-col gap-5 xl:gap-6 lg:overflow-y-auto custom-scrollbar">
-           <div><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Tactical Controls</h3><div className="grid grid-cols-1 gap-3">{room.status === 'waiting' && (<button onClick={startGame} className="w-full py-5 bg-[#0D9488] text-white rounded-2xl font-black text-xl shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all uppercase tracking-widest flex items-center justify-center gap-3"><Play size={24} fill="currentColor" />Lobby Start</button>)}{(room.status === 'playing' || room.status === 'paused') && (<div className="flex flex-col gap-3"><div className="grid grid-cols-2 gap-3"><button onClick={pauseGame} disabled={room.status === 'paused'} className={`py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all border-2 ${room.status === 'paused' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#A19B91]' : 'bg-[#EF4444] border-[#EF4444] text-white shadow-[0_4px_0_#B91C1C] active:translate-y-[4px] active:shadow-none'}`}><Square size={18} fill="currentColor" className="inline mr-2" />Emergency Stop</button><button onClick={resumeGame} disabled={room.status === 'playing'} className={`py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all border-2 ${room.status === 'playing' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#A19B91]' : 'bg-[#0D9488] border-[#0D9488] text-white shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none'}`}><Play size={18} fill="currentColor" className="inline mr-2" />Safety Resume</button></div><button onClick={resetGame} className="w-full py-3 bg-[#FAF7F2] border-2 border-[#E8E2D9] text-[#A19B91] rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-[#E8E2D9] hover:text-[#3D3A35] transition-all">Abort Round / Reset</button></div>)}{room.status === 'next_round' && (<div className="flex flex-col gap-2.5"><div className="bg-[#FAF7F2] border-2 border-[#FACC15] rounded-2xl p-3 text-center"><div className="text-[10px] font-black uppercase tracking-widest text-[#7A746B]">Auto-Starting Round {room.roundNumber + 1}</div><div className="text-3xl font-display text-[#EA580C] leading-tight mt-0.5"><Countdown endsAt={room.nextRoundEndsAt} /></div></div><button onClick={startNextRound} className="w-full py-4 bg-[#FACC15] text-[#854D0E] rounded-2xl font-black text-lg shadow-[0_6px_0_#A16207] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-tighter flex flex-col items-center leading-none"><span className="text-[10px] mb-1">Skip Countdown</span>Start Next Round Now</button></div>)}</div></div>
-           <div className="pt-6 border-t-2 border-[#FAF7F2]"><h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-4">Ball Calling</h3><div className="space-y-4"><div className="bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest block mb-2">Auto-Call Speed (seconds)</label><div className="flex gap-2">{[0, 3, 5].map(speed => (<button key={speed} onClick={() => updateSettings({ autoCallSpeed: speed })} className={`flex-1 py-2 rounded-xl text-xs font-black border-2 transition-all ${room.autoCallSpeed === speed ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#DED9D1] text-[#A19B91] hover:border-[#A19B91]'}`}>{speed === 0 ? 'Off' : `${speed}s`}</button>))}<input type="number" min="0" placeholder="Custom" value={room.autoCallSpeed || ''} onChange={e => updateSettings({ autoCallSpeed: parseInt(e.target.value) || 0 })} className="w-16 py-2 px-1 text-center rounded-xl text-xs font-black border-2 bg-white border-[#DED9D1] text-[#3D3A35] focus:border-[#0D9488] outline-none" /></div></div>{room.status === 'playing' && room.autoCallSpeed === 0 && (<button onClick={callNextBall} className="w-full py-8 bg-[#3D3A35] text-white rounded-[32px] font-black text-2xl shadow-[0_8px_0_#1C1917] active:translate-y-[8px] active:shadow-none transition-all uppercase tracking-widest">Call Ball</button>)}</div></div>
+           <div><h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em] mb-3.5">Game Controls</h3><div className="grid grid-cols-1 gap-3">{room.status === 'waiting' && (<button type="button" onClick={startGame} className="w-full py-5 bg-[#0D9488] text-white rounded-2xl font-black text-xl shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all uppercase tracking-widest flex items-center justify-center gap-3"><Play size={22} fill="currentColor" />Start Round</button>)}{(room.status === 'playing' || room.status === 'paused') && (<div className="flex flex-col gap-3"><div className="grid grid-cols-2 gap-2.5"><button type="button" onClick={pauseGame} disabled={room.status === 'paused'} className={`py-3.5 px-2 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border-2 flex items-center justify-center gap-1.5 ${room.status === 'paused' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#6B655D]' : 'bg-[#EF4444] border-[#EF4444] text-white shadow-[0_4px_0_#B91C1C] active:translate-y-[4px] active:shadow-none'}`}><Square size={14} fill="currentColor" />Pause Calling</button><button type="button" onClick={resumeGame} disabled={room.status === 'playing'} className={`py-3.5 px-2 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border-2 flex items-center justify-center gap-1.5 ${room.status === 'playing' ? 'bg-[#F3EFE9] border-[#DED9D1] text-[#6B655D]' : 'bg-[#0D9488] border-[#0D9488] text-white shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none'}`}><Play size={14} fill="currentColor" />Resume</button></div><button type="button" onClick={resetGame} className="w-full py-2.5 bg-[#FAF7F2] border-2 border-[#E8E2D9] text-[#6B655D] rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-[#E8E2D9] hover:text-[#3D3A35] transition-all">Reset Round</button></div>)}{room.status === 'next_round' && (<div className="flex flex-col gap-2.5"><div className="bg-[#FAF7F2] border-2 border-[#FACC15] rounded-2xl p-3 text-center"><div className="text-[11px] font-bold uppercase tracking-wider text-[#6B655D]">Auto-Starting Round {room.roundNumber + 1}</div><div className="text-3xl font-display text-[#EA580C] leading-tight mt-0.5"><Countdown endsAt={room.nextRoundEndsAt} /></div></div><button type="button" onClick={startNextRound} className="w-full py-4 bg-[#FACC15] text-[#854D0E] rounded-2xl font-black text-lg shadow-[0_6px_0_#A16207] active:translate-y-[4px] active:shadow-none transition-all uppercase tracking-tight flex flex-col items-center leading-none"><span className="text-[10px] mb-1">Skip Countdown</span>Start Next Round Now</button></div>)}</div></div>
+           <div className="pt-5 border-t-2 border-[#FAF7F2]"><h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em] mb-3.5">Ball Calling</h3><div className="space-y-4"><div className="bg-[#FAF7F2] p-3.5 rounded-2xl border-2 border-[#E8E2D9]"><label htmlFor="autocall-sec" className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider block mb-2">Auto-Call Speed (sec)</label><div className="flex gap-1.5">{[0, 3, 5].map(speed => (<button key={speed} type="button" onClick={() => updateSettings({ autoCallSpeed: speed })} className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${room.autoCallSpeed === speed ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#DED9D1] text-[#6B655D] hover:border-[#6B655D]'}`}>{speed === 0 ? 'Off' : `${speed}s`}</button>))}<input id="autocall-sec" type="number" min="0" placeholder="Sec" value={room.autoCallSpeed || ''} onChange={e => updateSettings({ autoCallSpeed: parseInt(e.target.value) || 0 })} className="w-20 py-2 px-2 text-center rounded-xl text-xs font-bold border-2 bg-white border-[#DED9D1] text-[#3D3A35] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none tabular-nums" /></div></div>{room.status === 'playing' && room.autoCallSpeed === 0 && (<button type="button" onClick={callNextBall} className="w-full py-6 bg-[#3D3A35] hover:bg-black text-white rounded-3xl font-black text-2xl shadow-[0_8px_0_#1C1917] active:translate-y-[8px] active:shadow-none transition-all uppercase tracking-widest flex flex-col items-center justify-center gap-1"><span>Call Ball</span><kbd className="text-[10px] font-semibold tracking-widest bg-white/15 px-2 py-0.5 rounded-md">Space</kbd></button>)}</div></div>
            <div className="mt-auto pt-4 border-t-2 border-[#FAF7F2]">
              <div className="bg-[#FAF7F2] rounded-2xl p-4 border-2 border-[#E8E2D9] space-y-4">
                <div>
@@ -460,7 +492,7 @@ export default function Host() {
                      ))}
                    </div>
                  ) : (
-                   <p className="text-xs text-[#A19B91] italic pl-1">None yet</p>
+                   <p className="text-xs text-[#6B655D] italic pl-1">None yet</p>
                  )}
                </div>
 
@@ -492,7 +524,7 @@ export default function Host() {
                      ))}
                    </div>
                  ) : (
-                   <p className="text-xs text-[#A19B91] italic pl-1">None yet</p>
+                   <p className="text-xs text-[#6B655D] italic pl-1">None yet</p>
                  )}
                </div>
              </div>
@@ -502,7 +534,7 @@ export default function Host() {
         <section className="bg-[#FAF7F2] p-4 sm:p-6 xl:p-8 flex flex-col gap-5 xl:gap-6 lg:overflow-y-auto custom-scrollbar min-w-0">
            <div className="grid grid-cols-1 xl:grid-cols-[minmax(220px,1fr)_minmax(290px,360px)] gap-5 xl:gap-6 shrink-0">
               <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-6 shadow-sm flex flex-col justify-center items-center relative overflow-hidden min-h-[210px]">
-                 <div className="absolute top-4 left-5 text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Latest Call</div>
+                 <div className="absolute top-4 left-5 text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.2em]">Latest Call</div>
                  <AnimatePresence mode="popLayout">
                     {revealedBall ? (
                        <motion.div
@@ -520,39 +552,41 @@ export default function Host() {
                             <span className="text-6xl xl:text-7xl font-display leading-none tracking-tighter z-10">{revealedBall}</span>
                           </div>
                        </motion.div>
-                    ) : (<div className="text-lg xl:text-xl font-black text-[#DED9D1] uppercase tracking-widest text-center px-4">{room.status === 'playing' ? 'Drawing Ball...' : 'Awaiting First Ball'}</div>)}
+                    ) : (<div className="text-lg xl:text-xl font-bold text-[#6B655D] uppercase tracking-wider text-center px-4">{room.status === 'playing' ? 'Drawing Ball...' : 'Awaiting First Ball'}</div>)}
                  </AnimatePresence>
               </div>
               <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-5 shadow-sm flex flex-col min-w-0">
                 <div className="flex items-center justify-between mb-3 shrink-0">
-                  <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.25em]">Active Patterns</span>
+                  <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.2em]">Active Patterns</span>
                   {!room.hidePattern && room.mode === 'Bingo' && (
-                    <span className="text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full uppercase">
+                    <span className="text-[10px] font-bold text-[#0D9488] bg-[#0D9488]/12 px-2.5 py-0.5 rounded-full uppercase">
                       {room.patterns.length} ON
                     </span>
                   )}
                 </div>
-                <div className="flex-1 flex items-center justify-center max-h-[190px] overflow-y-auto custom-scrollbar px-1">
-                  {!room.hidePattern ? (
-                    room.mode === 'Bingo' ? (
-                      <PatternVisualizer patterns={room.patterns} size="sm" />
-                    ) : (
-                      <div className="text-center py-4">
-                        <div className="text-2xl font-display text-[#EA580C] uppercase italic">{room.mode}</div>
-                        <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest mt-1">
-                          {room.mode === 'Blackout' ? 'Mark all 25 cells' : 'Hit any 2 adjacent numbers'}
+                <div className="flex-1 flex items-start justify-center max-h-[210px] overflow-y-auto custom-scrollbar px-1">
+                  <div className="my-auto w-full py-0.5">
+                    {!room.hidePattern ? (
+                      room.mode === 'Bingo' ? (
+                        <PatternVisualizer patterns={room.patterns} size="sm" />
+                      ) : (
+                        <div className="text-center py-4">
+                          <div className="text-2xl font-display text-[#EA580C] uppercase italic">{room.mode}</div>
+                          <div className="text-xs font-semibold text-[#6B655D] mt-1">
+                            {room.mode === 'Blackout' ? 'Mark all 25 cells' : 'Hit any 2 adjacent numbers'}
+                          </div>
                         </div>
+                      )
+                    ) : (
+                      <div className="text-[#6B655D] flex flex-col items-center gap-2 py-4">
+                        <Eye size={28} className="opacity-70" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-center leading-tight px-4">Pattern Hidden from Screens</span>
                       </div>
-                    )
-                  ) : (
-                    <div className="text-[#DED9D1] flex flex-col items-center gap-2 py-4">
-                      <Eye size={32} className="opacity-30" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-center leading-tight px-4">Pattern Hidden from Screens</span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
                 <div className="mt-3 pt-3 border-t-2 border-[#FAF7F2] flex items-center justify-between shrink-0">
-                  <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest">Mode</span>
+                  <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">Mode</span>
                   <span className="text-sm font-black text-[#EA580C] uppercase tracking-tight">{room.mode === 'Bingo' ? 'Standard' : room.mode}</span>
                 </div>
               </div>
@@ -566,20 +600,20 @@ export default function Host() {
                      <div className="text-xs font-black uppercase tracking-wider text-[#0D9488]">
                        Dikit Fight In Progress
                      </div>
-                     <div className="text-[10px] font-bold text-[#7A746B]">
+                     <div className="text-[11px] font-semibold text-[#3D3A35]">
                        {room.dikitFight.roundBingoPending
                          ? '🏆 BINGO VERIFIED! Continue calling balls to conclude Dikit Fight'
                          : 'Simultaneous sidebet: Waiting for 1 or 2 cards to hit another Dikit'}
                      </div>
                    </div>
                  </div>
-                 <div className="text-[10px] font-black uppercase bg-[#0D9488] text-white px-3 py-1 rounded-full">
+                 <div className="text-[11px] font-bold uppercase bg-[#0D9488] text-white px-3 py-1 rounded-full">
                    {room.dikitFight.contenders.map(c => c.playerName).join(' vs ')}
                  </div>
                </div>
              )}
              <div className="flex justify-between items-center mb-4">
-               <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Master Number Board</h3>
+               <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.2em]">Master Number Board</h3>
                <div className="text-xs font-black text-[#EA580C] tabular-nums bg-[#EA580C]/10 px-3 py-1 rounded-full">{room.calledNumbers.length} / 75</div>
              </div>
              <div className="space-y-1.5">
@@ -598,7 +632,7 @@ export default function Host() {
                                ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-md ring-2 ring-[#FACC15] scale-105 z-10'
                                : isCalled
                                  ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm'
-                                 : 'bg-[#FAF7F2] text-[#C5BFB6] border-[#E8E2D9]'
+                                 : 'bg-[#FAF7F2] text-[#7A746B] border-[#E8E2D9]'
                            }`}
                          >
                            {isCalled && (
@@ -618,11 +652,11 @@ export default function Host() {
         <section className="bg-white border-t-2 lg:border-t-0 lg:border-l-2 border-[#E8E2D9] flex flex-col lg:overflow-hidden min-h-0">
            <div className="p-5 xl:p-6 border-b-2 border-[#FAF7F2] bg-[#FAF7F2]/30 shrink-0 space-y-3">
              <div className="flex items-center justify-between">
-               <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">Session Stats</h3>
+               <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em]">Room Stats</h3>
                <button
                  type="button"
                  onClick={() => setShowSettings(true)}
-                 className="text-[9px] font-black uppercase text-[#EA580C] bg-[#EA580C]/10 hover:bg-[#EA580C]/20 px-2 py-0.5 rounded-full transition-colors"
+                 className="text-[10px] font-bold uppercase text-[#EA580C] bg-[#EA580C]/10 hover:bg-[#EA580C]/20 px-2.5 py-0.5 rounded-full transition-colors"
                >
                  Edit Prices
                </button>
@@ -631,24 +665,28 @@ export default function Host() {
                <div className="bg-white p-3 rounded-2xl border-2 border-[#E8E2D9] shadow-sm">
                  <Ticket size={16} className="text-[#EA580C] mb-1" />
                  <div className="text-2xl font-display tabular-nums leading-none">{room.stats.totalCardsSold}</div>
-                 <div className="text-[9px] font-bold text-[#A19B91] uppercase tracking-wider mt-0.5">Cards Sold</div>
+                 <div className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider mt-0.5">
+                   {room.stats.totalCardsSold === 1 ? 'Card Sold' : 'Cards Sold'}
+                 </div>
                </div>
                <div className="bg-white p-3 rounded-2xl border-2 border-[#E8E2D9] shadow-sm">
                  <Users size={16} className="text-[#0D9488] mb-1" />
                  <div className="text-2xl font-display tabular-nums leading-none">{Object.values(room.players).length}</div>
-                 <div className="text-[9px] font-bold text-[#A19B91] uppercase tracking-wider mt-0.5">Players</div>
+                 <div className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider mt-0.5">
+                   {Object.values(room.players).length === 1 ? 'Player' : 'Players'}
+                 </div>
                </div>
              </div>
              <div className="bg-white p-3.5 rounded-2xl border-2 border-[#E8E2D9] shadow-sm space-y-2">
                <div className="flex items-center justify-between">
-                 <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-wider flex items-center gap-1.5">
+                 <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider flex items-center gap-1.5">
                    <Coins size={13} className="text-[#EA580C]" />
                    Pot Collected
                  </span>
                  <span className="text-xl font-display text-[#3D3A35] tabular-nums leading-none">{formatPeso(totalCollected)}</span>
                </div>
                {pricingEnabled && (
-                 <div className="text-[9px] font-bold text-[#A19B91] flex flex-wrap gap-x-2 gap-y-0.5">
+                 <div className="text-[10px] font-semibold text-[#6B655D] flex flex-wrap gap-x-2 gap-y-0.5">
                    <span>1: {formatPeso(calculateCardsCost(1, room))}</span>
                    <span>· 2: {formatPeso(calculateCardsCost(2, room))}</span>
                    <span>· 4: {formatPeso(calculateCardsCost(4, room))}</span>
@@ -656,18 +694,18 @@ export default function Host() {
                )}
                <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-[#FAF7F2]">
                  <div className="bg-[#0D9488]/10 px-2.5 py-1.5 rounded-xl">
-                   <div className="text-[8px] font-black text-[#0D9488] uppercase tracking-wider">⚔️ Dikit Prize</div>
+                   <div className="text-[9px] font-bold text-[#0D9488] uppercase tracking-wider">⚔️ Dikit Prize</div>
                    <div className="text-sm font-display text-[#0D9488] tabular-nums">{dikitPrize > 0 ? formatPeso(dikitPrize) : 'Not set'}</div>
                  </div>
                  <div className="bg-[#EA580C]/10 px-2.5 py-1.5 rounded-xl">
-                   <div className="text-[8px] font-black text-[#EA580C] uppercase tracking-wider">🏆 Bingo Prize</div>
+                   <div className="text-[9px] font-bold text-[#EA580C] uppercase tracking-wider">🏆 Bingo Prize</div>
                    <div className="text-sm font-display text-[#EA580C] tabular-nums">{bingoPrize > 0 ? formatPeso(bingoPrize) : 'Not set'}</div>
                  </div>
                </div>
                {(totalCollected > 0 || totalPrizes > 0) && (
-                 <div className="flex items-center justify-between text-[10px] pt-1 border-t border-[#FAF7F2]">
-                   <span className="font-bold text-[#7A746B] uppercase tracking-wider">Balance</span>
-                   <span className={`font-black tabular-nums ${potBalance >= 0 ? 'text-[#0D9488]' : 'text-[#EF4444]'}`}>
+                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#FAF7F2]">
+                   <span className="font-bold text-[#6B655D] uppercase tracking-wider">Balance</span>
+                   <span className={`font-black tabular-nums ${potBalance >= 0 ? 'text-[#0D9488]' : 'text-[#B91C1C]'}`}>
                      {potBalance >= 0 ? `+${formatPeso(potBalance)}` : `-${formatPeso(Math.abs(potBalance))}`}
                    </span>
                  </div>
@@ -676,8 +714,8 @@ export default function Host() {
            </div>
            <div className="flex-1 p-5 xl:p-6 overflow-y-auto custom-scrollbar bg-[#FAF7F2] min-h-[200px]">
              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">God View (Live Boards)</h3>
-                <div className="text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full uppercase">Real-time</div>
+                <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em]">Live Player Cards</h3>
+                <div className="text-[10px] font-bold text-[#0D9488] bg-[#0D9488]/12 px-2 py-0.5 rounded-full uppercase">Real-time</div>
              </div>
              <div className="grid grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3">
                {Object.values(room.players).map(p => { 
@@ -685,19 +723,20 @@ export default function Host() {
                  return p.activeCards.map((card, cardIdx) => {
                    const marked = p.markedCells[cardIdx] || [];
                    const res = checkValidWin(card, marked, room.calledNumbers, room.mode, room.patterns);
-                   const nearWin = room.calledNumbers.length > 0 && res.cellsAway <= 3;
+                   const isFalseMark = res.cellsAway === 99;
+                   const nearWin = room.calledNumbers.length > 0 && !isFalseMark && res.cellsAway <= 3;
                    
                    return (
-                     <div key={`${p.id}-${cardIdx}`} className={`flex flex-col bg-white border-2 p-2.5 rounded-2xl shadow-sm transition-all ${nearWin ? 'border-[#EA580C] shadow-[0_0_15px_rgba(234,88,12,0.25)]' : 'border-[#E8E2D9]'}`}>
+                     <div key={`${p.id}-${cardIdx}`} className={`flex flex-col bg-white border-2 p-2.5 rounded-2xl shadow-sm transition-all ${isFalseMark ? 'border-[#B91C1C]' : nearWin ? 'border-[#EA580C] shadow-[0_0_15px_rgba(234,88,12,0.25)]' : 'border-[#E8E2D9]'}`}>
                         <div className="flex justify-between items-center gap-1 mb-2">
                            <div className="flex items-center gap-1.5 truncate min-w-0">
-                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white font-display text-[8px] shadow-inner shrink-0" style={{ backgroundColor: p.avatarColor || '#ccc' }}>
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white font-display text-[9px] shadow-inner shrink-0" style={{ backgroundColor: p.avatarColor || '#6B655D' }}>
                                  {p.nickname.substring(0,2).toUpperCase()}
                               </div>
-                              <span className="font-black text-[11px] text-[#3D3A35] truncate">{p.nickname}</span>
+                              <span className="font-bold text-[11px] text-[#3D3A35] truncate">{p.nickname}</span>
                            </div>
-                           <div className={`px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter shrink-0 ${nearWin ? 'bg-[#EA580C] text-white animate-pulse' : 'bg-[#E8E2D9] text-[#7A746B]'}`}>
-                              {res.cellsAway} Left
+                           <div className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight shrink-0 ${isFalseMark ? 'bg-[#B91C1C] text-white' : nearWin ? 'bg-[#EA580C] text-white animate-pulse' : 'bg-[#E8E2D9] text-[#3D3A35]'}`}>
+                              {isFalseMark ? 'False' : `${res.cellsAway} Left`}
                            </div>
                         </div>
                         <div className="grid grid-cols-5 gap-0.5 pointer-events-none">
@@ -706,12 +745,12 @@ export default function Host() {
                               const isMarked = num === 0 || marked.includes(num);
                               
                               return (
-                                 <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-black text-[8px] rounded-[4px] border ${
+                                 <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-bold text-[9px] rounded-[4px] border ${
                                     num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : 
                                     (isMarked && called) ? 'bg-[#0D9488] text-white border-[#0D9488]' : 
-                                    (!isMarked && called) ? 'bg-[#0D9488]/20 border-[#0D9488]/30 text-[#3D3A35]/60' :
+                                    (!isMarked && called) ? 'bg-[#0D9488]/20 border-[#0D9488]/35 text-[#3D3A35]' :
                                     (isMarked && !called) ? 'bg-white border-[#EA580C] text-[#EA580C]' :
-                                    'bg-[#FAF7F2] border-[#E8E2D9] text-[#C5BFB6]'
+                                    'bg-[#FAF7F2] border-[#E8E2D9] text-[#6B655D]'
                                  }`}>
                                     {num === 0 ? 'FR' : num}
                                  </div>
@@ -723,12 +762,12 @@ export default function Host() {
                  });
                })}
                {Object.values(room.players).filter(p => p.connected && p.activeCards.length > 0).length === 0 && (
-                 <div className="col-span-full text-center py-8 text-[#C5BFB6] font-bold italic text-sm">Waiting for players to get cards</div>
+                 <div className="col-span-full text-center py-8 text-[#6B655D] font-semibold italic text-sm">Waiting for players to join with cards</div>
                )}
              </div>
            </div>
            <div className="p-5 xl:p-6 border-t-2 border-[#FAF7F2] bg-[#FAF7F2]/30 max-h-44 overflow-y-auto custom-scrollbar shrink-0">
-             <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-3">Hall of Fame</h3>
+             <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em] mb-3">Hall of Fame</h3>
              <div className="space-y-2">
                {room.stats.winners.slice(-10).reverse().map((w, i) => {
                  const isEarlyBird = room.stats.winners[0] === w;
@@ -737,40 +776,40 @@ export default function Host() {
                  return (
                    <div key={i} className="flex items-center justify-between text-xs">
                      <div className="font-bold flex items-center gap-2 truncate max-w-[60%]">
-                        <Trophy size={12} className={isEarlyBird ? "text-[#0D9488]" : "text-[#FACC15]"} />
+                        <Trophy size={12} className={isEarlyBird ? "text-[#0D9488]" : "text-[#CA8A04]"} />
                         <span className="truncate">{w.name}</span>
-                        {wins > 1 && <span className="text-[8px] bg-[#EA580C] text-white px-1 rounded-sm">{wins}</span>}
+                        {wins > 1 && <span className="text-[9px] bg-[#EA580C] text-white px-1 rounded-sm">{wins}</span>}
                      </div>
-                     <div className="text-[10px] text-[#A19B91] font-black uppercase tracking-tighter shrink-0">{w.pattern}</div>
+                     <div className="text-[10px] text-[#6B655D] font-bold uppercase tracking-tight shrink-0">{w.pattern}</div>
                    </div>
                  );
                })}
-               {room.stats.winners.length === 0 && (<div className="text-[10px] text-[#DED9D1] font-bold italic">Round results will appear here</div>)}
+               {room.stats.winners.length === 0 && (<div className="text-xs text-[#6B655D] font-medium italic">Round results will appear here</div>)}
              </div>
            </div>
         </section>
       </main>
 
       {showSettings && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-           <div className="bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl relative border-4 border-[#3D3A35]">
-              <div className="flex justify-between items-center mb-8"><h2 className="text-3xl font-black uppercase tracking-tighter">Room Config</h2><button onClick={() => setShowSettings(false)} className="text-[#A19B91] hover:text-[#3D3A35]"><Plus size={24} className="rotate-45" /></button></div>
-              <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="fixed inset-0 bg-[#3D3A35]/60 backdrop-blur-sm flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Room Settings">
+           <div className="bg-white rounded-[32px] w-full max-w-md p-7 sm:p-8 shadow-2xl relative border-4 border-[#3D3A35]">
+              <div className="flex justify-between items-center mb-6"><h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">Room Settings</h2><button type="button" onClick={() => setShowSettings(false)} aria-label="Close settings" className="p-1.5 rounded-lg text-[#6B655D] hover:text-[#3D3A35] hover:bg-[#FAF7F2] transition-colors"><Plus size={22} className="rotate-45" /></button></div>
+              <div className="space-y-6 max-h-[62vh] overflow-y-auto pr-2 custom-scrollbar">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Round Name</label>
-                    <input value={room.roundName} onChange={e => updateSettings({ roundName: e.target.value })} className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none" maxLength={40} />
+                    <label htmlFor="host-round-name" className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Round Name</label>
+                    <input id="host-round-name" value={room.roundName} onChange={e => updateSettings({ roundName: e.target.value })} className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-bold text-sm text-[#3D3A35] focus:border-[#0D9488] outline-none" maxLength={40} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Prize Note</label>
-                    <input value={room.prizeText} onChange={e => updateSettings({ prizeText: e.target.value })} placeholder="Optional note" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-black text-sm focus:border-[#0D9488] outline-none placeholder:text-[#DED9D1]" maxLength={80} />
+                    <label htmlFor="host-prize-note" className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Prize Note</label>
+                    <input id="host-prize-note" value={room.prizeText} onChange={e => updateSettings({ prizeText: e.target.value })} placeholder="Optional note" className="w-full p-3 bg-[#FAF7F2] rounded-xl border-2 border-[#E8E2D9] font-bold text-sm text-[#3D3A35] focus:border-[#0D9488] outline-none placeholder:text-[#7A746B]" maxLength={80} />
                   </div>
                 </div>
 
                 {/* Card Pricing & Custom Round Prizes (₱) */}
                 <div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider flex items-center gap-1.5">
                       <Coins size={13} className="text-[#EA580C]" />
                       Card Pricing &amp; Prizes (₱)
                     </span>
@@ -781,7 +820,7 @@ export default function Host() {
 
                   <div className="grid grid-cols-3 gap-2.5">
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-[#7A746B] uppercase tracking-wider ml-1">1 Card (₱)</label>
+                      <label className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">1 Card (₱)</label>
                       <input
                         type="number"
                         min="0"
@@ -789,11 +828,11 @@ export default function Host() {
                         placeholder="0"
                         value={room.cardPrice || ''}
                         onChange={e => updateSettings({ cardPrice: Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] focus:border-[#0D9488] outline-none tabular-nums"
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none tabular-nums"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-[#7A746B] uppercase tracking-wider ml-1">Bundle of 2 (₱)</label>
+                      <label className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Bundle of 2 (₱)</label>
                       <input
                         type="number"
                         min="0"
@@ -801,11 +840,11 @@ export default function Host() {
                         placeholder={room.cardPrice ? `${room.cardPrice * 2}` : '0'}
                         value={room.bundle2Price || ''}
                         onChange={e => updateSettings({ bundle2Price: Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] focus:border-[#0D9488] outline-none tabular-nums"
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none tabular-nums"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-[#7A746B] uppercase tracking-wider ml-1">Bundle of 4 (₱)</label>
+                      <label className="text-[10px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Bundle of 4 (₱)</label>
                       <input
                         type="number"
                         min="0"
@@ -813,13 +852,13 @@ export default function Host() {
                         placeholder={room.bundle2Price ? `${room.bundle2Price * 2}` : room.cardPrice ? `${room.cardPrice * 4}` : '0'}
                         value={room.bundle4Price || ''}
                         onChange={e => updateSettings({ bundle4Price: Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] focus:border-[#0D9488] outline-none tabular-nums"
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#E8E2D9] font-black text-sm text-[#3D3A35] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none tabular-nums"
                       />
                     </div>
                   </div>
 
                   {pricingEnabled && (
-                    <div className="bg-white rounded-xl border border-[#E8E2D9] px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-[#7A746B]">
+                    <div className="bg-white rounded-xl border border-[#E8E2D9] px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-[#6B655D]">
                       <span>1 Card: <strong className="text-[#3D3A35]">{formatPeso(calculateCardsCost(1, room))}</strong></span>
                       <span>2 Cards: <strong className="text-[#3D3A35]">{formatPeso(calculateCardsCost(2, room))}</strong></span>
                       <span>3 Cards: <strong className="text-[#3D3A35]">{formatPeso(calculateCardsCost(3, room))}</strong></span>
@@ -829,7 +868,7 @@ export default function Host() {
 
                   <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#E8E2D9]">
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-[#0D9488] uppercase tracking-wider ml-1">⚔️ Dikit Prize (₱)</label>
+                      <label className="text-[10px] font-bold text-[#0D9488] uppercase tracking-wider ml-1">⚔️ Dikit Prize (₱)</label>
                       <input
                         type="number"
                         min="0"
@@ -837,11 +876,11 @@ export default function Host() {
                         placeholder="0"
                         value={room.dikitPrize || ''}
                         onChange={e => updateSettings({ dikitPrize: Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#0D9488]/40 font-black text-sm text-[#0D9488] focus:border-[#0D9488] outline-none tabular-nums"
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#0D9488]/40 font-black text-sm text-[#0D9488] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none tabular-nums"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-[#EA580C] uppercase tracking-wider ml-1">🏆 Bingo Prize (₱)</label>
+                      <label className="text-[10px] font-bold text-[#EA580C] uppercase tracking-wider ml-1">🏆 Bingo Prize (₱)</label>
                       <input
                         type="number"
                         min="0"
@@ -849,13 +888,13 @@ export default function Host() {
                         placeholder="0"
                         value={room.bingoPrize || ''}
                         onChange={e => updateSettings({ bingoPrize: Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#EA580C]/40 font-black text-sm text-[#EA580C] focus:border-[#EA580C] outline-none tabular-nums"
+                        className="w-full p-2.5 bg-white rounded-xl border-2 border-[#EA580C]/40 font-black text-sm text-[#EA580C] placeholder:text-[#7A746B] focus:border-[#EA580C] outline-none tabular-nums"
                       />
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-[#E8E2D9] px-3 py-2 flex items-center justify-between text-[10px]">
-                    <span className="font-bold text-[#7A746B]">
+                  <div className="bg-white rounded-xl border border-[#E8E2D9] px-3 py-2 flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-[#6B655D]">
                       Prizes: <strong className="text-[#3D3A35] tabular-nums">{formatPeso(totalPrizes)}</strong>
                     </span>
                     <span className={`font-black tabular-nums ${potBalance >= 0 ? 'text-[#0D9488]' : 'text-[#EF4444]'}`}>
@@ -865,10 +904,10 @@ export default function Host() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest ml-1">Game Mode</label>
+                  <label className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">Game Mode</label>
                   <div className="flex gap-2">
                     {['Bingo', 'Blackout', 'Dikit'].map(m => (
-                      <button key={m} onClick={() => updateSettings({ mode: m })} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${room.mode === m ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#A19B91]'}`}>
+                      <button key={m} type="button" onClick={() => updateSettings({ mode: m })} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${room.mode === m ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-md' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#6B655D] hover:border-[#6B655D]'}`}>
                         {m === 'Bingo' ? 'Standard' : m}
                       </button>
                     ))}
@@ -879,15 +918,15 @@ export default function Host() {
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <div className="flex items-center gap-2">
-                            <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest">Pattern Library</label>
-                            <span className="text-[8px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full">
+                            <label className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">Pattern Library</label>
+                            <span className="text-[10px] font-bold uppercase text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full tabular-nums">
                               {libraryPatterns.filter(p => room.patterns.some(rp => rp.id === p.id)).length} / {libraryPatterns.length} Active
                             </span>
                           </div>
                           <button
                             type="button"
                             onClick={activateAllPatterns}
-                            className="text-[9px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2.5 py-1 rounded-lg transition-all shadow-sm active:scale-95"
+                            className="text-[10px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2.5 py-1 rounded-lg transition-all shadow-sm active:scale-95"
                           >
                             Activate All
                           </button>
@@ -905,7 +944,7 @@ export default function Host() {
                                       togglePattern(pattern);
                                       if (!isPreset) selectCustomPatternToEdit(pattern);
                                     }}
-                                    className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]" : "bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]"}`}
+                                    className={`w-full px-3 py-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-wider transition-all relative text-left ${selected ? "bg-[#0D9488] border-[#0D9488] text-white shadow-md z-10 scale-[1.02]" : "bg-white border-[#E8E2D9] text-[#6B655D] hover:border-[#6B655D]"}`}
                                   >
                                     <span className="truncate block pr-4">{pattern.name}</span>
                                     {selected && <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full" />}
@@ -915,7 +954,8 @@ export default function Host() {
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); deleteFromLibrary(pattern.id); }}
                                       className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 opacity-85 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-20 shadow-lg"
-                                      title="Delete Pattern from Database"
+                                      title="Delete Pattern from Library"
+                                      aria-label={`Delete ${pattern.name}`}
                                     >
                                       <Plus size={8} className="rotate-45" strokeWidth={5} />
                                     </button>
@@ -930,8 +970,8 @@ export default function Host() {
                       <div className="rounded-[24px] border-2 border-[#E8E2D9] bg-[#FAF7F2] p-4 space-y-4 shadow-inner">
                         <div className="flex justify-between items-center gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest whitespace-nowrap">Draw Pattern</span>
-                            <span className="text-[8px] font-black uppercase text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full">
+                            <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider whitespace-nowrap">Draw Pattern</span>
+                            <span className="text-[10px] font-bold uppercase text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-full tabular-nums">
                               {customCells.filter(c => c !== 12).length} Selected
                             </span>
                           </div>
@@ -939,7 +979,7 @@ export default function Host() {
                             <input
                               value={customName}
                               onChange={e => setCustomName(e.target.value)}
-                              className="bg-white px-2 py-1 rounded-lg border-2 border-[#E8E2D9] font-bold text-[10px] focus:border-[#0D9488] outline-none w-28 sm:w-36"
+                              className="bg-white px-2.5 py-1 rounded-lg border-2 border-[#E8E2D9] font-bold text-xs text-[#3D3A35] placeholder:text-[#7A746B] focus:border-[#0D9488] outline-none w-28 sm:w-36"
                               maxLength={28}
                               placeholder="Pattern Name"
                             />
@@ -947,7 +987,8 @@ export default function Host() {
                               type="button"
                               onClick={startNewCustomPattern}
                               title="Start Fresh Pattern"
-                              className="p-1.5 rounded-lg bg-white border-2 border-[#E8E2D9] text-[#7A746B] hover:text-[#3D3A35] hover:border-[#0D9488] transition-colors"
+                              aria-label="Start Fresh Pattern"
+                              className="p-1.5 rounded-lg bg-white border-2 border-[#E8E2D9] text-[#6B655D] hover:text-[#3D3A35] hover:border-[#0D9488] transition-colors"
                             >
                               <RotateCcw size={12} />
                             </button>
@@ -964,7 +1005,7 @@ export default function Host() {
                         </div>
 
                         {saveFeedback && (
-                          <div className="text-center text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 py-1.5 px-3 rounded-xl">
+                          <div className="text-center text-xs font-bold text-[#0D9488] bg-[#0D9488]/10 py-1.5 px-3 rounded-xl">
                             {saveFeedback}
                           </div>
                         )}
@@ -975,7 +1016,7 @@ export default function Host() {
                             onClick={() => saveCustomPattern(false)}
                             className="w-full bg-white border-2 border-[#3D3A35] text-[#3D3A35] py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-[#3D3A35] hover:text-white transition-all shadow-sm flex items-center justify-center gap-1"
                           >
-                            Save to Database
+                            Save to Library
                           </button>
                           <button
                             type="button"
@@ -995,7 +1036,7 @@ export default function Host() {
                       </div>
                     </div>
                   )}
-                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest mb-2">Hall Ambience</span><button onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#A19B91] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? '🔊 Active' : '🔇 Muted'}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex justify-between items-center mb-2"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Voice Engine</span><button type="button" onClick={() => previewVoice(room.voiceMode || 'robotic')} className="text-[9px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2 py-0.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1" title="Test selected voice"><Volume2 size={10} />Test</button></div><select value={room.voiceMode || 'robotic'} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 px-1 bg-white rounded-xl text-[10px] font-black uppercase border-2 border-[#DED9D1] outline-none cursor-pointer">
+                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider mb-2">Hall Ambience</span><button type="button" onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#6B655D] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? '🔊 Active' : '🔇 Muted'}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex justify-between items-center mb-2"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider">Caller Voice</span><button type="button" onClick={() => previewVoice(room.voiceMode || 'robotic')} className="text-[9px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2 py-0.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1" title="Test selected voice"><Volume2 size={10} />Test</button></div><select value={room.voiceMode || 'robotic'} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 px-1 bg-white rounded-xl text-[10px] font-bold text-[#3D3A35] uppercase border-2 border-[#DED9D1] outline-none cursor-pointer">
   <option value="robotic">🤖 Robotic (Browser TTS)</option>
   <optgroup label="United States Natural Voices">
     {NATURAL_VOICES.filter(v => v.region === 'United States').map(v => (
@@ -1018,18 +1059,24 @@ export default function Host() {
     ))}
   </optgroup>
 </select></div></div>
-                 <div className="pt-4 border-t-2 border-[#FAF7F2]"><div className="flex items-center justify-between bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex flex-col"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-widest">Mystery Mode</span><span className="text-[10px] font-bold text-[#A19B91] uppercase tracking-tighter">Hide winning pattern from screens</span></div><button onClick={() => updateSettings({ hidePattern: !room.hidePattern })} className={`w-14 h-8 rounded-full transition-all relative ${room.hidePattern ? 'bg-[#0D9488]' : 'bg-[#DED9D1]'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${room.hidePattern ? 'left-7' : 'left-1'}`} /></button></div></div>
-              </div><button onClick={() => setShowSettings(false)} className="mt-8 w-full bg-[#3D3A35] text-white py-4 rounded-2xl font-black text-lg uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">Save & Close</button></div></div>)}
+                 <div className="pt-4 border-t-2 border-[#FAF7F2]"><div className="flex items-center justify-between bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex flex-col"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider">Mystery Mode</span><span className="text-[11px] font-medium text-[#6B655D]">Hide winning pattern from screens</span></div><button type="button" role="switch" aria-checked={Boolean(room.hidePattern)} aria-label="Toggle Mystery Mode" onClick={() => updateSettings({ hidePattern: !room.hidePattern })} className={`w-14 h-8 rounded-full transition-all relative shrink-0 ${room.hidePattern ? 'bg-[#0D9488]' : 'bg-[#DED9D1]'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${room.hidePattern ? 'left-7' : 'left-1'}`} /></button></div></div>
+              </div>
+              <div className="pt-5 mt-5 border-t-2 border-[#E8E2D9]">
+                <button type="button" onClick={() => setShowSettings(false)} className="w-full bg-[#3D3A35] hover:bg-black text-white py-4 rounded-2xl font-black text-base uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">Save &amp; Close</button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {room.claims.length > 0 && !winner && (
-        <div className="fixed inset-0 bg-[#3D3A35]/80 backdrop-blur-md flex justify-center items-center z-50 p-4">
+        <div className="fixed inset-0 bg-[#3D3A35]/80 backdrop-blur-md flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Verify Bingo Claim">
           <div className="bg-white rounded-[36px] w-full max-w-lg max-h-[92vh] overflow-hidden shadow-2xl flex flex-col border-[6px] border-[#EA580C]">
             <div className="bg-[#EA580C] text-white p-5 sm:p-6 text-center relative shrink-0">
-              <div className="inline-block bg-white/20 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest mb-2">
+              <div className="inline-block bg-black/20 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest mb-2 tabular-nums">
                 Claim {(room.verifiedWinners?.length || 0) + 1} of {(room.claims.length || 0) + (room.verifiedWinners?.length || 0)}
               </div>
               <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter italic drop-shadow-md">Bingo Claim!</h2>
-              <p className="text-base sm:text-lg font-bold opacity-90 mt-0.5">{room.claims[0].playerName} called Bingo (Card {(room.claims[0].cardIndex ?? 0) + 1})</p>
+              <p className="text-base sm:text-lg font-bold opacity-95 mt-0.5">{room.claims[0].playerName} called Bingo (Card {(room.claims[0].cardIndex ?? 0) + 1})</p>
             </div>
             <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 flex flex-col items-center gap-4">
               <div className="bg-[#FAF7F2] p-4 sm:p-5 rounded-[28px] border-4 border-[#E8E2D9] shadow-inner w-full max-w-[300px]">
@@ -1043,12 +1090,12 @@ export default function Host() {
                       return (
                         <div
                           key={`${rIdx}-${cIdx}`}
-                          className={`aspect-square flex items-center justify-center font-display text-base sm:text-lg rounded-xl border-2 transition-all ${
+                          className={`aspect-square flex items-center justify-center font-display text-base sm:text-lg rounded-xl border-2 transition-all tabular-nums ${
                             num === 0
                               ? 'bg-[#3D3A35] text-white border-[#3D3A35]'
                               : called
-                                ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-md'
-                                : 'bg-white border-[#E8E2D9] text-[#A19B91]'
+                                ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-md'
+                                : 'bg-white border-[#E8E2D9] text-[#7A746B]'
                           }`}
                         >
                           {num === 0 ? 'FR' : num}
@@ -1060,18 +1107,20 @@ export default function Host() {
               </div>
               <div className="w-full bg-[#FAF7F2] py-3 px-5 rounded-2xl border-2 border-[#E8E2D9] flex justify-between items-center">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">Claimed Pattern</span>
+                  <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em]">Claimed Pattern</span>
                   <span className="text-xl font-black text-[#EA580C] uppercase italic leading-tight">{room.claims[0].pattern}</span>
                 </div>
                 <Trophy className="text-[#EA580C] shrink-0" size={32} />
               </div>
             </div>
             <div className="p-5 bg-[#FAF7F2] border-t-4 border-[#E8E2D9] flex gap-3 shrink-0">
-              <button onClick={() => verifyClaim(room.claims[0].id, false)} className="flex-1 py-4 bg-white border-4 border-[#E8E2D9] text-[#7A746B] hover:text-[#3D3A35] rounded-2xl font-black text-base uppercase tracking-widest active:translate-y-1 transition-all">
-                Reject
+              <button type="button" onClick={() => verifyClaim(room.claims[0].id, false)} className="flex-1 py-4 bg-white border-4 border-[#E8E2D9] text-[#6B655D] hover:text-[#3D3A35] hover:border-[#6B655D] rounded-2xl font-black text-base uppercase tracking-wider active:translate-y-1 transition-all flex items-center justify-center gap-2">
+                <span>Reject</span>
+                <kbd className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#FAF7F2] border border-[#DED9D1] text-[#6B655D]">Esc</kbd>
               </button>
-              <button onClick={() => verifyClaim(room.claims[0].id, true)} className="flex-1 py-4 bg-[#0D9488] text-white rounded-2xl font-black text-lg sm:text-xl uppercase tracking-widest shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all">
-                Verify & Win
+              <button type="button" onClick={() => verifyClaim(room.claims[0].id, true)} className="flex-1 py-4 bg-[#0D9488] hover:bg-[#0F766E] text-white rounded-2xl font-black text-lg sm:text-xl uppercase tracking-wider shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all flex items-center justify-center gap-2">
+                <span>Verify &amp; Win</span>
+                <kbd className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/20 text-white">Enter</kbd>
               </button>
             </div>
           </div>
@@ -1079,19 +1128,19 @@ export default function Host() {
       )}
 
       {(multiBingoPending || room.multiBingoPending) && (room.verifiedWinners?.length || 0) >= 3 && !winner && (
-        <div className="fixed inset-0 bg-[#3D3A35]/85 backdrop-blur-md flex justify-center items-center z-50 p-4">
+        <div className="fixed inset-0 bg-[#3D3A35]/85 backdrop-blur-md flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Multiple Bingo Winners Tie">
           <div className="bg-white rounded-[40px] w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col border-[8px] border-[#FACC15] max-h-[90vh]">
-            <div className="bg-gradient-to-r from-[#EA580C] to-[#FACC15] text-white p-6 sm:p-8 text-center relative shrink-0">
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] bg-black/20 px-3 py-1 rounded-full inline-block mb-2">
+            <div className="bg-[#3D3A35] text-white border-b-4 border-[#FACC15] p-6 sm:p-8 text-center relative shrink-0">
+              <span className="text-[11px] font-black uppercase tracking-[0.25em] bg-[#FACC15]/20 text-[#FACC15] border border-[#FACC15]/40 px-3 py-1 rounded-full inline-block mb-2">
                 Multiple Winners Detected
               </span>
-              <h2 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter italic drop-shadow-md">
+              <h2 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter italic text-[#FACC15]">
                 3+ Bingo Winners Tie!
               </h2>
-              <p className="text-sm sm:text-base font-bold opacity-90 mt-1">
+              <p className="text-sm sm:text-base font-bold text-white/90 mt-1.5">
                 {room.verifiedWinners.length} cards achieved Bingo on this call.
                 {bingoPrize > 0 && (
-                  <span className="ml-1.5 inline-block bg-black/20 px-2.5 py-0.5 rounded-full">
+                  <span className="ml-1.5 inline-block bg-white/15 text-white px-2.5 py-0.5 rounded-full tabular-nums">
                     Prize: {formatPeso(bingoPrize)} ({formatPeso(bingoPrize / room.verifiedWinners.length)} each)
                   </span>
                 )}
@@ -1109,7 +1158,7 @@ export default function Host() {
                         Card {(w.cardIndex ?? 0) + 1}
                       </span>
                     </div>
-                    <div className="text-[10px] font-bold text-[#7A746B] uppercase tracking-wider mb-2">
+                    <div className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider mb-2">
                       Pattern: <span className="text-[#EA580C] font-black">{w.pattern || 'Bingo'}</span>
                     </div>
                     <div className="grid grid-cols-5 gap-1 w-full max-w-[200px]">
@@ -1119,8 +1168,8 @@ export default function Host() {
                       {w.card.map((row: number[], rIdx: number) => row.map((num: number, cIdx: number) => {
                         const called = num === 0 || (room.calledNumbers || []).includes(num);
                         return (
-                          <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-display text-xs rounded-lg border transition-all ${
-                            num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-sm font-bold' : 'bg-white border-[#E8E2D9] text-[#A19B91]'
+                          <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-display text-xs rounded-lg border transition-all tabular-nums ${
+                            num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm font-bold' : 'bg-white border-[#E8E2D9] text-[#7A746B]'
                           }`}>
                             {num === 0 ? 'FR' : num}
                           </div>
@@ -1135,15 +1184,17 @@ export default function Host() {
             {/* Settle vs Continue Controls */}
             <div className="p-6 bg-white border-t-4 border-[#E8E2D9] flex flex-col sm:flex-row gap-4 shrink-0">
               <button
+                type="button"
                 onClick={() => settleMultiBingo('continue')}
-                className="flex-1 py-4 px-6 bg-[#FAF7F2] border-4 border-[#E8E2D9] text-[#7A746B] hover:text-[#3D3A35] rounded-2xl font-black text-base uppercase tracking-wider active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-4 px-6 bg-[#FAF7F2] border-4 border-[#E8E2D9] text-[#6B655D] hover:text-[#3D3A35] hover:border-[#6B655D] rounded-2xl font-black text-base uppercase tracking-wider active:translate-y-1 transition-all flex items-center justify-center gap-2"
               >
                 <Play size={20} fill="currentColor" />
                 <span>Continue (Break Tie)</span>
               </button>
               <button
+                type="button"
                 onClick={() => settleMultiBingo('settle')}
-                className="flex-1 py-4 px-6 bg-[#0D9488] text-white rounded-2xl font-black text-xl uppercase tracking-wider shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-4 px-6 bg-[#0D9488] hover:bg-[#0F766E] text-white rounded-2xl font-black text-xl uppercase tracking-wider shadow-[0_6px_0_#0F766E] active:translate-y-[6px] active:shadow-none transition-all flex items-center justify-center gap-2"
               >
                 <CheckCircle2 size={24} />
                 <span>Settle ({room.verifiedWinners.length} Winners)</span>
@@ -1244,7 +1295,7 @@ export default function Host() {
                   </div>
                 )}
                 {room.status === 'next_round' && (
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[#A19B91] mb-3 shrink-0">
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#6B655D] mb-3 shrink-0 tabular-nums">
                     Next round starts in <Countdown endsAt={room.nextRoundEndsAt} />
                   </p>
                 )}
@@ -1268,12 +1319,12 @@ export default function Host() {
                               return (
                                 <div
                                   key={`${rIdx}-${cIdx}`}
-                                  className={`aspect-square flex items-center justify-center font-display text-xs rounded-lg border-2 transition-all ${
+                                  className={`aspect-square flex items-center justify-center font-display text-xs rounded-lg border-2 transition-all tabular-nums ${
                                     num === 0
                                       ? 'bg-[#3D3A35] text-white border-[#3D3A35]'
                                       : called
-                                        ? 'bg-[#EA580C] text-white border-[#EA580C]'
-                                        : 'bg-white border-[#E8E2D9] text-[#A19B91]'
+                                        ? 'bg-[#0D9488] text-white border-[#0D9488]'
+                                        : 'bg-white border-[#E8E2D9] text-[#7A746B]'
                                   }`}
                                 >
                                   {num === 0 ? 'FR' : num}

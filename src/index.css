@@ -4,18 +4,38 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Anton", sans-serif;
 
-  --color-indigo-50: #eef2ff;
-  --color-indigo-100: #e0e7ff;
-  --color-indigo-200: #c7d2fe;
-  --color-indigo-300: #a5b4fc;
-  --color-indigo-400: #818cf8;
-  --color-indigo-500: #6366f1;
-  --color-indigo-600: #4f46e5;
-  --color-indigo-700: #4338ca;
-  --color-indigo-800: #3730a3;
-  --color-indigo-900: #312e81;
+  /* Semantic Warm Paper-Bingo Hall Palette */
+  --color-paper: #FAF7F2;
+  --color-card-stock: #FCFAF5;
+  --color-ink: #3D3A35;
+  --color-ink-muted: #6B655D;
+  --color-ink-subtle: #7A746B;
+  --color-border-warm: #E8E2D9;
+  --color-call: #EA580C;
+  --color-daub: #0D9488;
+  --color-gold: #FACC15;
+}
 
-  --animate-blob: blob 7s infinite;
+/* Browser Surface & Typographic Polish */
+@layer base {
+  html {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    caret-color: var(--color-call);
+  }
+
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-daub);
+    outline-offset: 2px;
+  }
 }
 
 /* Paper Texture Utility */
@@ -32,21 +52,6 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
-@keyframes blob {
-  0% { transform: translate(0px, 0px) scale(1); }
-  33% { transform: translate(30px, -50px) scale(1.1); }
-  66% { transform: translate(-20px, 20px) scale(0.9); }
-  100% { transform: translate(0px, 0px) scale(1); }
-}
-
-.animation-delay-2000 {
-  animation-delay: 2s;
-}
-
-.animation-delay-4000 {
-  animation-delay: 4s;
-}
-
 /* Card Responsive Auto-Scaling Utilities */
 .card-fit-wrapper {
   container-type: size;
@@ -60,7 +65,7 @@
 /* Custom Scrollbar Utility */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #DED9D1 transparent;
+  scrollbar-color: #C9C1B6 transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -73,12 +78,12 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #DED9D1;
+  background-color: #C9C1B6;
   border-radius: 9999px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #A19B91;
+  background-color: #7A746B;
 }
 
 /* Hide Scrollbar Utility */
@@ -108,4 +113,49 @@
 
 .animate-spin-slow {
   animation: spin-slow 12s linear infinite;
+}
+
+/* Stationary Luminous Glow for High-Stakes Bingo CTA (No Moving Tap Target) */
+@keyframes bingo-glow {
+  0%, 100% {
+    box-shadow: 0 8px 0 #9A3412, 0 0 0 0 rgba(250, 204, 21, 0.75);
+  }
+  50% {
+    box-shadow: 0 8px 0 #9A3412, 0 0 0 10px rgba(250, 204, 21, 0);
+  }
+}
+
+.animate-bingo-glow {
+  animation: bingo-glow 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* Seamless Infinite TV Marquee */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 24s linear infinite;
+}
+
+/* Respect Reduced Motion Preferences While Preserving Clear State Feedback */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin-slow,
+  .animate-bingo-glow,
+  .animate-marquee,
+  .animate-ping,
+  .animate-pulse {
+    animation: none !important;
+  }
+
+  .animate-bingo-glow {
+    box-shadow: 0 8px 0 #9A3412, 0 0 0 4px rgba(250, 204, 21, 0.85) !important;
+  }
 }

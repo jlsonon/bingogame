@@ -91,19 +91,24 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
                 if (onToggleCell) onToggleCell(num);
               };
 
+              const letter = BINGO_HEADERS[cIndex];
               return (
-                <div 
+                <button
+                  type="button"
                   key={`${rIndex}-${cIndex}`}
                   onClick={handleClick}
+                  disabled={readOnly || num === 0}
+                  aria-pressed={num === 0 ? true : marked}
+                  aria-label={num === 0 ? 'Free space, marked' : `${letter} ${num}${called ? ', called' : ''}${marked ? ', marked' : ''}`}
                   className={cn(
-                    "aspect-square flex items-center justify-center rounded-[3cqw] font-display transition-all duration-200 relative overflow-hidden text-[7cqw]",
+                    "aspect-square flex items-center justify-center rounded-[3cqw] font-display transition-all duration-200 relative overflow-hidden text-[7cqw] disabled:opacity-100",
                     !readOnly && num !== 0 ? "cursor-pointer" : "cursor-default",
                     num === 0 ? "bg-[#FACC15] border-[max(1px,0.5cqw)] border-white text-[#854D0E] shadow-sm uppercase tracking-tighter" :
                     marked && called ? "bg-[#0D9488] border-[max(1px,0.5cqw)] border-[#0D9488] text-white shadow-inner shadow-black/20 scale-[0.96]" :
-                    marked && !called ? "bg-white border-[max(1px,0.5cqw)] border-[#EA580C] text-[#EA580C]" :
-                    !marked && called ? "bg-[#0D9488]/10 border-[max(1px,0.5cqw)] border-[#0D9488]/30 text-[#3D3A35] opacity-75" :
+                    marked && !called ? "bg-white border-[max(2px,0.6cqw)] border-[#EA580C] text-[#EA580C]" :
+                    !marked && called ? "bg-[#0D9488]/12 border-[max(1px,0.5cqw)] border-[#0D9488]/35 text-[#3D3A35]" :
                     "bg-[#FDFBF7] border-[max(1px,0.5cqw)] border-[#E8E2D9] text-[#3D3A35] hover:bg-orange-50",
-                    readOnly && !marked && !called && "opacity-50 grayscale-[35%]"
+                    readOnly && !marked && !called && "opacity-65"
                   )}
                 >
                   {/* Subtle Stamped Ink Highlight for Marked Numbers (Pure CSS, no external URL) */}
@@ -118,7 +123,7 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
                   )}
 
                   {num === 0 ? (
-                    <span className="text-[3cqw] font-sans uppercase tracking-tighter mix-blend-multiply opacity-90 font-black">Free</span>
+                    <span className="text-[3.6cqw] font-sans uppercase tracking-tight mix-blend-multiply font-black">Free</span>
                   ) : (
                     <span className={cn("relative z-10", marked && called && "scale-110 drop-shadow-md")}>{num}</span>
                   )}
@@ -137,7 +142,7 @@ export function BingoCard({ card, markedCells, calledNumbers, onToggleCell, read
                         </motion.div>
                      )}
                   </AnimatePresence>
-                </div>
+                </button>
               );
             })
           ))}

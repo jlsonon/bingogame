@@ -316,6 +316,11 @@ export default function Player() {
            room.dikitFight.contenders.some(c => c.playerId === me?.id && c.cardIndex === cardIdx);
   };
 
+  const calledSet = new Set(room.calledNumbers || []);
+  const falseMarkCardNumbers = cards
+    .map((_, idx) => ((markedCells[idx] || []).some(m => m !== 0 && !calledSet.has(m)) ? idx + 1 : null))
+    .filter((n): n is number => n !== null);
+
   return (
     <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full bg-[#FAF7F2] flex flex-col font-sans touch-manipulation text-[#3D3A35] select-none overflow-hidden">
       {/* Offline/Reconnecting Overlay */}
@@ -324,7 +329,7 @@ export default function Player() {
             <div className="bg-white rounded-[32px] p-8 border-4 border-[#EA580C] shadow-2xl max-w-xs">
                <Loader className="animate-spin text-[#EA580C] mx-auto mb-4" size={48} />
                <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Connection Lost</h2>
-               <p className="text-sm font-bold text-[#7A746B]">Hang tight! Reconnecting you to the Bingo Hall...</p>
+               <p className="text-sm font-bold text-[#6B655D]">Hang tight! Reconnecting you to the Bingo Hall...</p>
             </div>
          </div>
       )}
@@ -332,12 +337,12 @@ export default function Player() {
       {/* Immersive Top Ribbon - Latest Call Persistent */}
       <div className="bg-[#3D3A35] text-white h-14 sm:h-16 shrink-0 relative overflow-hidden flex items-center justify-between px-3 sm:px-4 z-30 shadow-lg paper-texture">
          <div className="flex items-center gap-3 relative z-10">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-display text-xs border-2 border-white/20 shadow-inner" style={{ backgroundColor: me.avatarColor || '#ccc' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-display text-xs border-2 border-white/25 shadow-inner" style={{ backgroundColor: me.avatarColor || '#6B655D' }}>
                {me.nickname.substring(0,2).toUpperCase()}
             </div>
             <div className="flex flex-col leading-none">
-               <span className="font-black text-[10px] uppercase tracking-widest opacity-60">Player</span>
-               <span className="font-display text-sm tracking-tight truncate max-w-[80px]">{me.nickname}</span>
+               <span className="font-bold text-[10px] uppercase tracking-widest text-white/75">Player</span>
+               <span className="font-display text-sm tracking-tight truncate max-w-[88px]">{me.nickname}</span>
             </div>
          </div>
 
@@ -354,20 +359,20 @@ export default function Player() {
                      {getBallLetter(latestBall)}
                   </div>
                   <div className="flex flex-col leading-none">
-                     <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-80">Latest Call</span>
-                     <span className="text-2xl font-display leading-none">{latestBall}</span>
+                     <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/90">Latest Call</span>
+                     <span className="text-2xl font-display leading-none tabular-nums">{latestBall}</span>
                   </div>
                </motion.div>
             ) : (
-               <div className="relative z-10 bg-white/10 px-4 py-2 rounded-full border border-white/5">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 italic">Waiting...</span>
+               <div className="relative z-10 bg-white/15 px-4 py-1.5 rounded-full border border-white/20">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/85">Waiting...</span>
                </div>
             )}
          </AnimatePresence>
 
          <div className="flex flex-col items-end relative z-10">
-            <span className="text-[10px] font-black text-[#EA580C] tracking-widest uppercase">Room</span>
-            <span className="font-display text-xl leading-none tracking-wider text-white/90">{room.id}</span>
+            <span className="text-[10px] font-black text-[#FACC15] tracking-widest uppercase">Room</span>
+            <span className="font-display text-xl leading-none tracking-wider text-white tabular-nums">{room.id}</span>
          </div>
       </div>
 
@@ -387,13 +392,13 @@ export default function Player() {
                         </div>
                         <div>
                           <h2 className="text-3xl font-display uppercase tracking-tight text-[#3D3A35]">Spectator Mode</h2>
-                          <p className="text-xs sm:text-sm font-bold text-[#A19B91] uppercase tracking-widest leading-relaxed max-w-xs mt-1">
-                             You're watching the game live! Follow the calls and pattern in the tabs below.
+                          <p className="text-xs sm:text-sm font-semibold text-[#6B655D] leading-relaxed max-w-xs mt-1.5">
+                             You're watching the game live. Follow the calls and winning patterns in the tabs below.
                           </p>
                         </div>
                         {!isGameOn && ['waiting', 'next_round'].includes(room.status) && (
                            <div className="bg-white border-2 border-[#E8E2D9] rounded-2xl p-4 w-full max-w-[300px] shadow-sm">
-                              <div className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest mb-2">Want to Play? Pick Cards</div>
+                              <div className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider mb-2">Want to Play? Pick Cards</div>
                               <div className="grid grid-cols-4 gap-2">
                                  {[1, 2, 3, 4].map(num => {
                                     const cost = calculateCardsCost(num, room);
@@ -406,7 +411,7 @@ export default function Player() {
                                        >
                                           <span className="font-display text-lg">{num}</span>
                                           {pricingEnabled && (
-                                             <span className="text-[9px] font-black opacity-75 tabular-nums">{formatPeso(cost)}</span>
+                                             <span className="text-[10px] font-bold opacity-85 tabular-nums">{formatPeso(cost)}</span>
                                           )}
                                        </button>
                                     );
@@ -415,25 +420,30 @@ export default function Player() {
                            </div>
                         )}
                         <div className="bg-white border-2 border-[#E8E2D9] rounded-2xl p-4 w-full max-w-[240px]">
-                           <div className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest mb-1 text-center">Numbers Called</div>
-                           <div className="text-3xl font-display text-[#EA580C]">{room.calledNumbers.length} / 75</div>
+                           <div className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider mb-1 text-center">Numbers Called</div>
+                           <div className="text-3xl font-display text-[#EA580C] tabular-nums">{room.calledNumbers.length} / 75</div>
                         </div>
                      </div>
                   ) : (
                      <>
                         <AnimatePresence>
                            {nearWinAlert && (
-                              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full bg-[#EA580C]/10 border border-[#EA580C]/20 rounded-xl py-0.5 text-center overflow-hidden shrink-0">
-                                 <span className="text-[9px] font-black text-[#EA580C] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5"><Trophy size={10} />{nearWinAlert}</span>
+                              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full bg-[#EA580C]/10 border border-[#EA580C]/25 rounded-xl py-1 text-center overflow-hidden shrink-0">
+                                 <span className="text-[10px] font-black text-[#EA580C] uppercase tracking-[0.16em] flex items-center justify-center gap-1.5"><Trophy size={11} />{nearWinAlert}</span>
                               </motion.div>
                            )}
                         </AnimatePresence>
+                        {falseMarkCardNumbers.length > 0 && (
+                           <div role="status" className="w-full max-w-[440px] mx-auto bg-amber-50 border border-amber-400 text-amber-900 rounded-xl px-3 py-1 text-center shrink-0 text-[11px] font-bold">
+                              Uncalled number marked on Card {falseMarkCardNumbers.join(', ')} — tap orange cell to clear
+                           </div>
+                        )}
                         <div className="flex-1 w-full relative min-h-0 flex flex-col items-center justify-center overflow-hidden">
                             {/* Card Count Selector: unlocked when waiting/next_round, locked and unclickable when game is on */}
-                            <div className={`flex items-center justify-between gap-1.5 bg-white border border-[#E8E2D9] px-2.5 py-1 rounded-xl shrink-0 w-full max-w-[440px] mx-auto mb-1 shadow-sm transition-all ${isGameOn ? 'bg-[#FAF7F2]/90 border-dashed opacity-85' : ''}`}>
+                            <div className={`flex items-center justify-between gap-1.5 bg-white border border-[#E8E2D9] px-2.5 py-1 rounded-xl shrink-0 w-full max-w-[440px] mx-auto mb-1 shadow-sm transition-all ${isGameOn ? 'bg-[#FAF7F2]/90 border-dashed opacity-90' : ''}`}>
                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B] flex items-center gap-1 shrink-0">
-                                     {isGameOn && <Lock size={9} className="text-[#EA580C]" />}
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B655D] flex items-center gap-1 shrink-0">
+                                     {isGameOn && <Lock size={10} className="text-[#EA580C]" />}
                                      Cards:
                                   </span>
                                   <div className="flex gap-1">
@@ -448,12 +458,12 @@ export default function Player() {
                                                  if (isGameOn) return;
                                                  setCardQuantity(num);
                                               }}
-                                              className={`${pricingEnabled ? 'px-1.5 py-0.5 min-w-[34px]' : 'w-6 h-6'} rounded-md border transition-all flex flex-col items-center justify-center leading-none ${cards.length === num ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-sm scale-105' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#7A746B]'} ${isGameOn ? 'cursor-not-allowed pointer-events-none' : 'cursor-pointer active:scale-95'}`}
+                                              className={`${pricingEnabled ? 'px-2 py-0.5 min-w-[38px]' : 'w-7 h-7'} rounded-md border transition-all flex flex-col items-center justify-center leading-none ${cards.length === num ? 'bg-[#EA580C] border-[#EA580C] text-white shadow-sm' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#6B655D]'} ${isGameOn ? 'cursor-not-allowed pointer-events-none' : 'cursor-pointer active:scale-95'}`}
                                               title={isGameOn ? 'Cards are locked during active game' : `Select ${num} card${num > 1 ? 's' : ''}${pricingEnabled ? ` (${formatPeso(cost)})` : ''}`}
                                            >
                                               <span className="font-display text-xs font-bold leading-none">{num}</span>
                                               {pricingEnabled && (
-                                                 <span className={`text-[7px] font-black leading-none mt-0.5 tabular-nums ${cards.length === num ? 'text-white/90' : 'text-[#A19B91]'}`}>
+                                                 <span className={`text-[9px] font-bold leading-none mt-0.5 tabular-nums ${cards.length === num ? 'text-white/95' : 'text-[#6B655D]'}`}>
                                                     {formatPeso(cost)}
                                                  </span>
                                               )}
@@ -464,7 +474,7 @@ export default function Player() {
                                </div>
                                <div className="flex items-center gap-1.5 shrink-0">
                                   {pricingEnabled && myCardCost > 0 && (
-                                     <span className="text-[9px] font-black text-[#EA580C] bg-[#EA580C]/10 px-1.5 py-0.5 rounded-md tabular-nums">
+                                     <span className="text-[10px] font-black text-[#EA580C] bg-[#EA580C]/10 px-1.5 py-0.5 rounded-md tabular-nums">
                                         {formatPeso(myCardCost)}
                                      </span>
                                   )}
@@ -475,12 +485,12 @@ export default function Player() {
                                         if (isGameOn) return;
                                         setCardQuantity(cards.length || 1);
                                      }}
-                                     className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md transition-all flex items-center gap-1 ${isGameOn ? 'text-[#A19B91] bg-gray-100 border border-[#E8E2D9] cursor-not-allowed pointer-events-none' : 'text-[#0D9488] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 cursor-pointer active:scale-95'}`}
+                                     className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md transition-all flex items-center gap-1 ${isGameOn ? 'text-[#6B655D] bg-[#F3EFE9] border border-[#E8E2D9] cursor-not-allowed pointer-events-none' : 'text-[#0D9488] bg-[#0D9488]/10 hover:bg-[#0D9488]/20 cursor-pointer active:scale-95'}`}
                                      title={isGameOn ? 'Card numbers are locked during active game' : 'Generate new random card numbers'}
                                   >
                                      {isGameOn ? (
                                         <>
-                                           <Lock size={8} className="text-[#A19B91]" />
+                                           <Lock size={9} className="text-[#6B655D]" />
                                            <span>Locked</span>
                                         </>
                                      ) : (
@@ -492,10 +502,10 @@ export default function Player() {
                             {/* Dikit Fight Active Alert Banner */}
                             {room?.dikitFight?.status === "active" && (
                                <div className="w-full max-w-[440px] bg-[#0D9488]/15 border border-[#0D9488]/40 rounded-xl px-2.5 py-1 text-center shrink-0 mb-1 flex items-center justify-between gap-1 shadow-sm">
-                                  <span className="text-[9px] font-black text-[#0D9488] uppercase tracking-wider flex items-center gap-1">
+                                  <span className="text-[10px] font-black text-[#0D9488] uppercase tracking-wider flex items-center gap-1">
                                      <span className="text-xs">⚔️</span> DIKIT FIGHT
                                   </span>
-                                  <span className="text-[8px] font-black text-[#3D3A35] truncate max-w-[240px]">
+                                  <span className="text-[10px] font-bold text-[#3D3A35] truncate max-w-[240px]">
                                      {room.dikitFight.roundBingoPending
                                         ? "🏆 Bingo Won! Fighting for Dikit..."
                                         : room.dikitFight.contenders.map(c => c.playerName).join(" vs ")}
@@ -606,7 +616,7 @@ export default function Player() {
                                        <div className="flex items-center gap-1">
                                           <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card 1</span>
                                           {isCardInDikitFight(0) && (
-                                             <span className="bg-[#0D9488] text-white text-[6px] font-black px-1 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                             <span className="bg-[#0D9488] text-white text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ Fight</span>
                                           )}
                                        </div>
                                        {hasCalledBalls && cardStatus[0]?.win.cellsAway === 1 && (
@@ -640,11 +650,11 @@ export default function Player() {
                                                 <div className="flex items-center gap-1">
                                                    <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
                                                    {isCardInDikitFight(idx) && (
-                                                      <span className="bg-[#0D9488] text-white text-[6px] font-black px-1 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                                      <span className="bg-[#0D9488] text-white text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ Fight</span>
                                                    )}
                                                 </div>
                                                 {isNearWin && (
-                                                   <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
+                                                   <span className="bg-[#FACC15] text-[#854D0E] text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                                 )}
                                              </div>
                                              <div className="flex-1 min-h-0 min-w-0 w-full h-full flex items-center justify-center card-fit-wrapper">
@@ -679,11 +689,11 @@ export default function Player() {
                                              <div className="flex items-center gap-1">
                                                 <span className="text-[8px] font-black uppercase tracking-widest text-[#7A746B]">Card {idx + 1}</span>
                                                 {isCardInDikitFight(idx) && (
-                                                   <span className="bg-[#0D9488] text-white text-[6px] font-black px-1 rounded-full uppercase animate-pulse">⚔️ Fight</span>
+                                                   <span className="bg-[#0D9488] text-white text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">⚔️ Fight</span>
                                                 )}
                                              </div>
                                              {isNearWin && (
-                                                <span className="bg-[#FACC15] text-[#854D0E] text-[6px] font-black px-1 rounded-full uppercase animate-pulse">1 Away</span>
+                                                <span className="bg-[#FACC15] text-[#854D0E] text-[9px] font-black px-1.5 rounded-full uppercase animate-pulse">1 Away</span>
                                              )}
                                           </div>
                                           <div className="flex-1 min-h-0 min-w-0 w-full h-full flex items-center justify-center card-fit-wrapper">
@@ -708,8 +718,8 @@ export default function Player() {
                            )}
                         </div>
                         <div className="flex justify-center shrink-0 py-0.5 sm:py-1">
-                           <button onClick={() => setAutoMark(!autoMark)} className={`flex items-center gap-1.5 px-3 py-1 rounded-full border font-black text-[8px] sm:text-[9px] uppercase tracking-widest transition-all ${autoMark ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-sm' : 'bg-white border-[#E8E2D9] text-[#7A746B]'}`}>
-                              <CheckCircle2 size={11} fill={autoMark ? "currentColor" : "none"} />Auto-Marking {autoMark ? 'ON' : 'OFF'}
+                           <button type="button" onClick={() => setAutoMark(!autoMark)} aria-pressed={autoMark} className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border font-bold text-[10px] uppercase tracking-wider transition-all ${autoMark ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-sm' : 'bg-white border-[#E8E2D9] text-[#6B655D]'}`}>
+                              <CheckCircle2 size={12} fill={autoMark ? "currentColor" : "none"} />Auto-Marking {autoMark ? 'ON' : 'OFF'}
                            </button>
                         </div>
                      </>
@@ -719,11 +729,11 @@ export default function Player() {
             {activeTab === 'pattern' && (
                <motion.div key="pattern" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="flex-1 flex flex-col items-center p-4 sm:p-6 gap-4 sm:gap-6 overflow-y-auto custom-scrollbar">
                   <div className="text-center shrink-0 pt-2">
-                     <h3 className="text-xs font-black text-[#A19B91] uppercase tracking-[0.3em] mb-1">Winning Patterns</h3>
+                     <h3 className="text-xs font-bold text-[#6B655D] uppercase tracking-[0.22em] mb-1">Winning Patterns</h3>
                      <div className="flex items-center justify-center gap-2">
                         <p className="text-2xl font-black text-[#EA580C] uppercase tracking-tighter italic">{room.mode === 'Bingo' ? 'Standard Bingo' : room.mode}</p>
                         {!room.hidePattern && room.mode === 'Bingo' && (
-                           <span className="text-[10px] font-black uppercase bg-[#0D9488]/10 text-[#0D9488] px-2.5 py-0.5 rounded-full">
+                           <span className="text-[10px] font-black uppercase bg-[#0D9488]/10 text-[#0D9488] px-2.5 py-0.5 rounded-full tabular-nums">
                               {room.patterns.length} Active
                            </span>
                         )}
@@ -736,83 +746,83 @@ export default function Player() {
                        ) : (
                           <div className="py-8 text-center">
                              <div className="text-3xl font-display text-[#EA580C] uppercase italic">{room.mode}</div>
-                             <p className="text-xs font-bold text-[#7A746B] uppercase tracking-widest mt-2">
+                             <p className="text-xs font-bold text-[#6B655D] uppercase tracking-widest mt-2">
                                 {room.mode === 'Blackout' ? 'Mark all 25 squares to win!' : 'Mark any 2 adjacent horizontal numbers!'}
                              </p>
                           </div>
                        )}
                     </div>
                   ) : (
-                    <div className="bg-white p-10 rounded-[36px] border-4 border-dashed border-[#E8E2D9] flex flex-col items-center gap-4 text-[#C5BFB6] w-full max-w-sm">
-                       <Eye size={56} className="opacity-30" /><span className="text-xs font-black uppercase tracking-[0.4em]">Mystery Pattern</span>
+                    <div className="bg-white p-10 rounded-[36px] border-4 border-dashed border-[#E8E2D9] flex flex-col items-center gap-4 text-[#6B655D] w-full max-w-sm">
+                       <Eye size={56} className="opacity-50" /><span className="text-xs font-bold uppercase tracking-[0.28em]">Mystery Pattern</span>
                     </div>
                   )}
                   {(dikitPrize > 0 || bingoPrize > 0 || totalCollected > 0) && (
                     <div className="bg-white p-4 rounded-[28px] border-2 border-[#E8E2D9] shadow-sm w-full max-w-xl shrink-0 space-y-2.5">
                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.25em] flex items-center gap-1.5">
-                             <Coins size={12} className="text-[#EA580C]" />
+                          <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em] flex items-center gap-1.5">
+                             <Coins size={13} className="text-[#EA580C]" />
                              Round Prizes
                           </span>
                           {totalCollected > 0 && (
-                             <span className="text-[10px] font-black text-[#3D3A35] bg-[#FAF7F2] border border-[#E8E2D9] px-2.5 py-0.5 rounded-full tabular-nums">
+                             <span className="text-[11px] font-black text-[#3D3A35] bg-[#FAF7F2] border border-[#E8E2D9] px-2.5 py-0.5 rounded-full tabular-nums">
                                 Pot: {formatPeso(totalCollected)}
                              </span>
                           )}
                        </div>
                        <div className="grid grid-cols-2 gap-2.5">
                           <div className="bg-[#0D9488]/10 border border-[#0D9488]/20 rounded-2xl p-3 text-center">
-                             <div className="text-[9px] font-black text-[#0D9488] uppercase tracking-widest">⚔️ Dikit Prize</div>
+                             <div className="text-[10px] font-black text-[#0D9488] uppercase tracking-wider">⚔️ Dikit Prize</div>
                              <div className="text-2xl font-display text-[#0D9488] tabular-nums mt-0.5">{dikitPrize > 0 ? formatPeso(dikitPrize) : '—'}</div>
                           </div>
                           <div className="bg-[#EA580C]/10 border border-[#EA580C]/20 rounded-2xl p-3 text-center">
-                             <div className="text-[9px] font-black text-[#EA580C] uppercase tracking-widest">🏆 Bingo Prize</div>
+                             <div className="text-[10px] font-black text-[#EA580C] uppercase tracking-wider">🏆 Bingo Prize</div>
                              <div className="text-2xl font-display text-[#EA580C] tabular-nums mt-0.5">{bingoPrize > 0 ? formatPeso(bingoPrize) : '—'}</div>
                           </div>
                        </div>
                     </div>
                   )}
-                  {room.prizeText && <div className="bg-[#FACC15]/20 px-6 py-4 rounded-2xl border-2 border-[#FACC15] text-center w-full max-w-xl shrink-0"><p className="text-[10px] font-black text-[#854D0E] uppercase tracking-widest mb-1">Prize Note</p><p className="text-xl font-black text-[#854D0E]">{room.prizeText}</p></div>}
+                  {room.prizeText && <div className="bg-[#FACC15]/20 px-6 py-4 rounded-2xl border-2 border-[#FACC15] text-center w-full max-w-xl shrink-0"><p className="text-[11px] font-bold text-[#854D0E] uppercase tracking-widest mb-1">Prize Note</p><p className="text-xl font-black text-[#854D0E]">{room.prizeText}</p></div>}
                </motion.div>
             )}
             {activeTab === 'history' && (
                <motion.div key="history" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="flex-1 flex flex-col p-6 overflow-hidden">
-                  <h3 className="text-xs font-black text-[#A19B91] uppercase tracking-[0.2em] mb-6">Call History</h3>
+                  <h3 className="text-xs font-bold text-[#6B655D] uppercase tracking-[0.2em] mb-6">Call History</h3>
                   <div className="grid grid-cols-5 gap-3 overflow-y-auto pr-2 custom-scrollbar pb-12">
                      {[...room.calledNumbers].reverse().map((n, i) => (
                         <div key={i} className="aspect-square bg-white border-2 border-[#E8E2D9] rounded-xl flex flex-col items-center justify-center shadow-sm">
-                           <span className="text-[8px] font-black text-[#A19B91] leading-none mb-0.5">{getBallLetter(n)}</span>
-                           <span className="text-lg font-display text-[#3D3A35] leading-none">{n}</span>
+                           <span className="text-[10px] font-bold text-[#6B655D] leading-none mb-0.5">{getBallLetter(n)}</span>
+                           <span className="text-lg font-display text-[#3D3A35] leading-none tabular-nums">{n}</span>
                         </div>
                      ))}
-                     {room.calledNumbers.length === 0 && <div className="col-span-5 py-20 text-center text-[#DED9D1] font-bold italic">No numbers called yet</div>}
+                     {room.calledNumbers.length === 0 && <div className="col-span-5 py-20 text-center text-[#6B655D] font-semibold italic">No numbers called yet</div>}
                   </div>
                </motion.div>
             )}
             {activeTab === 'stats' && (
-               <motion.div key="stats" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="flex-1 flex flex-col p-8 gap-6 overflow-y-auto">
-                  <div className="text-center mb-2">
-                     <h3 className="text-xs font-black text-[#A19B91] uppercase tracking-[0.3em] mb-1">Session Intel</h3>
-                     <p className="text-[10px] font-bold text-[#DED9D1] uppercase tracking-widest italic">Live Game Data</p>
+               <motion.div key="stats" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="flex-1 flex flex-col p-6 sm:p-8 gap-5 overflow-y-auto">
+                  <div className="text-center mb-1">
+                     <h3 className="text-xs font-bold text-[#6B655D] uppercase tracking-[0.22em] mb-1">Game Stats</h3>
+                     <p className="text-xs font-semibold text-[#6B655D]">Round Overview</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                      <div className="bg-white p-5 rounded-[32px] border-2 border-[#E8E2D9] shadow-sm relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-white to-[#FAF7F2] pointer-events-none" />
                         <Users size={20} className="text-[#0D9488] mb-2 relative z-10" />
                         <div className="text-4xl font-display tabular-nums relative z-10">{Object.values(room.players).length}</div>
-                        <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider relative z-10">Players</div>
+                        <div className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider relative z-10">{Object.values(room.players).length === 1 ? 'Player' : 'Players'}</div>
                      </div>
                      <div className="bg-white p-5 rounded-[32px] border-2 border-[#E8E2D9] shadow-sm relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-white to-[#FAF7F2] pointer-events-none" />
                         <Ticket size={20} className="text-[#EA580C] mb-2 relative z-10" />
                         <div className="text-4xl font-display tabular-nums relative z-10">{room.stats?.totalCardsSold || 0}</div>
-                        <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider relative z-10">Cards Sold</div>
+                        <div className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider relative z-10">{(room.stats?.totalCardsSold || 0) === 1 ? 'Card Sold' : 'Cards Sold'}</div>
                      </div>
                   </div>
                   {(pricingEnabled || totalCollected > 0 || dikitPrize > 0 || bingoPrize > 0) && (
                      <div className="bg-white p-5 rounded-[32px] border-2 border-[#E8E2D9] shadow-sm space-y-3">
                         <div className="flex items-center justify-between">
-                           <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest flex items-center gap-1.5">
+                           <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider flex items-center gap-1.5">
                               <Coins size={14} className="text-[#EA580C]" />
                               Pot &amp; Prizes
                            </span>
@@ -820,16 +830,16 @@ export default function Player() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                            <div className="bg-[#0D9488]/10 rounded-2xl p-3">
-                              <div className="text-[9px] font-black text-[#0D9488] uppercase tracking-wider">⚔️ Dikit Prize</div>
+                              <div className="text-[10px] font-black text-[#0D9488] uppercase tracking-wider">⚔️ Dikit Prize</div>
                               <div className="text-xl font-display text-[#0D9488] tabular-nums">{dikitPrize > 0 ? formatPeso(dikitPrize) : 'Not set'}</div>
                            </div>
                            <div className="bg-[#EA580C]/10 rounded-2xl p-3">
-                              <div className="text-[9px] font-black text-[#EA580C] uppercase tracking-wider">🏆 Bingo Prize</div>
+                              <div className="text-[10px] font-black text-[#EA580C] uppercase tracking-wider">🏆 Bingo Prize</div>
                               <div className="text-xl font-display text-[#EA580C] tabular-nums">{bingoPrize > 0 ? formatPeso(bingoPrize) : 'Not set'}</div>
                            </div>
                         </div>
                         {pricingEnabled && (
-                           <div className="pt-2 border-t border-[#FAF7F2] flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-[#7A746B]">
+                           <div className="pt-2 border-t border-[#FAF7F2] flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-[#6B655D]">
                               <span>1 Card: {formatPeso(calculateCardsCost(1, room))} · 2: {formatPeso(calculateCardsCost(2, room))} · 4: {formatPeso(calculateCardsCost(4, room))}</span>
                               {cards.length > 0 && (
                                  <span className="font-black text-[#EA580C]">My Cost: {formatPeso(myCardCost)}</span>
@@ -844,6 +854,7 @@ export default function Player() {
                         <LayoutGrid size={20} className="text-[#EA580C] mb-2" />
                         {cards.length > 0 && ['waiting', 'next_round'].includes(room.status) && (
                            <button 
+                              type="button"
                               onClick={() => {
                                  const newCards = Array.from({ length: cards.length }, () => generateRandomCard());
                                  const emptyMarked: Record<number, number[]> = {};
@@ -859,7 +870,7 @@ export default function Player() {
                         )}
                      </div>
                      <div className="text-4xl font-display tabular-nums relative z-10">{cards.length}</div>
-                     <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider relative z-10">My Cards</div>
+                     <div className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider relative z-10">My Cards</div>
                   </div>
                   <div className="bg-white p-6 rounded-[40px] border-4 border-[#E8E2D9] shadow-inner relative overflow-hidden paper-texture">
                      <div className="flex items-center gap-3 mb-6 relative z-10">
@@ -872,17 +883,17 @@ export default function Player() {
                               <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent pointer-events-none" />
                               <div className="relative z-10">
                                  <div className="text-sm font-black text-[#3D3A35] uppercase italic">{w.name}</div>
-                                 <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-tight">{w.pattern}</div>
+                                 <div className="text-[11px] font-bold text-[#6B655D] uppercase tracking-tight">{w.pattern}</div>
                               </div>
                               <div className="text-[10px] font-black text-[#EA580C] bg-[#EA580C]/10 px-3 py-1 rounded-full border border-[#EA580C]/20 relative z-10">
                                  {new Date(w.time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                               </div>
                            </div>
                         ))}
-                        {hallOfFame.length === 0 && <div className="text-center py-6 text-[#DED9D1] font-bold italic text-xs">Waiting for the first all-time winner!</div>}
+                        {hallOfFame.length === 0 && <div className="text-center py-6 text-[#6B655D] font-semibold italic text-xs">Waiting for the first all-time winner!</div>}
                      </div>
                   </div>
-                  <button onClick={() => { leaveRoom(); navigate('/'); }} className="w-full py-4 mt-2 bg-red-50 text-red-500 border-2 border-red-200 rounded-[24px] font-black text-sm uppercase tracking-widest active:scale-95 transition-all shadow-sm">Leave Room</button>
+                  <button type="button" onClick={() => { leaveRoom(); navigate('/'); }} className="w-full py-4 mt-2 bg-red-50 text-red-600 border-2 border-red-200 rounded-[24px] font-black text-sm uppercase tracking-widest active:scale-95 transition-all shadow-sm">Leave Room</button>
                </motion.div>
             )}
          </AnimatePresence>
@@ -890,22 +901,24 @@ export default function Player() {
          <AnimatePresence>
             {room.status === 'next_round' && (
                <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className="absolute inset-0 z-40 bg-[#FAF7F2] p-6 flex flex-col gap-5 overflow-y-auto custom-scrollbar">
-                  <div className="text-center pt-4"><Trophy size={48} className="text-[#FACC15] mx-auto mb-2" /><h2 className="text-3xl font-black uppercase tracking-tighter italic">Round Complete!</h2><p className="text-xs font-black text-[#A19B91] uppercase tracking-widest mt-1">Next round starts in <Countdown endsAt={room.nextRoundEndsAt} /></p></div>
+                  <div className="text-center pt-4"><Trophy size={48} className="text-[#FACC15] mx-auto mb-2" /><h2 className="text-3xl font-black uppercase tracking-tighter italic">Round Complete!</h2><p className="text-xs font-bold text-[#6B655D] uppercase tracking-widest mt-1 tabular-nums">Next round starts in <Countdown endsAt={room.nextRoundEndsAt} /></p></div>
                   {cards.length > 0 ? (
                      <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-6 shadow-sm">
-                        <h3 className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest mb-4 text-center">Prepare your cards</h3>
+                        <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-widest mb-4 text-center">Tap cards to swap for fresh numbers</h3>
                         <div className="space-y-3">
                            {cards.map((_, i) => (
-                              <button key={i} onClick={() => toggleRoundChoice(i)} className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${roundChoices[i] ? 'bg-[#EA580C]/10 border-[#EA580C] text-[#EA580C]' : 'bg-[#FAF7F2] border-white text-[#7A746B]'}`}>
-                                 <div className="flex items-center gap-3"><span className="text-sm font-black uppercase tracking-widest">Card {i + 1}</span>{roundChoices[i] && <span className="text-[10px] font-black bg-[#EA580C] text-white px-2 py-0.5 rounded-full uppercase">NEW</span>}</div>
-                                 <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${roundChoices[i] ? 'bg-[#EA580C] border-[#EA580C] text-white' : 'bg-white border-[#E8E2D9]'}`}>{roundChoices[i] && <Plus size={16} strokeWidth={4} />}</div>
+                              <button key={i} type="button" aria-pressed={Boolean(roundChoices[i])} onClick={() => toggleRoundChoice(i)} className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${roundChoices[i] ? 'bg-[#EA580C]/10 border-[#EA580C] text-[#EA580C]' : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#3D3A35]'}`}>
+                                 <span className="text-sm font-black uppercase tracking-widest">Card {i + 1}</span>
+                                 <span className={`text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full ${roundChoices[i] ? 'bg-[#EA580C] text-white' : 'bg-white border border-[#DED9D1] text-[#6B655D]'}`}>
+                                    {roundChoices[i] ? 'Swap' : 'Keep'}
+                                 </span>
                               </button>
                            ))}
                         </div>
                      </div>
                   ) : (
                      <div className="bg-white rounded-[32px] border-4 border-[#E8E2D9] p-6 shadow-sm text-center">
-                        <h3 className="text-[10px] font-black text-[#7A746B] uppercase tracking-widest mb-3">Join the Next Round?</h3>
+                        <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-widest mb-3">Join the Next Round?</h3>
                         <div className="grid grid-cols-4 gap-2 max-w-[280px] mx-auto">
                            {[1, 2, 3, 4].map(num => {
                               const cost = calculateCardsCost(num, room);
@@ -913,7 +926,7 @@ export default function Player() {
                                  <button key={num} type="button" onClick={() => setCardQuantity(num)} className="py-2 px-1 rounded-xl bg-[#FAF7F2] border-2 border-[#E8E2D9] hover:border-[#EA580C] hover:bg-[#EA580C] hover:text-white text-[#3D3A35] transition-all flex flex-col items-center justify-center leading-none gap-0.5">
                                     <span className="font-display text-lg">{num}</span>
                                     {pricingEnabled && (
-                                       <span className="text-[9px] font-black opacity-75 tabular-nums">{formatPeso(cost)}</span>
+                                       <span className="text-[10px] font-bold opacity-85 tabular-nums">{formatPeso(cost)}</span>
                                     )}
                                  </button>
                               );
@@ -922,20 +935,20 @@ export default function Player() {
                      </div>
                   )}
                   {Object.values(roundChoices).some(Boolean) ? (
-                     <button onClick={applyRoundChoices} className="w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 bg-[#3D3A35] text-white">Confirm Changes</button>
+                     <button type="button" onClick={applyRoundChoices} className="w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 bg-[#3D3A35] text-white">Swap Selected Cards</button>
                   ) : (
-                     <button onClick={() => setPlayerReady()} disabled={me.isReady} className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${!me.isReady ? 'bg-[#0D9488] text-white shadow-[0_6px_0_#0F766E]' : 'bg-white border-4 border-[#0D9488] text-[#0D9488]'}`}>{!me.isReady ? "I'm Ready" : "Waiting for others..."}</button>
+                     <button type="button" onClick={() => setPlayerReady()} disabled={me.isReady} className={`w-full py-5 rounded-[24px] font-black text-lg uppercase tracking-widest shadow-xl transition-all active:scale-95 ${!me.isReady ? 'bg-[#0D9488] text-white shadow-[0_6px_0_#0F766E]' : 'bg-white border-4 border-[#0D9488] text-[#0D9488]'}`}>{!me.isReady ? "I'm Ready" : "Waiting for others..."}</button>
                   )}
-                  <p className="text-center text-[10px] font-bold text-[#A19B91] uppercase tracking-widest">{Object.values(roundChoices).some(Boolean) ? 'Selected cards will be refreshed' : cards.length > 0 ? 'Keeping current cards' : 'Watching as Spectator'}</p>
+                  <p className="text-center text-xs font-semibold text-[#6B655D]">{Object.values(roundChoices).some(Boolean) ? 'Selected cards will get new numbers' : cards.length > 0 ? 'Keeping your current cards' : 'Watching as Spectator'}</p>
                </motion.div>
             )}
          </AnimatePresence>
       </main>
 
-      <nav className="h-14 sm:h-16 bg-white border-t-2 border-[#E8E2D9] grid grid-cols-4 gap-1 px-2 shrink-0 z-30 pb-safe relative">
+      <nav className="h-14 sm:h-16 bg-white border-t-2 border-[#E8E2D9] grid grid-cols-4 gap-1 px-2 shrink-0 z-30 pb-safe relative" aria-label="Player tabs">
          {[{ id: 'cards', icon: LayoutGrid, label: 'Cards' },{ id: 'pattern', icon: Eye, label: 'Pattern' },{ id: 'history', icon: History, label: 'Calls' },{ id: 'stats', icon: Trophy, label: 'Stats' },].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex flex-col items-center justify-center gap-1 transition-all ${activeTab === tab.id ? 'text-[#EA580C] scale-110' : 'text-[#A19B91]'}`}>
-               <tab.icon size={20} strokeWidth={activeTab === tab.id ? 3 : 2} /><span className="text-[9px] font-black uppercase tracking-tighter">{tab.label}</span>
+            <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id as any)} aria-current={activeTab === tab.id ? 'page' : undefined} className={`flex flex-col items-center justify-center gap-0.5 transition-all ${activeTab === tab.id ? 'text-[#EA580C]' : 'text-[#6B655D] hover:text-[#3D3A35]'}`}>
+               <tab.icon size={20} strokeWidth={activeTab === tab.id ? 2.75 : 2} /><span className="text-[10px] font-bold uppercase tracking-tight">{tab.label}</span>
             </button>
          ))}
       </nav>
@@ -943,18 +956,18 @@ export default function Player() {
       <AnimatePresence>
          {(room.status === 'playing' || (room.status === 'paused' && ((room.claims?.length || 0) > 0 || (room.verifiedWinners?.length || 0) > 0))) && (winningCardIdx !== -1 || dikitCardIdx !== -1) && activeTab === 'cards' && (
             <motion.div initial={{ y: 100, scale: 0.8 }} animate={{ y: 0, scale: 1 }} exit={{ y: 100, scale: 0.8 }} className="fixed bottom-20 left-4 right-4 z-40 flex flex-col gap-2">
-               {dikitCardIdx !== -1 && room.status === 'playing' && (<button onClick={handleDikitClaim} className="w-full bg-[#0D9488] text-white py-3 rounded-2xl font-black text-lg uppercase tracking-[0.1em] shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none">Dikit Hit!</button>)}
-               {winningCardIdx !== -1 && (<button onClick={() => setShowClaimConfirm(true)} className="w-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white py-5 rounded-[24px] font-black text-2xl uppercase tracking-[0.15em] shadow-[0_8px_0_#9A3412] active:translate-y-[6px] active:shadow-none animate-bounce">{room.status === 'paused' ? 'I ALSO HAVE BINGO!' : 'BINGO AVAILABLE!'}</button>)}
+               {dikitCardIdx !== -1 && room.status === 'playing' && (<button type="button" onClick={handleDikitClaim} className="w-full bg-[#0D9488] text-white py-3 rounded-2xl font-black text-lg uppercase tracking-[0.1em] shadow-[0_4px_0_#0F766E] active:translate-y-[4px] active:shadow-none">Dikit Hit!</button>)}
+               {winningCardIdx !== -1 && (<button type="button" onClick={() => setShowClaimConfirm(true)} className="w-full bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white py-5 rounded-[24px] font-black text-2xl uppercase tracking-[0.15em] shadow-[0_8px_0_#9A3412] active:translate-y-[6px] active:shadow-none animate-bingo-glow">{room.status === 'paused' ? 'I ALSO HAVE BINGO!' : 'BINGO AVAILABLE!'}</button>)}
             </motion.div>
          )}
       </AnimatePresence>
 
       <AnimatePresence>
          {showClaimConfirm && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[#3D3A35]/80 backdrop-blur-sm flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[#3D3A35]/80 backdrop-blur-sm flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="Confirm Bingo Claim">
                <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white rounded-[40px] border-4 border-[#EA580C] p-8 w-full max-w-sm text-center shadow-2xl">
-                  <Trophy size={48} className="text-[#EA580C] mx-auto mb-4" /><h3 className="text-3xl font-black uppercase tracking-tighter mb-2 italic">Ready to Win?</h3><p className="text-sm font-bold text-[#7A746B] mb-8 leading-relaxed">This will pause the game for everyone and notify the Host. Are you sure you have Bingo?</p>
-                  <div className="flex flex-col gap-3"><button onClick={handleClaim} className="w-full py-5 bg-[#EA580C] text-white rounded-2xl font-black text-xl uppercase tracking-widest shadow-[0_6px_0_#9A3412] active:translate-y-[4px] active:shadow-none">YES, BINGO!</button><button onClick={() => setShowClaimConfirm(false)} className="w-full py-4 bg-[#FAF7F2] text-[#A19B91] rounded-2xl font-black text-sm uppercase tracking-widest">Wait, Go Back</button></div>
+                  <Trophy size={48} className="text-[#EA580C] mx-auto mb-4" /><h3 className="text-3xl font-black uppercase tracking-tighter mb-2 italic">Ready to Win?</h3><p className="text-sm font-semibold text-[#6B655D] mb-8 leading-relaxed">This will pause the game for everyone and notify the Host. Are you sure you have Bingo?</p>
+                  <div className="flex flex-col gap-3"><button type="button" onClick={handleClaim} className="w-full py-5 bg-[#EA580C] text-white rounded-2xl font-black text-xl uppercase tracking-widest shadow-[0_6px_0_#9A3412] active:translate-y-[4px] active:shadow-none">YES, BINGO!</button><button type="button" onClick={() => setShowClaimConfirm(false)} className="w-full py-4 bg-[#FAF7F2] border-2 border-[#E8E2D9] text-[#6B655D] hover:text-[#3D3A35] rounded-2xl font-black text-sm uppercase tracking-widest">Wait, Go Back</button></div>
                </motion.div>
             </motion.div>
          )}
@@ -1002,7 +1015,7 @@ export default function Player() {
                            : 'Sidebet winner announced · Game continues'}
                      </div>
                   </div>
-                  <button onClick={() => dismissDikit()} className="text-white/60 hover:text-white shrink-0 p-1">
+                  <button type="button" onClick={() => dismissDikit()} aria-label="Dismiss Dikit announcement" className="text-white/80 hover:text-white shrink-0 p-2 rounded-lg hover:bg-white/10 transition-colors">
                      <Plus size={20} className="rotate-45" />
                   </button>
                </div>
@@ -1083,8 +1096,8 @@ export default function Player() {
                             {w.card.map((row: number[], rIdx: number) => row.map((num: number, cIdx: number) => {
                               const called = num === 0 || (room.calledNumbers || []).includes(num);
                               return (
-                                <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-display text-[10px] rounded-md border transition-all ${
-                                  num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-sm font-bold' : 'bg-white border-[#E8E2D9] text-[#A19B91]'
+                                <div key={`${rIdx}-${cIdx}`} className={`aspect-square flex items-center justify-center font-display text-[10px] rounded-md border transition-all tabular-nums ${
+                                  num === 0 ? 'bg-[#3D3A35] text-white border-[#3D3A35]' : called ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-sm font-bold' : 'bg-white border-[#E8E2D9] text-[#7A746B]'
                                 }`}>
                                   {num === 0 ? 'FR' : num}
                                 </div>

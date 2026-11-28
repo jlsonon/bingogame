@@ -5,7 +5,7 @@ import { PatternVisualizer } from '../components/PatternVisualizer';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { getBallLetter, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
-import { Trophy, Users, PlayCircle, Monitor, Eye, Settings2, Coins } from 'lucide-react';
+import { Trophy, Users, PlayCircle, Monitor, Eye, Coins, Volume2, VolumeX } from 'lucide-react';
 import { SOUNDS, playSound, playVoiceBall } from '../lib/sounds';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
@@ -46,6 +46,7 @@ export default function Display() {
   const [lastBalls, setLastBalls] = useState<number[]>([]);
   const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [audioGateDismissed, setAudioGateDismissed] = useState(false);
   const [revealedBall, setRevealedBall] = useState<number | null>(() => latestBall || null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -194,8 +195,21 @@ export default function Display() {
 
   const enableAudio = () => {
     setAudioEnabled(true);
+    setAudioGateDismissed(true);
     if ('speechSynthesis' in window) {
       window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+    }
+  };
+
+  const toggleAudio = () => {
+    if (audioEnabled) {
+      setAudioEnabled(false);
+      setAudioGateDismissed(true);
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    } else {
+      enableAudio();
     }
   };
 
@@ -253,6 +267,17 @@ export default function Display() {
   if (room.status === 'waiting') {
     return (
       <div className="h-screen max-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col overflow-hidden relative p-5 sm:p-6 lg:p-8 paper-texture">
+        {audioGateDismissed && (
+          <button
+            type="button"
+            onClick={toggleAudio}
+            aria-label={audioEnabled ? 'Mute TV announcer' : 'Enable TV announcer'}
+            className={`fixed top-5 right-5 z-30 flex items-center gap-2 px-3.5 py-2 rounded-xl border-2 text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${audioEnabled ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-white border-[#DED9D1] text-[#6B655D] hover:text-[#3D3A35]'}`}
+          >
+            {audioEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            <span>{audioEnabled ? 'TV Voice ON' : 'Silent TV'}</span>
+          </button>
+        )}
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 lg:gap-6 relative z-10 max-w-6xl w-full mx-auto">
           {/* Top Brand Header */}
           <div className="flex items-center gap-4 lg:gap-6 shrink-0">
@@ -266,9 +291,9 @@ export default function Display() {
             <div className="text-left">
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-display uppercase tracking-tighter italic leading-none">Lucky Bingo</h1>
               <div className="flex items-center gap-3 mt-1">
-                <div className="h-1 w-10 bg-[#E8E2D9] rounded-full" />
-                <p className="text-xs sm:text-sm lg:text-base font-black text-[#A19B91] uppercase tracking-[0.4em]">The Hall is Open</p>
-                <div className="h-1 w-10 bg-[#E8E2D9] rounded-full" />
+                <div className="h-1 w-10 bg-[#DED9D1] rounded-full" />
+                <p className="text-xs sm:text-sm lg:text-base font-bold text-[#6B655D] uppercase tracking-[0.3em]">The Hall is Open</p>
+                <div className="h-1 w-10 bg-[#DED9D1] rounded-full" />
               </div>
             </div>
           </div>
@@ -278,7 +303,7 @@ export default function Display() {
             <div className="w-full bg-white rounded-3xl border-4 border-[#E8E2D9] px-5 py-3 shadow-md flex flex-wrap items-center justify-between gap-3 shrink-0">
               {pricingEnabled && (
                 <div className="flex flex-wrap items-center gap-2 text-xs lg:text-sm font-black text-[#3D3A35]">
-                  <span className="text-[10px] uppercase tracking-widest text-[#A19B91] mr-1 flex items-center gap-1">
+                  <span className="text-[11px] uppercase tracking-wider text-[#6B655D] mr-1 flex items-center gap-1">
                     <Coins size={14} className="text-[#EA580C]" />
                     Cards:
                   </span>
@@ -315,7 +340,7 @@ export default function Display() {
                 <img src={qrUrl} alt="Join QR" className="w-44 h-44 lg:w-56 lg:h-56 xl:w-64 xl:h-64 mix-blend-multiply" />
               </div>
               <div className="space-y-1 shrink-0">
-                <p className="text-xs lg:text-sm font-bold text-[#A19B91] uppercase tracking-widest">Or enter code</p>
+                <p className="text-xs lg:text-sm font-bold text-[#6B655D] uppercase tracking-widest">Or enter code</p>
                 <div className="text-5xl lg:text-6xl font-display text-[#EA580C] tracking-[0.2em] tabular-nums leading-none">{room.id}</div>
               </div>
             </div>
@@ -324,7 +349,7 @@ export default function Display() {
               <div className="flex items-center justify-between mb-6 shrink-0">
                 <div className="flex flex-col">
                   <span className="text-5xl lg:text-6xl font-display leading-none tabular-nums text-[#FACC15]">{connectedPlayers.length}</span>
-                  <span className="text-xs font-black uppercase tracking-[0.3em] opacity-60 mt-1">Players In Hall</span>
+                  <span className="text-xs font-bold uppercase tracking-[0.24em] text-white/80 mt-1">{connectedPlayers.length === 1 ? 'Player In Hall' : 'Players In Hall'}</span>
                 </div>
                 <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center animate-pulse">
                   <Users size={28} className="text-[#FACC15]" />
@@ -333,7 +358,7 @@ export default function Display() {
 
               <div className="flex-1 min-h-0 space-y-2.5 overflow-hidden relative">
                 <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#3D3A35] to-transparent z-10 pointer-events-none" />
-                <h4 className="text-xs font-black uppercase tracking-[0.3em] mb-3 opacity-40">Recent Arrivals</h4>
+                <h4 className="text-xs font-bold uppercase tracking-[0.24em] mb-3 text-white/70">Recent Arrivals</h4>
                 {connectedPlayers.slice(-6).reverse().map((p: Player, i) => (
                   <motion.div
                     key={p.id}
@@ -349,18 +374,30 @@ export default function Display() {
                   </motion.div>
                 ))}
                 {connectedPlayers.length === 0 && (
-                  <div className="py-16 text-center text-white/25 font-bold italic uppercase tracking-widest">Waiting for players...</div>
+                  <div className="py-16 text-center text-white/60 font-semibold italic uppercase tracking-widest">Waiting for players...</div>
                 )}
               </div>
             </div>
           </div>
         </div>
 
-        {!audioEnabled && (
-          <div className="fixed inset-0 z-[100] bg-[#3D3A35]/60 backdrop-blur-md flex items-center justify-center p-6">
-            <button onClick={enableAudio} className="bg-[#EA580C] text-white px-10 py-7 rounded-[36px] font-display text-3xl lg:text-4xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center gap-3 border-4 border-white tracking-widest uppercase italic">
-              <Monitor size={56} />ENABLE ANNOUNCER
-            </button>
+        {!audioEnabled && !audioGateDismissed && (
+          <div className="fixed inset-0 z-[100] bg-[#3D3A35]/70 backdrop-blur-md flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="TV Display Audio Setup">
+            <div className="bg-white rounded-[36px] border-4 border-[#3D3A35] p-8 max-w-md w-full text-center shadow-2xl flex flex-col gap-4">
+              <div className="w-16 h-16 mx-auto bg-[#EA580C]/10 text-[#EA580C] rounded-2xl flex items-center justify-center">
+                <Monitor size={36} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-display uppercase tracking-tight text-[#3D3A35]">TV Display Sound</h2>
+                <p className="text-sm font-medium text-[#6B655D] mt-1">Enable voice calling on this TV, or run silent if the Host device is announcing.</p>
+              </div>
+              <button type="button" onClick={enableAudio} className="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white px-6 py-4 rounded-2xl font-black text-lg shadow-[0_5px_0_#9A3412] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2.5 uppercase tracking-wider">
+                <Volume2 size={22} />Enable TV Announcer
+              </button>
+              <button type="button" onClick={() => setAudioGateDismissed(true)} className="w-full bg-[#FAF7F2] hover:bg-[#E8E2D9] border-2 border-[#DED9D1] text-[#3D3A35] px-6 py-3.5 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                <VolumeX size={18} />Silent TV (Display Only)
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -418,11 +455,23 @@ export default function Display() {
         )}
       </AnimatePresence>
 
-      {!audioEnabled && (
-        <div className="fixed inset-0 z-[100] bg-[#3D3A35]/60 backdrop-blur-md flex items-center justify-center p-6">
-          <button onClick={enableAudio} className="bg-[#EA580C] text-white px-10 py-7 rounded-[36px] font-display text-3xl lg:text-4xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex flex-col items-center gap-3 border-4 border-white tracking-widest uppercase italic">
-            <Monitor size={56} />ENABLE ANNOUNCER
-          </button>
+      {!audioEnabled && !audioGateDismissed && (
+        <div className="fixed inset-0 z-[100] bg-[#3D3A35]/70 backdrop-blur-md flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="TV Display Audio Setup">
+          <div className="bg-white rounded-[36px] border-4 border-[#3D3A35] p-8 max-w-md w-full text-center shadow-2xl flex flex-col gap-4">
+            <div className="w-16 h-16 mx-auto bg-[#EA580C]/10 text-[#EA580C] rounded-2xl flex items-center justify-center">
+              <Monitor size={36} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-display uppercase tracking-tight text-[#3D3A35]">TV Display Sound</h2>
+              <p className="text-sm font-medium text-[#6B655D] mt-1">Enable voice calling on this TV, or run silent if the Host device is announcing.</p>
+            </div>
+            <button type="button" onClick={enableAudio} className="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white px-6 py-4 rounded-2xl font-black text-lg shadow-[0_5px_0_#9A3412] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2.5 uppercase tracking-wider">
+              <Volume2 size={22} />Enable TV Announcer
+            </button>
+            <button type="button" onClick={() => setAudioGateDismissed(true)} className="w-full bg-[#FAF7F2] hover:bg-[#E8E2D9] border-2 border-[#DED9D1] text-[#3D3A35] px-6 py-3.5 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+              <VolumeX size={18} />Silent TV (Display Only)
+            </button>
+          </div>
         </div>
       )}
 
@@ -431,17 +480,26 @@ export default function Display() {
           <div className="w-11 h-11 lg:w-12 lg:h-12 bg-[#EA580C] rounded-2xl flex items-center justify-center shadow-lg rotate-[-5deg]"><span className="text-2xl lg:text-3xl font-display text-white italic">L</span></div>
           <div>
             <h1 className="text-2xl lg:text-3xl font-display uppercase tracking-tighter leading-none">Lucky Bingo</h1>
-            <p className="text-[#A19B91] font-black text-[10px] uppercase tracking-[0.4em] mt-0.5">Live Venue Display</p>
+            <p className="text-[#6B655D] font-bold text-[11px] uppercase tracking-[0.28em] mt-0.5">Live Hall Display</p>
           </div>
         </div>
-        <div className="flex items-center gap-6 lg:gap-10">
+        <div className="flex items-center gap-5 lg:gap-8">
+          <button
+            type="button"
+            onClick={toggleAudio}
+            aria-label={audioEnabled ? 'Mute TV announcer' : 'Enable TV announcer'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 text-xs font-bold uppercase tracking-wider transition-all ${audioEnabled ? 'bg-[#0D9488] border-[#0D9488] text-white' : 'bg-[#FAF7F2] border-[#DED9D1] text-[#6B655D] hover:text-[#3D3A35]'}`}
+          >
+            {audioEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            <span className="hidden sm:inline">{audioEnabled ? 'Voice ON' : 'Silent'}</span>
+          </button>
           <div className="flex flex-col items-end">
-            <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest">Room Code</span>
+            <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">Room Code</span>
             <span className="text-4xl lg:text-5xl font-display tracking-tighter text-[#3D3A35] leading-none tabular-nums">{room.id}</span>
           </div>
           <div className="h-10 w-1 bg-[#E8E2D9] rounded-full" />
           <div className="flex flex-col items-end">
-            <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest">Players</span>
+            <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">{connectedPlayers.length === 1 ? 'Player' : 'Players'}</span>
             <div className="flex items-center gap-2">
               <Users className="text-[#0D9488]" size={20} />
               <span className="text-3xl lg:text-4xl font-display text-[#3D3A35] leading-none tabular-nums">{connectedPlayers.length}</span>
@@ -465,24 +523,18 @@ export default function Display() {
         <AnimatePresence>
           {nearWinAlert && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.1 }}
-              className="absolute inset-4 z-20 pointer-events-none rounded-[44px] shadow-[inset_0_0_90px_rgba(234,88,12,0.55)] border-8 border-[#EA580C]/50 flex items-center justify-center"
+              initial={{ opacity: 0, y: -24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -24 }}
+              transition={{ duration: 0.25 }}
+              className="absolute inset-2 z-20 pointer-events-none rounded-[40px] shadow-[inset_0_0_48px_rgba(234,88,12,0.45)] border-4 border-[#EA580C]/70 flex items-start justify-center pt-3"
             >
-              <motion.div
-                animate={{ opacity: [0.15, 0.35, 0.15] }}
-                transition={{ repeat: Infinity, duration: 1 }}
-                className="absolute inset-0 bg-[#EA580C]/10 rounded-[40px]"
-              />
-              <div className="relative z-10 flex flex-col items-center gap-3">
-                <div className="bg-[#EA580C] text-white px-10 py-3 rounded-full font-black text-2xl lg:text-4xl uppercase tracking-[0.2em] animate-bounce shadow-2xl border-4 border-white italic">
-                  HIGH ALERT: 1 AWAY!
-                </div>
-                <div className="bg-white/95 backdrop-blur-md px-8 py-2.5 rounded-2xl border-4 border-[#EA580C] shadow-xl">
-                  <span className="text-3xl lg:text-4xl font-black text-[#3D3A35] uppercase tracking-tighter">{nearWinAlert.playerName}</span>
-                  <span className="text-base lg:text-xl font-bold text-[#EA580C] ml-3 uppercase tracking-widest">on {nearWinAlert.patternName}</span>
-                </div>
+              <div className="relative z-10 flex items-center gap-3 bg-[#3D3A35] text-white pl-4 pr-6 py-2.5 rounded-full shadow-2xl border-2 border-[#FACC15] max-w-[92%]">
+                <span className="bg-[#EA580C] text-white px-3 py-1 rounded-full font-black text-xs lg:text-sm uppercase tracking-widest shrink-0">
+                  1 Away!
+                </span>
+                <span className="text-lg lg:text-2xl font-black uppercase tracking-tight truncate">{nearWinAlert.playerName}</span>
+                <span className="text-xs lg:text-base font-bold text-[#FACC15] uppercase tracking-wider shrink-0">on {nearWinAlert.patternName}</span>
               </div>
             </motion.div>
           )}
@@ -507,31 +559,31 @@ export default function Display() {
                       <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-black/20 via-transparent to-white/40 pointer-events-none" />
                       <div className="absolute top-6 left-9 w-12 h-6 bg-white/30 rounded-[100%] blur-sm -rotate-45 pointer-events-none" />
                       <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-3xl xl:text-4xl font-display leading-none mb-1 z-10">{getBallLetter(revealedBall)}</motion.span>
-                      <motion.span initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="text-8xl xl:text-[120px] font-display leading-none tracking-tighter z-10">{revealedBall}</motion.span>
+                      <motion.span initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="text-8xl xl:text-[120px] font-display leading-none tracking-tighter z-10 tabular-nums">{revealedBall}</motion.span>
                     </div>
                   </motion.div>
                 ) : (
-                  <div className="relative z-10 flex flex-col items-center gap-3 text-[#C5BFB6]">
+                  <div className="relative z-10 flex flex-col items-center gap-3 text-[#6B655D]">
                     <PlayCircle size={64} strokeWidth={1.5} />
-                    <span className="text-lg font-black uppercase tracking-widest">Waiting to start</span>
+                    <span className="text-base font-bold uppercase tracking-widest">Waiting to start</span>
                   </div>
                 )}
               </AnimatePresence>
             </div>
 
             <div className="bg-white rounded-[36px] border-4 border-[#E8E2D9] p-5 xl:p-7 shadow-lg flex flex-col relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-[#FAF7F2] rounded-bl-[80px] -mr-6 -mt-6 border-b-4 border-l-4 border-[#E8E2D9]" />
+              <div className="absolute top-0 right-0 w-24 h-24 bg-[#FAF7F2] rounded-bl-[80px] -mr-6 -mt-6 pointer-events-none" />
               <div className="flex-1 flex flex-col justify-between">
                 <div>
-                  <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em] mb-3">Game Context</h3>
+                  <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.22em] mb-3">Round Details</h3>
                   <div className="flex flex-wrap items-end gap-6">
                     <div>
-                      <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-[0.2em] block mb-0.5">Current Round</label>
+                      <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.16em] block mb-0.5">Current Round</span>
                       <div className="text-3xl xl:text-4xl font-display text-[#3D3A35] uppercase italic leading-none">{room.roundName}</div>
                     </div>
                     {room.prizeText && (
                       <div>
-                        <label className="text-[10px] font-black text-[#7A746B] uppercase tracking-[0.2em] block mb-0.5">Playing For</label>
+                        <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.16em] block mb-0.5">Playing For</span>
                         <div className="text-2xl xl:text-3xl font-display text-[#EA580C] uppercase tracking-tighter leading-none">{room.prizeText}</div>
                       </div>
                     )}
@@ -554,7 +606,7 @@ export default function Display() {
                         </span>
                       )}
                       {pricingEnabled && (
-                        <span className="text-[10px] font-bold text-[#A19B91] ml-1 tabular-nums">
+                        <span className="text-[11px] font-bold text-[#6B655D] ml-1 tabular-nums">
                           Cards: 1={formatPeso(calculateCardsCost(1, room))} · 2={formatPeso(calculateCardsCost(2, room))} · 4={formatPeso(calculateCardsCost(4, room))}
                         </span>
                       )}
@@ -562,7 +614,7 @@ export default function Display() {
                   )}
                 </div>
                 <div>
-                  <h3 className="text-xs font-black text-[#A19B91] uppercase tracking-[0.2em] mb-2.5">Previous Numbers</h3>
+                  <h3 className="text-xs font-bold text-[#6B655D] uppercase tracking-[0.18em] mb-2.5">Previous Numbers</h3>
                   <div className="flex gap-2.5 xl:gap-3 h-14 xl:h-16">
                     <AnimatePresence initial={false} mode="popLayout">
                       {lastBalls.map((n, i) => (
@@ -574,13 +626,13 @@ export default function Display() {
                           transition={{ type: "spring", stiffness: 300, damping: 25 }}
                           className="w-14 h-14 xl:w-16 xl:h-16 rounded-2xl bg-[#FAF7F2] border-2 border-[#E8E2D9] shadow-sm flex flex-col items-center justify-center relative overflow-hidden"
                         >
-                          <span className="text-[9px] font-black text-[#A19B91] leading-none">{getBallLetter(n)}</span>
-                          <span className="text-2xl xl:text-3xl font-display text-[#3D3A35] leading-none">{n}</span>
+                          <span className="text-[10px] font-bold text-[#6B655D] leading-none">{getBallLetter(n)}</span>
+                          <span className="text-2xl xl:text-3xl font-display text-[#3D3A35] leading-none tabular-nums">{n}</span>
                         </motion.div>
                       ))}
                     </AnimatePresence>
                     {lastBalls.length === 0 && (
-                      <div className="h-full flex items-center text-[#C5BFB6] font-bold italic text-sm">No history yet</div>
+                      <div className="h-full flex items-center text-[#6B655D] font-semibold italic text-sm">No history yet</div>
                     )}
                   </div>
                 </div>
@@ -591,7 +643,7 @@ export default function Display() {
           {/* 5-Row Aligned Master Number Board */}
           <div className="bg-white rounded-[36px] p-4 lg:p-6 border-4 border-[#E8E2D9] shadow-lg flex-1 min-h-0 flex flex-col justify-center overflow-hidden">
             <div className="flex justify-between items-center mb-3 shrink-0">
-              <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Master Number Board</span>
+              <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.22em]">Master Number Board</span>
               <span className="text-xs font-black text-[#EA580C] bg-[#EA580C]/10 px-3 py-0.5 rounded-full tabular-nums">{room.calledNumbers.length} / 75</span>
             </div>
             <div className="flex-1 min-h-0 flex flex-col justify-between gap-1.5 xl:gap-2">
@@ -605,12 +657,12 @@ export default function Display() {
                       return (
                         <div
                           key={num}
-                          className={`aspect-square max-h-full w-full flex items-center justify-center text-base lg:text-xl xl:text-2xl font-display rounded-lg xl:rounded-xl border-2 transition-all duration-300 relative overflow-hidden ${
+                          className={`aspect-square max-h-full w-full flex items-center justify-center text-base lg:text-xl xl:text-2xl font-display rounded-lg xl:rounded-xl border-2 transition-all duration-300 relative overflow-hidden tabular-nums ${
                             isLatestNum
                               ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-lg ring-2 ring-[#FACC15] scale-105 z-10'
                               : isCalled
                                 ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-md'
-                                : 'bg-[#FAF7F2] text-[#C5BFB6] border-[#E8E2D9]'
+                                : 'bg-[#FAF7F2] text-[#7A746B] border-[#E8E2D9]'
                           }`}
                         >
                           {isCalled && (
@@ -634,16 +686,16 @@ export default function Display() {
             <div className="bg-[#FAF7F2] p-3 rounded-[24px] border-2 border-[#E8E2D9] mb-3 shadow-inner">
               <img src={qrUrl} alt="Join QR Code" className="w-36 h-36 xl:w-44 xl:h-44 mix-blend-multiply" />
             </div>
-            <p className="text-[#A19B91] font-bold text-[10px] uppercase tracking-widest mb-1">Or enter code on mobile</p>
-            <div className="text-3xl xl:text-4xl font-display text-[#EA580C] tracking-[0.2em] leading-none">{room.id}</div>
+            <p className="text-[#6B655D] font-bold text-[11px] uppercase tracking-wider mb-1">Or enter code on mobile</p>
+            <div className="text-3xl xl:text-4xl font-display text-[#EA580C] tracking-[0.2em] leading-none tabular-nums">{room.id}</div>
           </div>
 
           <div className="bg-white rounded-[36px] p-5 border-4 border-[#E8E2D9] shadow-lg flex-1 min-h-0 flex flex-col relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#FACC15] to-transparent opacity-50" />
             <div className="flex items-center justify-between mb-3 shrink-0">
-              <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.3em]">Target Patterns</h3>
+              <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.22em]">Target Patterns</h3>
               {!room.hidePattern && room.mode === 'Bingo' && (
-                <span className="text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 px-2.5 py-0.5 rounded-full uppercase">
+                <span className="text-[10px] font-black text-[#0D9488] bg-[#0D9488]/10 px-2.5 py-0.5 rounded-full uppercase tabular-nums">
                   {room.patterns.length} ON
                 </span>
               )}
@@ -655,37 +707,42 @@ export default function Display() {
                 ) : (
                   <div className="my-auto text-center">
                     <div className="text-3xl font-display text-[#EA580C] uppercase italic">{room.mode}</div>
-                    <p className="text-[10px] font-bold text-[#A19B91] uppercase tracking-widest mt-1">
+                    <p className="text-xs font-bold text-[#6B655D] uppercase tracking-wider mt-1">
                       {room.mode === 'Blackout' ? 'Mark all 25 squares' : 'Hit any 2 adjacent numbers'}
                     </p>
                   </div>
                 )
               ) : (
-                <div className="my-auto text-[#C5BFB6] flex flex-col items-center gap-3">
-                  <Eye size={48} className="opacity-30" />
-                  <span className="text-xs font-black uppercase tracking-[0.4em] text-center">Pattern Mystery</span>
+                <div className="my-auto text-[#6B655D] flex flex-col items-center gap-3">
+                  <Eye size={48} className="opacity-50" />
+                  <span className="text-xs font-bold uppercase tracking-[0.28em] text-center">Pattern Mystery</span>
                 </div>
               )}
             </div>
             <div className="mt-3 pt-3 border-t-2 border-[#FAF7F2] flex items-center justify-between shrink-0">
-              <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest">Game Mode</span>
+              <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider">Game Mode</span>
               <span className="text-lg font-display text-[#EA580C] uppercase italic">{room.mode === 'Bingo' ? 'Standard' : room.mode}</span>
             </div>
           </div>
         </div>
       </main>
 
-      <footer className="h-11 lg:h-12 bg-white border-t-4 border-[#E8E2D9] px-10 flex items-center justify-center relative overflow-hidden shrink-0">
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#EA580C]/5 to-transparent opacity-50" />
-        <motion.div animate={{ x: [400, -400] }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }} className="flex items-center gap-4 text-[#A19B91] font-black text-xs uppercase tracking-[0.4em] whitespace-nowrap">
-          <span>Powered by Lucky Bingo</span>
-          <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
-          <span>Community Event Night</span>
-          <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
-          <span>Good Luck to All Players!</span>
-          <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
-          <span>Check Your Cards!</span>
-        </motion.div>
+      <footer className="h-11 lg:h-12 bg-white border-t-4 border-[#E8E2D9] flex items-center relative overflow-hidden shrink-0">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#EA580C]/5 to-transparent opacity-50 pointer-events-none" />
+        <div className="animate-marquee flex items-center gap-8 text-[#6B655D] font-bold text-xs uppercase tracking-[0.3em] whitespace-nowrap">
+          {[0, 1].map((dup) => (
+            <div key={dup} className="flex items-center gap-8 shrink-0" aria-hidden={dup === 1}>
+              <span>Lucky Bingo</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+              <span>Community Bingo Hall</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+              <span>Good Luck to All Players!</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+              <span>Check Your Cards!</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+            </div>
+          ))}
+        </div>
       </footer>
 
       <AnimatePresence>
@@ -772,13 +829,13 @@ export default function Display() {
                 >
                   <div className="relative mb-8">
                     <motion.div
-                      animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
-                      transition={{ duration: 0.5, repeat: Infinity }}
+                      animate={{ scale: [1, 1.08, 1] }}
+                      transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
                       className="w-36 h-36 bg-[#EA580C] rounded-full flex items-center justify-center shadow-[0_0_80px_rgba(234,88,12,0.6)] border-8 border-white"
                     >
-                      <Settings2 size={64} className="text-white animate-spin" style={{ animationDuration: '3s' }} />
+                      <Trophy size={64} className="text-[#FACC15]" />
                     </motion.div>
-                    <div className="absolute -inset-6 border-4 border-dashed border-[#EA580C]/40 rounded-full animate-spin-slow" />
+                    <div className="absolute -inset-6 border-4 border-dashed border-[#FACC15]/50 rounded-full animate-spin-slow" />
                   </div>
 
                   <h2 className="text-6xl lg:text-8xl font-black text-white uppercase italic tracking-tighter mb-4 drop-shadow-2xl">
@@ -816,8 +873,8 @@ export default function Display() {
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-[#FACC15] text-xl font-black uppercase tracking-[0.5em] animate-pulse">
-                      Analyzing Card Data...
+                    <p className="text-[#FACC15] text-xl font-black uppercase tracking-[0.35em] animate-pulse">
+                      Host Verifying Card...
                     </p>
                     <div className="w-80 h-3 bg-white/10 rounded-full overflow-hidden border border-white/20 mx-auto">
                       <motion.div
@@ -918,12 +975,12 @@ export default function Display() {
                               return (
                                 <div
                                   key={`${rIdx}-${cIdx}`}
-                                  className={`aspect-square flex items-center justify-center font-display text-base lg:text-lg rounded-xl border-2 transition-all ${
+                                  className={`aspect-square flex items-center justify-center font-display text-base lg:text-lg rounded-xl border-2 transition-all tabular-nums ${
                                     num === 0
                                       ? 'bg-[#3D3A35] text-white border-[#3D3A35]'
                                       : called
-                                        ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-md'
-                                        : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#A19B91]'
+                                        ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-md'
+                                        : 'bg-[#FAF7F2] border-[#E8E2D9] text-[#7A746B]'
                                   }`}
                                 >
                                   {num === 0 ? 'FR' : num}
@@ -933,7 +990,7 @@ export default function Display() {
                           )}
                         </div>
                         <div className="mt-4 pt-3 border-t-2 border-[#FAF7F2] flex items-center justify-between">
-                          <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em]">Pattern</span>
+                          <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.18em]">Pattern</span>
                           <span className="text-lg font-display text-[#EA580C] uppercase italic tracking-tight">{w.pattern || 'Bingo'}</span>
                         </div>
                       </motion.div>

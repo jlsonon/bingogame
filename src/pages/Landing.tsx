@@ -5,7 +5,15 @@ import { motion } from 'framer-motion';
 import { PlayCircle, Users, Loader } from 'lucide-react';
 import { calculateCardsCost, formatPeso, hasCardPricing } from '../lib/bingo';
 
-const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
+const COLORS = [
+  { hex: '#ef4444', name: 'Red' },
+  { hex: '#f97316', name: 'Orange' },
+  { hex: '#eab308', name: 'Gold' },
+  { hex: '#22c55e', name: 'Green' },
+  { hex: '#3b82f6', name: 'Blue' },
+  { hex: '#a855f7', name: 'Purple' },
+  { hex: '#ec4899', name: 'Pink' },
+];
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -60,10 +68,10 @@ export default function Landing() {
         setLocalName(name);
       }
       if (!targetCode || targetCode.length !== 4) {
-        setError('Please enter a valid 4-letter code');
+        setError('Please enter a valid 4-letter room code');
         return;
       }
-      
+
       setLoading(true);
       setError('');
       setProfile(name, localColor);
@@ -72,7 +80,7 @@ export default function Landing() {
       if (success) {
         navigate(`/play/${targetCode}`);
       } else {
-        setError('Room not found or disconnected');
+        setError('Room not found or disconnected. Check the 4-letter code.');
         setLoading(false);
       }
     } catch (err: any) {
@@ -81,159 +89,198 @@ export default function Landing() {
     }
   };
 
-  const matchedRoom = publicRooms.find(r => r.id === joinCode.trim().toUpperCase()) || (publicRooms.length === 1 ? publicRooms[0] : null);
+  const matchedRoom =
+    publicRooms.find(r => r.id === joinCode.trim().toUpperCase()) ||
+    (publicRooms.length === 1 ? publicRooms[0] : null);
   const matchedPricing = matchedRoom && hasCardPricing(matchedRoom) ? matchedRoom : null;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#FAF7F2]">
-      {/* Decorative background balls */}
-      <div className="absolute top-10 left-10 w-32 h-32 bg-[#EA580C]/20 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-blob" />
-      <div className="absolute top-20 right-20 w-40 h-40 bg-[#0D9488]/20 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-blob animation-delay-2000" />
-      <div className="absolute -bottom-8 left-40 w-40 h-40 bg-[#FACC15]/20 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-blob animation-delay-4000" />
-
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+    <div className="min-h-screen flex items-center justify-center p-3 sm:p-4 relative overflow-x-hidden bg-[#FAF7F2] paper-texture">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-[40px] shadow-[12px_12px_0px_rgba(61,58,53,0.1)] border-4 border-[#3D3A35] overflow-hidden relative z-10 p-6 md:p-8"
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full max-w-md bg-white rounded-[32px] shadow-[0_20px_50px_rgba(61,58,53,0.12)] border-4 border-[#3D3A35] overflow-hidden relative z-10 p-5 sm:p-7"
       >
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-[20px] bg-[#EA580C] text-white shadow-[0_8px_0_#9A3412] transform rotate-[-8deg] mb-6 relative">
-            <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-white/30 rounded-[20px] pointer-events-none" />
+        <div className="text-center mb-5">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#EA580C] text-white shadow-[0_6px_0_#9A3412] transform -rotate-6 mb-3 relative">
+            <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-white/30 rounded-2xl pointer-events-none" />
             <span className="text-3xl font-display italic relative z-10">L</span>
           </div>
-          <h1 className="text-5xl font-display tracking-tight leading-none text-[#3D3A35] mb-2 uppercase italic">LuckyBingo</h1>
-          <p className="text-[#A19B91] text-[10px] font-black uppercase tracking-[0.3em]">Professional Digital Bingo Hall</p>
+          <h1 className="text-4xl sm:text-5xl font-display tracking-tight leading-none text-[#3D3A35] mb-1.5 uppercase italic">
+            Lucky Bingo
+          </h1>
+          <p className="text-[#6B655D] text-[11px] font-bold uppercase tracking-[0.25em]">
+            Community Bingo Hall
+          </p>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="space-y-1">
-            <label className="text-xs font-black text-[#7A746B] uppercase tracking-widest ml-1">Your Nickname</label>
-            <input 
-              type="text" 
+            <label htmlFor="nickname-input" className="text-xs font-bold text-[#6B655D] uppercase tracking-wider ml-1 block">
+              Your Nickname
+            </label>
+            <input
+              id="nickname-input"
+              type="text"
               placeholder="e.g. Juan Dela Cruz"
               value={localName}
               onChange={e => { setLocalName(e.target.value); setError(''); }}
-              className="w-full px-4 py-3 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-bold transition-colors text-lg text-[#3D3A35]"
+              className="w-full px-4 py-2.5 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-bold transition-colors text-base text-[#3D3A35] placeholder:text-[#7A746B]"
               maxLength={24}
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-black text-[#7A746B] uppercase tracking-widest ml-1">Pick your color</label>
+          <div className="space-y-1.5">
+            <span className="text-xs font-bold text-[#6B655D] uppercase tracking-wider ml-1 block">
+              Pick Your Color
+            </span>
             <div className="flex gap-2 justify-between px-1">
               {COLORS.map(color => (
                 <button
-                  key={color}
-                  onClick={() => setLocalColor(color)}
-                  className={`w-9 h-9 rounded-full transition-all ${localColor === color ? 'scale-110 ring-4 ring-offset-2 ring-slate-200 shadow-md' : 'hover:scale-105'}`}
-                  style={{ backgroundColor: color }}
+                  key={color.hex}
+                  type="button"
+                  aria-label={`Choose ${color.name} avatar color`}
+                  aria-pressed={localColor === color.hex}
+                  onClick={() => setLocalColor(color.hex)}
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-all ${
+                    localColor === color.hex
+                      ? 'scale-110 ring-4 ring-offset-2 ring-[#3D3A35]/35 shadow-md'
+                      : 'hover:scale-105'
+                  }`}
+                  style={{ backgroundColor: color.hex }}
                 />
               ))}
             </div>
           </div>
 
-          <div className="pt-6 border-t-2 border-[#FAF7F2] space-y-4">
-              <div className="flex gap-2.5 sm:gap-3 items-stretch">
-                 <input 
-                    type="text" 
-                    placeholder="CODE"
-                    value={joinCode}
-                    onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError(''); }}
-                    className="w-[116px] sm:w-1/3 shrink-0 px-2 sm:px-3 py-3 sm:py-4 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-display text-center text-2xl sm:text-3xl tracking-[0.1em] sm:tracking-[0.18em] uppercase text-[#3D3A35] placeholder:text-[#C5BFB6]"
-                    maxLength={4}
-                  />
-                  <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                     <label className="text-[10px] font-black text-[#A19B91] uppercase tracking-widest ml-1">Buy Cards</label>
-                     <div className="flex gap-1 sm:gap-1.5 flex-1">
-                        {[0, 1, 2, 3, 4].map(num => {
-                           const price = matchedPricing && num > 0 ? calculateCardsCost(num, matchedPricing) : 0;
-                           return (
-                              <button
-                                key={num}
-                                onClick={() => setCardCount(num)}
-                                className={`flex-1 min-w-0 py-1.5 rounded-xl border-2 transition-all flex flex-col items-center justify-center leading-none gap-0.5 ${cardCount === num ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md' : 'bg-white border-[#E8E2D9] text-[#7A746B] hover:border-[#A19B91]'}`}
-                              >
-                                <span className="font-display text-lg sm:text-xl leading-none">{num === 0 ? '👀' : num}</span>
-                                {matchedPricing && num > 0 && (
-                                   <span className={`text-[8px] font-black leading-none tabular-nums ${cardCount === num ? 'text-[#FACC15]' : 'text-[#A19B91]'}`}>
-                                      {formatPeso(price)}
-                                   </span>
-                                )}
-                              </button>
-                           );
-                        })}
-                     </div>
-                     <span className="text-[10px] font-black text-[#A19B91] uppercase tracking-wider text-center">
-                        {cardCount === 0
-                           ? 'Spectator Mode (No Cards)'
-                           : matchedPricing
-                             ? `Total: ${formatPeso(calculateCardsCost(cardCount, matchedPricing))}`
-                             : 'Select card count'}
-                     </span>
-                  </div>
+          <div className="pt-4 border-t-2 border-[#FAF7F2] space-y-3">
+            <div className="flex gap-2.5 sm:gap-3 items-stretch">
+              <div className="w-[116px] sm:w-1/3 shrink-0 flex flex-col gap-1">
+                <label htmlFor="room-code-input" className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">
+                  Room Code
+                </label>
+                <input
+                  id="room-code-input"
+                  type="text"
+                  placeholder="ABCD"
+                  value={joinCode}
+                  onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError(''); }}
+                  className="w-full flex-1 px-2 sm:px-3 py-2.5 bg-[#FDFBF7] border-2 border-[#E8E2D9] rounded-2xl focus:outline-none focus:border-[#0D9488] font-display text-center text-2xl sm:text-3xl tracking-[0.1em] sm:tracking-[0.16em] uppercase text-[#3D3A35] placeholder:text-[#7A746B]"
+                  maxLength={4}
+                />
               </div>
+              <div className="flex-1 min-w-0 flex flex-col gap-1">
+                <span className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider ml-1">
+                  Buy Cards
+                </span>
+                <div className="flex gap-1 sm:gap-1.5 flex-1">
+                  {[0, 1, 2, 3, 4].map(num => {
+                    const price = matchedPricing && num > 0 ? calculateCardsCost(num, matchedPricing) : 0;
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        aria-label={num === 0 ? 'Watch as Spectator (0 cards)' : `Buy ${num} card${num > 1 ? 's' : ''}`}
+                        aria-pressed={cardCount === num}
+                        onClick={() => setCardCount(num)}
+                        className={`flex-1 min-w-0 py-1.5 rounded-xl border-2 transition-all flex flex-col items-center justify-center leading-none gap-0.5 ${
+                          cardCount === num
+                            ? 'bg-[#3D3A35] border-[#3D3A35] text-white shadow-md'
+                            : 'bg-white border-[#E8E2D9] text-[#3D3A35] hover:border-[#6B655D]'
+                        }`}
+                      >
+                        <span className="font-display text-lg sm:text-xl leading-none">{num === 0 ? '👀' : num}</span>
+                        {matchedPricing && num > 0 && (
+                          <span className={`text-[9px] font-bold leading-none tabular-nums ${cardCount === num ? 'text-[#FACC15]' : 'text-[#6B655D]'}`}>
+                            {formatPeso(price)}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="text-[11px] font-semibold text-[#6B655D] text-center">
+                  {cardCount === 0
+                    ? 'Spectator Mode (0 cards)'
+                    : matchedPricing
+                      ? `Total: ${formatPeso(calculateCardsCost(cardCount, matchedPricing))}`
+                      : `${cardCount} ${cardCount === 1 ? 'card' : 'cards'} selected`}
+                </span>
+              </div>
+            </div>
 
-              <button 
-                id="join-btn"
-                onClick={() => handleJoin()}
-                disabled={loading}
-                className="w-full bg-[#EA580C] text-white py-5 rounded-[24px] font-display text-2xl italic transition-all flex items-center justify-center gap-3 shadow-[0_8px_0_#9A3412] active:translate-y-[8px] active:shadow-none touch-manipulation uppercase tracking-widest"
+            {error && (
+              <motion.p
+                role="alert"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-[#B91C1C] bg-red-50 border border-red-200 rounded-xl px-3 py-2 font-bold text-center text-xs"
               >
-                <PlayCircle size={28} fill="currentColor" />
-                Join Game
-              </button>
+                {error}
+              </motion.p>
+            )}
+
+            <button
+              id="join-btn"
+              type="button"
+              onClick={() => handleJoin()}
+              disabled={loading}
+              className="w-full bg-[#EA580C] hover:bg-[#DC4E08] text-white py-4 rounded-2xl font-display text-2xl italic transition-all flex items-center justify-center gap-3 shadow-[0_6px_0_#9A3412] active:translate-y-[6px] active:shadow-none touch-manipulation uppercase tracking-widest disabled:opacity-60"
+            >
+              <PlayCircle size={26} strokeWidth={2.5} />
+              Join Game
+            </button>
           </div>
 
           {publicRooms.length > 0 && (
-             <div className="bg-[#FAF7F2] p-4 rounded-3xl border-2 border-[#E8E2D9]">
-                <h3 className="text-[10px] font-black text-[#A19B91] uppercase tracking-[0.2em] mb-3">Live Rooms</h3>
-                <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                   {publicRooms.map(room => (
-                      <button
-                         key={room.id}
-                         onClick={() => {
-                            setJoinCode(room.id);
-                            handleJoin(room.id);
-                         }}
-                         className="w-full flex items-center justify-between bg-white border border-[#DED9D1] p-3 rounded-xl hover:border-[#0D9488] hover:bg-[#F3EFE9] transition-colors text-left"
-                      >
-                         <div className="min-w-0">
-                            <div className="text-sm font-black text-[#3D3A35] uppercase tracking-widest">{room.id}</div>
-                            <div className="text-[10px] font-bold text-[#A19B91] uppercase tracking-wider truncate">
-                              Host: {room.hostName} · {room.mode}
-                              {hasCardPricing(room) && ` · ${formatPeso(calculateCardsCost(1, room))}/card`}
-                              {room.bingoPrize > 0 && ` · 🏆 ${formatPeso(room.bingoPrize)}`}
-                            </div>
-                         </div>
-                         <div className="flex items-center gap-1.5 bg-[#0D9488]/10 text-[#0D9488] px-2 py-1 rounded-full">
-                            <span className="w-1.5 h-1.5 bg-[#0D9488] rounded-full animate-pulse" />
-                            <span className="text-[10px] font-black">{room.players}</span>
-                         </div>
-                      </button>
-                   ))}
-                </div>
-             </div>
+            <div className="bg-[#FAF7F2] p-3.5 rounded-2xl border-2 border-[#E8E2D9]">
+              <h3 className="text-[11px] font-bold text-[#6B655D] uppercase tracking-wider mb-2">Open Rooms</h3>
+              <div className="space-y-2 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
+                {publicRooms.map(room => (
+                  <button
+                    key={room.id}
+                    type="button"
+                    onClick={() => {
+                      setJoinCode(room.id);
+                      handleJoin(room.id);
+                    }}
+                    className="w-full flex items-center justify-between bg-white border border-[#DED9D1] p-2.5 rounded-xl hover:border-[#0D9488] hover:bg-[#F3EFE9] transition-colors text-left"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-black text-[#3D3A35] uppercase tracking-widest">{room.id}</div>
+                      <div className="text-[11px] font-semibold text-[#6B655D] truncate">
+                        Host: {room.hostName} · {room.mode}
+                        {hasCardPricing(room) && ` · ${formatPeso(calculateCardsCost(1, room))}/card`}
+                        {room.bingoPrize > 0 && ` · 🏆 ${formatPeso(room.bingoPrize)}`}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-[#0D9488]/12 text-[#0D9488] px-2.5 py-1 rounded-full shrink-0">
+                      <span className="w-1.5 h-1.5 bg-[#0D9488] rounded-full animate-pulse" />
+                      <span className="text-xs font-black tabular-nums">{room.players}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
-          <div className="relative flex items-center justify-center py-2">
-            <div className="absolute border-t-2 border-[#FAF7F2] w-full" />
-            <span className="relative bg-white px-4 text-[10px] font-black text-[#DED9D1] uppercase tracking-[0.3em]">Venue Host</span>
+          <div className="relative flex items-center justify-center py-1">
+            <div className="absolute border-t-2 border-[#E8E2D9] w-full" />
+            <span className="relative bg-white px-3 text-[11px] font-bold text-[#6B655D] uppercase tracking-[0.2em]">
+              Or Host a Room
+            </span>
           </div>
 
-          <button 
+          <button
+            type="button"
             onClick={handleHost}
             disabled={loading}
-            className="w-full py-4 bg-[#F3EFE9] border-2 border-[#DED9D1] text-[#7A746B] rounded-[24px] font-black text-sm transition-all flex items-center justify-center gap-2 active:translate-y-1 touch-manipulation uppercase tracking-widest disabled:opacity-60"
+            className="w-full py-3.5 bg-[#F3EFE9] hover:bg-[#E8E2D9] border-2 border-[#DED9D1] text-[#3D3A35] rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:translate-y-0.5 touch-manipulation uppercase tracking-widest disabled:opacity-60"
           >
-            {loading ? <Loader className="animate-spin text-[#0D9488]" size={20} /> : <Users size={20} />}
-            {loading ? 'Starting Host...' : 'Host New Room'}
+            {loading ? <Loader className="animate-spin text-[#0D9488]" size={18} /> : <Users size={18} />}
+            {loading ? 'Starting Room...' : 'Host New Room'}
           </button>
-
-          {error && (
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-500 font-black text-center text-xs uppercase tracking-wider">
-              {error}
-            </motion.p>
-          )}
         </div>
       </motion.div>
     </div>
