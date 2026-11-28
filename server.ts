@@ -1,13 +1,13 @@
 import express from "express";
 import { createServer } from "http";
+import os from "os";
 import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
-import { createServer as createViteServer } from "vite";
 import { checkValidWin, checkDikitSidequest, countDikitPairs, generateRandomCard, calculateTotalCollected, DEFAULT_BINGO_PATTERNS, PRESET_PATTERNS, type BingoPattern, type GameMode } from "./src/lib/bingo";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
-import { NATURAL_VOICE_MAP } from "./src/lib/voices";
+import { DEFAULT_VOICE_ID, NATURAL_VOICE_MAP, resolveVoiceId } from "./src/lib/voices";
 import { z } from "zod";
 
 const SettingsSchema = z.object({
@@ -128,8 +128,30 @@ const pendingDikitClaims: Record<string, { ballIndex: number; claims: DikitFight
 const sessionSockets: Record<string, string> = {}; // sessionId -> socketId
 // -----------------------
 
+// --- DATA & VOICE CACHE DIRECTORIES ---
+const DATA_DIR = process.env.BINGO_DATA_DIR ? path.resolve(process.env.BINGO_DATA_DIR) : process.cwd();
+const VOICE_CACHE_DIR = process.env.BINGO_VOICE_CACHE_DIR
+  ? path.resolve(process.env.BINGO_VOICE_CACHE_DIR)
+  : path.join(process.cwd(), "voice-cache");
+
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.error("Failed to create DATA_DIR:", err);
+}
+
 // --- GLOBAL PATTERN PERSISTENCE ---
-const PATTERNS_FILE = path.join(process.cwd(), "patterns.json");
+const PATTERNS_FILE = path.join(DATA_DIR, "patterns.json");
+const BUNDLED_PATTERNS_FILE = path.join(process.cwd(), "patterns.json");
+if (DATA_DIR !== process.cwd() && !fs.existsSync(PATTERNS_FILE) && fs.existsSync(BUNDLED_PATTERNS_FILE)) {
+  try {
+    fs.copyFileSync(BUNDLED_PATTERNS_FILE, PATTERNS_FILE);
+  } catch (err) {
+    console.warn("Could not seed patterns.json into DATA_DIR:", err);
+  }
+}
 let globalPatternLibrary: BingoPattern[] = [];
 
 const DELETED_PATTERN_IDENTIFIERS = new Set([
@@ -145,7 +167,7 @@ function isDeletedPattern(pattern: { id?: string; name?: string } | null | undef
 }
 
 // --- HALL OF FAME PERSISTENCE ---
-const HOF_FILE = path.join(process.cwd(), "hallOfFame.json");
+const HOF_FILE = path.join(DATA_DIR, "hallOfFame.json");
 let globalHallOfFame: any[] = [];
 
 function loadGlobalPatterns() {
@@ -496,9 +518,50 @@ async function startServer() {
 
   const ttsCache = new Map<string, Buffer>();
 
+  function getLanNetworkInfo(port: number) {
+    const interfaces = os.networkInterfaces();
+    const candidates: { name: string; address: string; priority: number }[] = [];
+
+    for (const [name, addrs] of Object.entries(interfaces)) {
+      if (!addrs) continue;
+      for (const info of addrs) {
+        if (info.family !== "IPv4" || info.internal) continue;
+        // Skip link-local 169.254.x.x unless nothing else exists
+        const isLinkLocal = info.address.startsWith("169.254.");
+        const isPrivate =
+          info.address.startsWith("192.168.") ||
+          info.address.startsWith("10.") ||
+          /^172\.(1[6-9]|2\d|3[0-1])\./.test(info.address);
+        // Prefer macOS Wi-Fi (en0 / en1) and private LAN subnets
+        let priority = 50;
+        if (name === "en0") priority = 1;
+        else if (name === "en1") priority = 2;
+        else if (name.startsWith("en") || name.startsWith("wl")) priority = 10;
+        if (!isPrivate) priority += 20;
+        if (isLinkLocal) priority += 100;
+        candidates.push({ name, address: info.address, priority });
+      }
+    }
+
+    candidates.sort((a, b) => a.priority - b.priority);
+    const primaryIp = candidates[0]?.address || "127.0.0.1";
+    const lanUrl = primaryIp !== "127.0.0.1" ? `http://${primaryIp}:${port}` : `http://localhost:${port}`;
+    return {
+      ip: primaryIp,
+      port,
+      lanUrl,
+      allIps: candidates.map(c => ({ interface: c.name, address: c.address })),
+    };
+  }
+
+  app.get("/api/lan-info", (req, res) => {
+    res.json(getLanNetworkInfo(PORT));
+  });
+
   app.get("/api/tts", async (req, res) => {
     try {
-      const voiceId = String(req.query.voice || 'natural_jenny');
+      const requestedVoice = String(req.query.voice || DEFAULT_VOICE_ID);
+      const voiceId = resolveVoiceId(requestedVoice);
       const ballNum = req.query.ball ? parseInt(String(req.query.ball), 10) : undefined;
       const preview = req.query.preview === 'true';
       const customText = req.query.text ? String(req.query.text).slice(0, 100) : undefined;
@@ -509,26 +572,48 @@ async function startServer() {
       }
 
       let textToSpeak = "";
+      let diskFileName: string | null = null;
       if (ballNum && ballNum >= 1 && ballNum <= 75) {
         const letter = ballNum <= 15 ? 'B' : ballNum <= 30 ? 'I' : ballNum <= 45 ? 'N' : ballNum <= 60 ? 'G' : 'O';
         textToSpeak = `${letter}... ${ballNum}.`;
+        diskFileName = `ball_${ballNum}.mp3`;
       } else if (customText) {
         textToSpeak = customText;
       } else if (preview) {
         textToSpeak = `Lucky Bingo! B... 12.`;
+        diskFileName = `preview.mp3`;
       } else {
         textToSpeak = `Lucky Bingo!`;
+        diskFileName = `intro.mp3`;
       }
 
-      const cacheKey = `${voiceConfig.edgeVoice}:${textToSpeak}`;
+      const cacheKey = `${voiceId}:${textToSpeak}`;
       if (ttsCache.has(cacheKey)) {
         const cached = ttsCache.get(cacheKey)!;
         res.setHeader("Content-Type", "audio/mpeg");
         res.setHeader("Content-Length", cached.length);
-        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         return res.send(cached);
       }
 
+      // Check persistent offline voice-cache on disk first (100% offline LAN playback)
+      const diskPath = diskFileName ? path.join(VOICE_CACHE_DIR, voiceId, diskFileName) : null;
+      if (diskPath && fs.existsSync(diskPath)) {
+        try {
+          const diskBuffer = await fs.promises.readFile(diskPath);
+          if (diskBuffer.length > 256) {
+            ttsCache.set(cacheKey, diskBuffer);
+            res.setHeader("Content-Type", "audio/mpeg");
+            res.setHeader("Content-Length", diskBuffer.length);
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            return res.send(diskBuffer);
+          }
+        } catch (diskErr) {
+          console.warn("Voice disk cache read warning:", diskErr);
+        }
+      }
+
+      // Online fallback: synthesize with Edge Neural TTS and save to disk cache
       const tts = new MsEdgeTTS();
       await tts.setMetadata(voiceConfig.edgeVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
       const stream = tts.toStream(textToSpeak);
@@ -541,22 +626,27 @@ async function startServer() {
       stream.audioStream.on("end", () => {
         const fullBuffer = Buffer.concat(chunks);
         ttsCache.set(cacheKey, fullBuffer);
+        if (diskPath && fullBuffer.length > 256) {
+          fs.promises.mkdir(path.dirname(diskPath), { recursive: true })
+            .then(() => fs.promises.writeFile(diskPath, fullBuffer))
+            .catch(() => {});
+        }
         res.setHeader("Content-Type", "audio/mpeg");
         res.setHeader("Content-Length", fullBuffer.length);
-        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         res.send(fullBuffer);
       });
 
       stream.audioStream.on("error", (err: any) => {
         console.error("TTS stream error:", err);
         if (!res.headersSent) {
-          res.status(500).json({ error: "TTS generation error" });
+          res.status(503).json({ error: "Voice clip not cached offline and TTS service is unreachable" });
         }
       });
     } catch (err: any) {
       console.error("TTS endpoint error:", err);
       if (!res.headersSent) {
-        res.status(500).json({ error: "TTS endpoint failed" });
+        res.status(503).json({ error: "Voice clip unavailable offline" });
       }
     }
   });
@@ -648,7 +738,7 @@ io.on("connection", (socket: Socket) => {
         roundName: 'Round 1',
         roundNumber: 1,
         autoCallSpeed: 0,
-        voiceMode: 'robotic',
+        voiceMode: DEFAULT_VOICE_ID,
         ambienceEnabled: false,
         voiceId: '24JGmqE2AvYy6abpAy3g',
         patterns: getAllLibraryPatterns(),
@@ -871,7 +961,7 @@ io.on("connection", (socket: Socket) => {
             }
           }
         }
-        if (settings.voiceMode) room.voiceMode = settings.voiceMode;
+        if (settings.voiceMode) room.voiceMode = resolveVoiceId(settings.voiceMode);
         if (typeof settings.ambienceEnabled === 'boolean') room.ambienceEnabled = settings.ambienceEnabled;
         if (settings.voiceId) room.voiceId = sanitizeText(settings.voiceId, '24JGmqE2AvYy6abpAy3g', 64);
         if (typeof settings.roundName === 'string') room.roundName = sanitizeText(settings.roundName, 'Round 1', 40);
@@ -1347,15 +1437,18 @@ io.on("connection", (socket: Socket) => {
     });
   });
 
-  // Vite middleware for development
+  // Vite middleware for development (dynamic import so production & macOS .app never require Vite)
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = process.env.BINGO_DIST_DIR
+      ? path.resolve(process.env.BINGO_DIST_DIR)
+      : path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -1363,7 +1456,8 @@ io.on("connection", (socket: Socket) => {
   }
 
   httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    const lan = getLanNetworkInfo(PORT);
+    console.log(`Lucky Bingo server running on http://localhost:${PORT} (Wi-Fi LAN: ${lan.lanUrl})`);
   });
 }
 

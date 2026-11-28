@@ -1,6 +1,6 @@
 // Sound Manager Utility for Lucky Bingo
-// Handles Web Audio synthesized SFX (no blocked external hotlinks), natural human neural voices, and robotic speech fallback
-import { isNaturalVoice } from './voices';
+// Handles Web Audio synthesized SFX (100% offline) and cached Natural Neural Voices
+import { resolveVoiceId } from './voices';
 
 export const SOUNDS = {
   BALL_DRAW: 'BALL_DRAW',
@@ -65,9 +65,6 @@ export function stopVoice() {
       // Ignore abort errors
     }
     currentVoiceAudio = null;
-  }
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
   }
 }
 
@@ -138,7 +135,7 @@ export function playSound(soundId: string, volume = 0.5) {
 
 export function playVoiceBall(
   ball: number,
-  mode: string,
+  mode?: string,
   callbacks?: {
     onStart?: () => void;
     onEnd?: () => void;
@@ -146,69 +143,60 @@ export function playVoiceBall(
 ): boolean {
   stopVoice();
 
-  // 1. Natural Neural Voices (Streamed via Edge Natural Neural TTS)
-  if (isNaturalVoice(mode)) {
-    try {
-      const url = `/api/tts?voice=${encodeURIComponent(mode)}&ball=${ball}`;
-      const audio = new Audio(url);
-      audio.volume = 1.0;
-      currentVoiceAudio = audio;
+  const voiceId = resolveVoiceId(mode);
 
-      let started = false;
-      const triggerStart = () => {
-        if (!started) {
-          started = true;
-          callbacks?.onStart?.();
-        }
-      };
+  try {
+    const url = `/api/tts?voice=${encodeURIComponent(voiceId)}&ball=${ball}`;
+    const audio = new Audio(url);
+    audio.volume = 1.0;
+    currentVoiceAudio = audio;
 
-      audio.addEventListener('play', triggerStart, { once: true });
-      audio.addEventListener('playing', triggerStart, { once: true });
-      if (callbacks?.onEnd) {
-        audio.addEventListener('ended', callbacks.onEnd, { once: true });
+    let started = false;
+    const triggerStart = () => {
+      if (!started) {
+        started = true;
+        callbacks?.onStart?.();
       }
+    };
 
-      // Fallback timer: ensure visual reveal triggers even if network/audio buffers slowly
-      const fallbackTimer = setTimeout(triggerStart, 350);
-      audio.addEventListener('playing', () => clearTimeout(fallbackTimer), { once: true });
-
-      audio.play().catch(e => {
-        console.warn('Natural voice playback blocked:', e);
-        clearTimeout(fallbackTimer);
-        triggerStart();
-      });
-      return true;
-    } catch (err) {
-      console.error('Failed to play natural voice ball:', err);
-      callbacks?.onStart?.();
-      return false;
+    audio.addEventListener('play', triggerStart, { once: true });
+    audio.addEventListener('playing', triggerStart, { once: true });
+    if (callbacks?.onEnd) {
+      audio.addEventListener('ended', callbacks.onEnd, { once: true });
     }
-  }
 
-  // 2. Robotic Mode (Standard Browser Web Speech)
-  return false;
+    // Fallback timer: ensure visual reveal triggers even if audio buffers slowly
+    const fallbackTimer = setTimeout(triggerStart, 350);
+    audio.addEventListener('playing', () => clearTimeout(fallbackTimer), { once: true });
+    audio.addEventListener('error', () => {
+      clearTimeout(fallbackTimer);
+      triggerStart();
+    }, { once: true });
+
+    audio.play().catch(e => {
+      console.warn('Natural voice playback blocked:', e);
+      clearTimeout(fallbackTimer);
+      triggerStart();
+    });
+    return true;
+  } catch (err) {
+    console.error('Failed to play natural voice ball:', err);
+    callbacks?.onStart?.();
+    return false;
+  }
 }
 
-export function previewVoice(mode: string): void {
+export function previewVoice(mode?: string): void {
   stopVoice();
 
-  if (isNaturalVoice(mode)) {
-    try {
-      const url = `/api/tts?voice=${encodeURIComponent(mode)}&preview=true`;
-      const audio = new Audio(url);
-      audio.volume = 1.0;
-      currentVoiceAudio = audio;
-      audio.play().catch(e => console.warn('Voice preview blocked:', e));
-    } catch (err) {
-      console.error('Failed to preview natural voice:', err);
-    }
-    return;
-  }
-
-  // Robotic Preview
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    const utterance = new SpeechSynthesisUtterance("Lucky Bingo! B... 12.");
-    utterance.rate = 0.85;
-    window.speechSynthesis.speak(utterance);
+  const voiceId = resolveVoiceId(mode);
+  try {
+    const url = `/api/tts?voice=${encodeURIComponent(voiceId)}&preview=true`;
+    const audio = new Audio(url);
+    audio.volume = 1.0;
+    currentVoiceAudio = audio;
+    audio.play().catch(e => console.warn('Voice preview blocked:', e));
+  } catch (err) {
+    console.error('Failed to preview natural voice:', err);
   }
 }

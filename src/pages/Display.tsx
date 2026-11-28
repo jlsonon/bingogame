@@ -2,11 +2,14 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore, type Player } from '../store/gameStore';
 import { PatternVisualizer } from '../components/PatternVisualizer';
+import { QrCode } from '../components/QrCode';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { getBallLetter, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
-import { Trophy, Users, PlayCircle, Monitor, Eye, Coins, Volume2, VolumeX, Loader, Swords } from 'lucide-react';
-import { SOUNDS, playSound, playVoiceBall } from '../lib/sounds';
+import { Trophy, Users, PlayCircle, Monitor, Eye, Coins, Volume2, VolumeX, Loader, Swords, ArrowLeft, LayoutGrid, Wifi } from 'lucide-react';
+import { SOUNDS, playSound, playVoiceBall, stopVoice } from '../lib/sounds';
+import { resolveVoiceId } from '../lib/voices';
+import { useLanJoinBase } from '../lib/lan';
 
 function Countdown({ endsAt }: { endsAt?: number }) {
   const [now, setNow] = useState(Date.now());
@@ -34,6 +37,7 @@ export default function Display() {
   // Atomic Selectors
   const socket = useGameStore(s => s.socket);
   const room = useGameStore(s => s.room);
+  const me = useGameStore(s => s.me);
   const latestBall = useGameStore(s => s.latestBall);
   const winner = useGameStore(s => s.winner);
   const claimAlert = useGameStore(s => s.claimAlert);
@@ -42,14 +46,27 @@ export default function Display() {
   const nearWinAlert = useGameStore(s => s.nearWinAlert);
   const connect = useGameStore(s => s.connect);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
+  const callNextBall = useGameStore(s => s.callNextBall);
 
+  const isHostView = Boolean(me?.isHost);
   const [lastBalls, setLastBalls] = useState<number[]>([]);
-  const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [audioGateDismissed, setAudioGateDismissed] = useState(false);
-  const [qrFailed, setQrFailed] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(() =>
+    isHostView ? sessionStorage.getItem('bingo_host_audio') !== 'muted' : false
+  );
+  const [audioGateDismissed, setAudioGateDismissed] = useState(() => isHostView);
   const [revealedBall, setRevealedBall] = useState<number | null>(() => latestBall || null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAnnouncedKeyRef = useRef<string | null>(
+    latestBall ? `${room?.roundNumber || 1}:${room?.calledNumbers?.length || 0}:${latestBall}` : null
+  );
+  const { baseUrl: lanBaseUrl, displayHost, isLanAddress } = useLanJoinBase();
+
+  useEffect(() => {
+    if (isHostView && !audioGateDismissed) {
+      setAudioGateDismissed(true);
+      setAudioEnabled(sessionStorage.getItem('bingo_host_audio') !== 'muted');
+    }
+  }, [isHostView, audioGateDismissed]);
 
   // Reveal Spectacle State
   const [revealStatus, setRevealStatus] = useState<'idle' | 'verifying' | 'winner'>('idle');
@@ -126,24 +143,45 @@ export default function Display() {
 
   useEffect(() => {
     connect();
-    const loadVoices = () => {
-      if (!('speechSynthesis' in window)) return;
-      const voices = window.speechSynthesis.getVoices();
-      const preferred = voices.find(v => v.name.includes('David') || v.name.includes('Daniel') || v.name.includes('Male'));
-      setMaleVoice(preferred || voices[0] || null);
-    };
-    loadVoices();
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
   }, [connect]);
 
-  // Voice & Ball Reveal Synchronization
+  // Host keyboard controls when viewing TV Mode in-screen
+  useEffect(() => {
+    if (!isHostView || !room) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return;
+      if (event.code === 'Escape') {
+        event.preventDefault();
+        navigate(`/host/${room.id}`);
+        return;
+      }
+      if (event.code === 'Space' && room.status === 'playing' && room.autoCallSpeed === 0) {
+        event.preventDefault();
+        callNextBall();
+      }
+      if (event.code === 'KeyR' && latestBall) {
+        playVoiceBall(latestBall, resolveVoiceId(room.voiceMode));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isHostView, room, latestBall, navigate, callNextBall]);
+
+  // Natural Voice & Ball Reveal Synchronization
   useEffect(() => {
     if (!latestBall) {
       setRevealedBall(null);
+      lastAnnouncedKeyRef.current = null;
       return;
     }
+
+    const ballKey = `${room?.roundNumber || 1}:${room?.calledNumbers?.length || 0}:${latestBall}`;
+    if (lastAnnouncedKeyRef.current === ballKey) {
+      setRevealedBall(latestBall);
+      return;
+    }
+    lastAnnouncedKeyRef.current = ballKey;
 
     if (!audioEnabled) {
       setRevealedBall(latestBall);
@@ -163,52 +201,30 @@ export default function Display() {
     if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
     fallbackTimerRef.current = setTimeout(triggerReveal, 300);
 
-    const voiceTriggered = playVoiceBall(latestBall, room?.voiceMode || 'robotic', {
+    playVoiceBall(latestBall, resolveVoiceId(room?.voiceMode), {
       onStart: () => {
         if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
         triggerReveal();
       }
     });
 
-    if (!voiceTriggered && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const letter = getBallLetter(latestBall);
-      const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
-      if (maleVoice) utterance.voice = maleVoice;
-      utterance.rate = 0.85;
-
-      utterance.onstart = () => {
-        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-        triggerReveal();
-      };
-      utterance.onerror = () => {
-        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-        triggerReveal();
-      };
-
-      window.speechSynthesis.speak(utterance);
-    }
-
     return () => {
       if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
     };
-  }, [latestBall, maleVoice, audioEnabled, room?.voiceMode]);
+  }, [latestBall, audioEnabled, room?.voiceMode, room?.roundNumber, room?.calledNumbers?.length]);
 
   const enableAudio = () => {
     setAudioEnabled(true);
     setAudioGateDismissed(true);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
-    }
+    if (isHostView) sessionStorage.setItem('bingo_host_audio', 'on');
   };
 
   const toggleAudio = () => {
     if (audioEnabled) {
       setAudioEnabled(false);
       setAudioGateDismissed(true);
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      if (isHostView) sessionStorage.setItem('bingo_host_audio', 'muted');
+      stopVoice();
     } else {
       enableAudio();
     }
@@ -256,14 +272,36 @@ export default function Display() {
 
   if (!room) return null;
 
-  const joinUrl = `${window.location.origin}/?code=${room.id}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&bgcolor=FAF7F2&color=3D3A35`;
+  const joinUrl = `${lanBaseUrl}/?code=${room.id}`;
   const connectedPlayers = Object.values(room.players).filter((p: Player) => p.connected);
   const pricingEnabled = hasCardPricing(room);
   const totalCollected = room.stats?.totalPotCollected ?? calculateTotalCollected(room.players, room);
   const dikitPrize = room.dikitPrize || 0;
   const bingoPrize = room.bingoPrize || 0;
   const showFinanceBar = pricingEnabled || totalCollected > 0 || dikitPrize > 0 || bingoPrize > 0;
+
+  const hostNavBar = isHostView ? (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => navigate(`/host/${room.id}`)}
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-[#3D3A35] hover:text-white border-2 border-[#DED9D1] hover:border-[#3D3A35] text-[#3D3A35] text-xs font-bold uppercase tracking-wider shadow-sm transition-all"
+        title="Return to Host Booth (Esc)"
+      >
+        <ArrowLeft size={15} />
+        <span>Host Booth</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => navigate(`/host/${room.id}/grid`)}
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#EA580C]/10 hover:bg-[#EA580C]/20 border-2 border-[#EA580C]/20 text-[#EA580C] text-xs font-bold uppercase tracking-wider transition-all"
+        title="Switch to Live Player Cards"
+      >
+        <LayoutGrid size={15} />
+        <span className="hidden sm:inline">Live Cards</span>
+      </button>
+    </div>
+  ) : null;
 
   const offlineBanner = !socket?.connected ? (
     <div role="status" className="fixed top-3 left-1/2 -translate-x-1/2 z-[140] bg-[#EA580C] text-white px-5 py-2 rounded-full shadow-2xl border-2 border-white flex items-center gap-2 text-xs font-black uppercase tracking-wider">
@@ -296,6 +334,11 @@ export default function Display() {
     return (
       <div className="min-h-screen lg:h-screen lg:max-h-screen bg-[#FAF7F2] text-[#3D3A35] font-sans flex flex-col lg:overflow-hidden relative p-5 sm:p-6 lg:p-8 paper-texture">
         {offlineBanner}
+        {hostNavBar && (
+          <div className="fixed top-5 left-5 z-30">
+            {hostNavBar}
+          </div>
+        )}
         {audioGateDismissed && (
           <button
             type="button"
@@ -364,17 +407,21 @@ export default function Display() {
           {/* Main 2-Column Lobby Area (Fits cleanly within 720p, 900p, 1080p) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 w-full flex-1 min-h-0 lg:max-h-[540px]">
             <div className="bg-white rounded-[40px] lg:rounded-[48px] p-6 lg:p-8 border-4 border-[#E8E2D9] shadow-xl flex flex-col items-center justify-center text-center min-h-0">
-              <h3 className="text-lg lg:text-xl font-black uppercase tracking-tight mb-4 shrink-0">Scan to Join</h3>
-              <div className="bg-[#FAF7F2] p-4 lg:p-5 rounded-[32px] border-4 border-white shadow-inner mb-4 shrink-0">
-                {qrFailed ? (
-                  <div className="w-44 h-44 lg:w-56 lg:h-56 xl:w-64 xl:h-64 flex flex-col items-center justify-center p-4 text-center">
-                    <span className="text-xs font-bold uppercase tracking-widest text-[#6B655D] mb-2">Join at</span>
-                    <span className="text-sm font-black text-[#3D3A35] break-all">{window.location.host}</span>
-                  </div>
-                ) : (
-                  <img src={qrUrl} alt="Join QR" onError={() => setQrFailed(true)} className="w-44 h-44 lg:w-56 lg:h-56 xl:w-64 xl:h-64 mix-blend-multiply" />
-                )}
+              <h3 className="text-lg lg:text-xl font-black uppercase tracking-tight mb-3 shrink-0">Scan to Join</h3>
+              <div className="bg-[#FAF7F2] p-4 lg:p-5 rounded-[32px] border-4 border-white shadow-inner mb-3 shrink-0">
+                <QrCode
+                  value={joinUrl}
+                  size={256}
+                  label={`Scan QR code to join room ${room.id}`}
+                  className="w-44 h-44 lg:w-56 lg:h-56 xl:w-60 xl:h-60"
+                />
               </div>
+              {isLanAddress && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 mb-2 rounded-full bg-[#FAF7F2] border border-[#E8E2D9] text-xs font-bold text-[#6B655D] tabular-nums shrink-0">
+                  <Wifi size={13} className="text-[#0D9488]" />
+                  <span>{displayHost}</span>
+                </div>
+              )}
               <div className="space-y-1 shrink-0">
                 <p className="text-xs lg:text-sm font-bold text-[#6B655D] uppercase tracking-widest">Or enter code</p>
                 <div className="text-5xl lg:text-6xl font-display text-[#EA580C] tracking-[0.2em] tabular-nums leading-none">{room.id}</div>
@@ -476,15 +523,29 @@ export default function Display() {
 
       {audioGateModal}
 
-      <header className="h-16 lg:h-20 bg-white border-b-4 border-[#E8E2D9] px-6 lg:px-10 flex items-center justify-between shadow-sm shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-11 h-11 lg:w-12 lg:h-12 bg-[#EA580C] rounded-2xl flex items-center justify-center shadow-lg rotate-[-5deg]"><span className="text-2xl lg:text-3xl font-display text-white italic">L</span></div>
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-display uppercase tracking-tighter leading-none">Lucky Bingo</h1>
-            <p className="text-[#6B655D] font-bold text-[11px] uppercase tracking-[0.28em] mt-0.5">Live Hall Display</p>
+      <header className="h-16 lg:h-20 bg-white border-b-4 border-[#E8E2D9] px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-3 shadow-sm shrink-0">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+          {hostNavBar}
+          {!hostNavBar && (
+            <div className="w-11 h-11 lg:w-12 lg:h-12 bg-[#EA580C] rounded-2xl flex items-center justify-center shadow-lg rotate-[-5deg] shrink-0"><span className="text-2xl lg:text-3xl font-display text-white italic">L</span></div>
+          )}
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-display uppercase tracking-tighter leading-none truncate">Lucky Bingo</h1>
+            <p className="text-[#6B655D] font-bold text-[11px] uppercase tracking-[0.28em] mt-0.5 hidden sm:block">Live Hall Display</p>
           </div>
         </div>
-        <div className="flex items-center gap-5 lg:gap-8">
+        <div className="flex items-center gap-3 sm:gap-5 lg:gap-8 shrink-0">
+          {isHostView && room.status === 'playing' && room.autoCallSpeed === 0 && (
+            <button
+              type="button"
+              onClick={callNextBall}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#3D3A35] hover:bg-black text-white text-xs font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all"
+              title="Call Next Ball (Space)"
+            >
+              <span>Call Ball</span>
+              <kbd className="text-[10px] font-semibold bg-white/15 px-1.5 py-0.5 rounded hidden md:inline">Space</kbd>
+            </button>
+          )}
           <button
             type="button"
             onClick={toggleAudio}
@@ -611,13 +672,13 @@ export default function Display() {
                         </span>
                       )}
                       {dikitPrize > 0 && (
-                        <span className="bg-[#0D9488]/15 text-[#0D9488] border border-[#0D9488]/25 px-3 py-1 rounded-xl text-xs font-black tabular-nums">
-                          ⚔️ Dikit: {formatPeso(dikitPrize)}
+                        <span className="bg-[#0D9488]/15 text-[#0F766E] border border-[#0D9488]/25 px-3 py-1 rounded-xl text-xs font-black tabular-nums inline-flex items-center gap-1.5">
+                          <Swords size={12} aria-hidden="true" /> Dikit: {formatPeso(dikitPrize)}
                         </span>
                       )}
                       {bingoPrize > 0 && (
-                        <span className="bg-[#EA580C]/15 text-[#EA580C] border border-[#EA580C]/25 px-3 py-1 rounded-xl text-xs font-black tabular-nums">
-                          🏆 Bingo: {formatPeso(bingoPrize)}
+                        <span className="bg-[#EA580C]/15 text-[#C2410C] border border-[#EA580C]/25 px-3 py-1 rounded-xl text-xs font-black tabular-nums inline-flex items-center gap-1.5">
+                          <Trophy size={12} aria-hidden="true" /> Bingo: {formatPeso(bingoPrize)}
                         </span>
                       )}
                       {pricingEnabled && (
@@ -698,16 +759,17 @@ export default function Display() {
         <div className="flex flex-col gap-4 lg:gap-5 min-h-0">
           <div className="bg-white rounded-[36px] p-5 border-4 border-[#E8E2D9] shadow-lg text-center flex flex-col items-center shrink-0">
             <h3 className="text-sm font-black text-[#3D3A35] uppercase tracking-widest mb-3">Scan to Play</h3>
-            <div className="bg-[#FAF7F2] p-3 rounded-[24px] border-2 border-[#E8E2D9] mb-3 shadow-inner">
-              {qrFailed ? (
-                <div className="w-36 h-36 xl:w-44 xl:h-44 flex flex-col items-center justify-center p-3 text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#6B655D] mb-1">Join at</span>
-                  <span className="text-xs font-black text-[#3D3A35] break-all">{window.location.host}</span>
-                </div>
-              ) : (
-                <img src={qrUrl} alt="Join QR Code" onError={() => setQrFailed(true)} className="w-36 h-36 xl:w-44 xl:h-44 mix-blend-multiply" />
-              )}
+            <div className="bg-[#FAF7F2] p-3 rounded-[24px] border-2 border-[#E8E2D9] mb-2.5 shadow-inner">
+              <QrCode
+                value={joinUrl}
+                size={180}
+                label={`Scan QR code to join room ${room.id}`}
+                className="w-36 h-36 xl:w-44 xl:h-44"
+              />
             </div>
+            {isLanAddress && (
+              <p className="text-[11px] font-bold text-[#0F766E] tabular-nums mb-1">{displayHost}</p>
+            )}
             <p className="text-[#6B655D] font-bold text-[11px] uppercase tracking-wider mb-1">Or enter code on mobile</p>
             <div className="text-3xl xl:text-4xl font-display text-[#EA580C] tracking-[0.2em] leading-none tabular-nums">{room.id}</div>
           </div>

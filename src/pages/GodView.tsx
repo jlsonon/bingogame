@@ -1,17 +1,25 @@
 import { useGameStore } from '../store/gameStore';
 import { checkValidWin, getBallLetter } from '../lib/bingo';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Loader, ArrowUpDown } from 'lucide-react';
+import { Loader, ArrowUpDown, ArrowLeft, Monitor } from 'lucide-react';
+import { SOUNDS, playSound, playVoiceBall } from '../lib/sounds';
+import { resolveVoiceId } from '../lib/voices';
 
 export default function GodView() {
   const { code } = useParams();
   const navigate = useNavigate();
   const socket = useGameStore(s => s.socket);
   const room = useGameStore(s => s.room);
+  const me = useGameStore(s => s.me);
   const latestBall = useGameStore(s => s.latestBall);
   const rejoinRoom = useGameStore(s => s.rejoinRoom);
+  const callNextBall = useGameStore(s => s.callNextBall);
   const [sortMode, setSortMode] = useState<'closest' | 'name'>('closest');
+  const isHostView = Boolean(me?.isHost);
+  const lastAnnouncedKeyRef = useRef<string | null>(
+    latestBall ? `${room?.roundNumber || 1}:${room?.calledNumbers?.length || 0}:${latestBall}` : null
+  );
 
   useEffect(() => {
     if (!socket || !code) return;
@@ -21,6 +29,44 @@ export default function GodView() {
       });
     }
   }, [socket, room, code, rejoinRoom, navigate]);
+
+  // Keep natural voice announcing newly called balls while Host inspects Live Cards
+  useEffect(() => {
+    if (!isHostView || !latestBall) {
+      if (!latestBall) lastAnnouncedKeyRef.current = null;
+      return;
+    }
+    const ballKey = `${room?.roundNumber || 1}:${room?.calledNumbers?.length || 0}:${latestBall}`;
+    if (lastAnnouncedKeyRef.current === ballKey) return;
+    lastAnnouncedKeyRef.current = ballKey;
+
+    if (sessionStorage.getItem('bingo_host_audio') === 'muted') return;
+    playSound(SOUNDS.BALL_DRAW, 0.4);
+    playVoiceBall(latestBall, resolveVoiceId(room?.voiceMode));
+  }, [isHostView, latestBall, room?.voiceMode, room?.roundNumber, room?.calledNumbers?.length]);
+
+  // Host keyboard controls when inspecting Live Cards in-screen
+  useEffect(() => {
+    if (!isHostView || !room) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return;
+      if (event.code === 'Escape') {
+        event.preventDefault();
+        navigate(`/host/${room.id}`);
+        return;
+      }
+      if (event.code === 'Space' && room.status === 'playing' && room.autoCallSpeed === 0) {
+        event.preventDefault();
+        callNextBall();
+      }
+      if (event.code === 'KeyR' && latestBall) {
+        playVoiceBall(latestBall, resolveVoiceId(room.voiceMode));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isHostView, room, latestBall, navigate, callNextBall]);
 
   if (!room) {
     return (
@@ -71,6 +117,28 @@ export default function GodView() {
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6 sm:mb-8">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
+            {isHostView && (
+              <div className="flex items-center gap-2 mr-1">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/host/${room.id}`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#3D3A35] hover:text-white border-2 border-[#DED9D1] hover:border-[#3D3A35] text-[#3D3A35] text-xs font-bold uppercase tracking-wider shadow-sm transition-all"
+                  title="Return to Host Booth (Esc)"
+                >
+                  <ArrowLeft size={15} />
+                  <span>Host Booth</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/display/${room.id}`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0D9488]/10 hover:bg-[#0D9488]/20 border-2 border-[#0D9488]/20 text-[#0D9488] text-xs font-bold uppercase tracking-wider transition-all"
+                  title="Switch to TV Display"
+                >
+                  <Monitor size={15} />
+                  <span>TV Mode</span>
+                </button>
+              </div>
+            )}
             <h1 className="text-2xl sm:text-3xl font-display uppercase tracking-tight text-[#3D3A35]">
               Lucky Bingo · Live Cards
             </h1>
@@ -91,6 +159,17 @@ export default function GodView() {
           </p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
+          {isHostView && room.status === 'playing' && room.autoCallSpeed === 0 && (
+            <button
+              type="button"
+              onClick={callNextBall}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#3D3A35] hover:bg-black text-white text-xs font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all"
+              title="Call Next Ball (Space)"
+            >
+              <span>Call Ball</span>
+              <kbd className="text-[10px] font-semibold bg-white/15 px-1.5 py-0.5 rounded hidden sm:inline">Space</kbd>
+            </button>
+          )}
           {activeBall && (
             <div className="bg-[#EA580C] text-white px-3.5 py-1.5 rounded-xl font-display text-lg tracking-wider tabular-nums shadow-sm">
               {getBallLetter(activeBall)}-{activeBall}

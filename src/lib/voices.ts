@@ -44,6 +44,8 @@ export const NATURAL_VOICES: NaturalVoice[] = [
   { id: 'natural_prabhat', edgeVoice: 'en-IN-PrabhatNeural', name: 'Prabhat', gender: 'Male', region: 'India', flag: '🇮🇳', label: '🇮🇳 Prabhat (Indian Male - Clear Host)' },
 ];
 
+export const DEFAULT_VOICE_ID = 'natural_jenny';
+
 export const NATURAL_VOICE_MAP: Record<string, NaturalVoice> = Object.fromEntries(
   NATURAL_VOICES.map(v => [v.id, v])
 );
@@ -53,7 +55,14 @@ export function isNaturalVoice(voiceMode: string | undefined): boolean {
   return voiceMode in NATURAL_VOICE_MAP;
 }
 
+export function resolveVoiceId(voiceMode: string | undefined): string {
+  if (voiceMode && voiceMode in NATURAL_VOICE_MAP) {
+    return voiceMode;
+  }
+  return DEFAULT_VOICE_ID;
+}
+
 export function getVoiceLabel(voiceMode: string | undefined): string {
-  if (!voiceMode || voiceMode === 'robotic') return '🤖 Robotic';
-  return NATURAL_VOICE_MAP[voiceMode]?.label || voiceMode;
+  const resolved = resolveVoiceId(voiceMode);
+  return NATURAL_VOICE_MAP[resolved]?.label || NATURAL_VOICES[0].label;
 }

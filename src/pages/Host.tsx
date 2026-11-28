@@ -2,12 +2,13 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { PatternVisualizer, PatternThumb, getPatternDisplayCells } from '../components/PatternVisualizer';
-import { Play, Square, Settings, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX, Coins, Swords, Pencil, Trash2 } from 'lucide-react';
+import { Play, Square, Settings, Copy, Users, Ticket, Monitor, Trophy, Plus, Eye, LayoutGrid, CheckCircle2, RotateCcw, Volume2, VolumeX, Coins, Swords, Pencil, Trash2, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { PRESET_PATTERNS, type BingoPattern, getBallLetter, checkValidWin, calculateCardsCost, calculateTotalCollected, formatPeso, hasCardPricing } from '../lib/bingo';
 import { SOUNDS, playSound, playVoiceBall, previewVoice } from '../lib/sounds';
-import { NATURAL_VOICES } from '../lib/voices';
+import { NATURAL_VOICES, resolveVoiceId } from '../lib/voices';
+import { useLanJoinBase, copyTextSafe } from '../lib/lan';
 
 const DELETED_PATTERN_IDENTIFIERS = new Set([
   'letter-x', 'letter-t', 'letter-l', 'dikit',
@@ -108,11 +109,22 @@ export default function Host() {
   const resetConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(() => sessionStorage.getItem('bingo_host_audio') !== 'muted');
   const [revealedBall, setRevealedBall] = useState<number | null>(() => latestBall || null);
-  const [maleVoice, setMaleVoice] = useState<SpeechSynthesisVoice | null>(null);
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasAutoSyncedPatternsRef = useRef(false);
+  const lastAnnouncedKeyRef = useRef<string | null>(
+    latestBall ? `${room?.roundNumber || 1}:${room?.calledNumbers?.length || 0}:${latestBall}` : null
+  );
+  const { baseUrl: lanBaseUrl, displayHost, isLanAddress } = useLanJoinBase();
+
+  const toggleHostAudio = () => {
+    setAudioEnabled(prev => {
+      const next = !prev;
+      sessionStorage.setItem('bingo_host_audio', next ? 'on' : 'muted');
+      return next;
+    });
+  };
 
   const libraryPatterns = useMemo(() => {
     const map = new Map<string, BingoPattern>();
@@ -138,40 +150,28 @@ export default function Host() {
     }
   }, [libraryPatterns, room, updateSettings]);
 
-  // Load voices and enable audio context on first interaction
+  // Cleanup confirmation timers on unmount
   useEffect(() => {
-    const loadVoices = () => {
-      if (!('speechSynthesis' in window)) return;
-      const voices = window.speechSynthesis.getVoices();
-      const preferred = voices.find(v => v.name.includes('David') || v.name.includes('Daniel') || v.name.includes('Male'));
-      setMaleVoice(preferred || voices[0] || null);
-    };
-    loadVoices();
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
-
-    const unlockAudio = () => {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
-      }
-    };
-    window.addEventListener('click', unlockAudio, { once: true });
-    window.addEventListener('keydown', unlockAudio, { once: true });
     return () => {
-      window.removeEventListener('click', unlockAudio);
-      window.removeEventListener('keydown', unlockAudio);
       if (resetConfirmTimerRef.current) clearTimeout(resetConfirmTimerRef.current);
       if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
     };
   }, []);
 
-  // Automatic Voice Calling & Ball Reveal on Ball Call
+  // Automatic Natural Voice Calling & Ball Reveal on Ball Call
   useEffect(() => {
     if (!latestBall) {
       setRevealedBall(null);
+      lastAnnouncedKeyRef.current = null;
       return;
     }
+
+    const ballKey = `${room?.roundNumber || 1}:${room?.calledNumbers?.length || 0}:${latestBall}`;
+    if (lastAnnouncedKeyRef.current === ballKey) {
+      setRevealedBall(latestBall);
+      return;
+    }
+    lastAnnouncedKeyRef.current = ballKey;
 
     if (!audioEnabled) {
       setRevealedBall(latestBall);
@@ -192,36 +192,17 @@ export default function Host() {
     if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
     fallbackTimerRef.current = setTimeout(triggerReveal, 300);
 
-    const voiceTriggered = playVoiceBall(latestBall, room?.voiceMode || 'robotic', {
+    playVoiceBall(latestBall, resolveVoiceId(room?.voiceMode), {
       onStart: () => {
         if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
         triggerReveal();
       }
     });
 
-    if (!voiceTriggered && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const letter = getBallLetter(latestBall);
-      const utterance = new SpeechSynthesisUtterance(`${letter}... ${latestBall}`);
-      if (maleVoice) utterance.voice = maleVoice;
-      utterance.rate = 0.85;
-
-      utterance.onstart = () => {
-        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-        triggerReveal();
-      };
-      utterance.onerror = () => {
-        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-        triggerReveal();
-      };
-
-      window.speechSynthesis.speak(utterance);
-    }
-
     return () => {
       if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
     };
-  }, [latestBall, audioEnabled, room?.voiceMode, maleVoice]);
+  }, [latestBall, audioEnabled, room?.voiceMode, room?.roundNumber, room?.calledNumbers?.length]);
 
   // Keep browser localStorage custom patterns synced to the server after redeploys without deleting the local backup
   useEffect(() => {
@@ -295,14 +276,8 @@ export default function Host() {
          updateSettings({ hidePattern: !room?.hidePattern });
       }
       if (event.code === 'KeyR' && latestBall) {
-         // Re-read last ball
-         const played = playVoiceBall(latestBall, room?.voiceMode || 'robotic');
-         if (!played && 'speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const msg = new SpeechSynthesisUtterance(`${getBallLetter(latestBall)}... ${latestBall}`);
-            msg.rate = 0.85;
-            window.speechSynthesis.speak(msg);
-         }
+         // Re-read last ball in natural voice
+         playVoiceBall(latestBall, resolveVoiceId(room?.voiceMode));
       }
 
       // Space to Call Ball (if playing and manual)
@@ -326,17 +301,16 @@ export default function Host() {
   const potBalance = totalCollected - totalPrizes;
   const pricingEnabled = hasCardPricing(room);
 
-  const joinUrl = `${window.location.origin}/?code=${room.id}`;
-  const displayUrl = `${window.location.origin}/display/${room.id}`;
+  const joinUrl = `${lanBaseUrl}/?code=${room.id}`;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(joinUrl);
+  const handleCopy = async () => {
+    await copyTextSafe(joinUrl);
     setCopyLabel('Copied');
     window.setTimeout(() => setCopyLabel('Copy'), 1400);
   };
 
   const openDisplay = () => {
-    window.open(displayUrl, '_blank');
+    navigate(`/display/${room.id}`);
   };
 
   const activateAllPatterns = () => {
@@ -477,22 +451,22 @@ export default function Host() {
                {copyLabel === 'Copied' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
                <span className="hidden lg:inline">{copyLabel === 'Copied' ? 'Copied!' : 'Copy Link'}</span>
              </button>
-             <button type="button" onClick={openDisplay} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#0D9488]/10 text-[#0D9488] rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#0D9488]/20 transition-all" title="Open TV Display">
+             <button type="button" onClick={openDisplay} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#0D9488]/10 text-[#0D9488] rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#0D9488]/20 transition-all" title="Switch to TV Display">
                <Monitor size={15} />
                <span className="hidden md:inline">TV Mode</span>
              </button>
              <button 
                type="button"
-               onClick={() => window.open(`${window.location.origin}/host/${room.id}/grid`, '_blank')} 
+               onClick={() => navigate(`/host/${room.id}/grid`)} 
                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#EA580C]/10 text-[#EA580C] rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#EA580C]/20 transition-all"
-               title="Open Live Player Cards Grid"
+               title="Switch to Live Player Cards Grid"
              >
                <LayoutGrid size={15} />
                <span className="hidden md:inline">Live Cards</span>
              </button>
              <button
                type="button"
-               onClick={() => setAudioEnabled(!audioEnabled)}
+               onClick={toggleHostAudio}
                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
                  audioEnabled ? 'bg-[#0D9488]/10 text-[#0D9488] hover:bg-[#0D9488]/20' : 'bg-[#EF4444]/10 text-[#B91C1C] hover:bg-[#EF4444]/20'
                }`}
@@ -501,6 +475,17 @@ export default function Host() {
                {audioEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
                <span className="hidden sm:inline">{audioEnabled ? 'Voice On' : 'Muted'}</span>
              </button>
+             {isLanAddress && (
+               <button
+                 type="button"
+                 onClick={handleCopy}
+                 className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#FAF7F2] border border-[#E8E2D9] text-[11px] font-bold text-[#6B655D] hover:text-[#3D3A35] hover:border-[#6B655D] transition-colors tabular-nums"
+                 title={`Local Wi-Fi address: ${joinUrl} (click to copy)`}
+               >
+                 <Wifi size={13} className="text-[#0D9488]" />
+                 <span>{displayHost}</span>
+               </button>
+             )}
           </div>
         </div>
         <div className="flex items-center gap-3 sm:gap-5 shrink-0">
@@ -1125,8 +1110,7 @@ export default function Host() {
                       </div>
                     </div>
                   )}
-                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider mb-2">Hall Ambience</span><button type="button" onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#6B655D] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? <><Volume2 size={13} />Active</> : <><VolumeX size={13} />Muted</>}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex justify-between items-center mb-2"><label htmlFor="host-voice-select" className="text-xs font-black text-[#3D3A35] uppercase tracking-wider">Caller Voice</label><button type="button" onClick={() => previewVoice(room.voiceMode || 'robotic')} className="text-[10px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2 py-0.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1" title="Test selected voice"><Volume2 size={11} />Test</button></div><select id="host-voice-select" value={room.voiceMode || 'robotic'} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 px-1 bg-white rounded-xl text-[10px] font-bold text-[#3D3A35] uppercase border-2 border-[#DED9D1] outline-none cursor-pointer">
-  <option value="robotic">Robotic (Browser TTS)</option>
+                 <div className="pt-4 border-t-2 border-[#FAF7F2] grid grid-cols-2 gap-3"><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><span className="text-xs font-black text-[#3D3A35] uppercase tracking-wider mb-2">Hall Ambience</span><button type="button" onClick={() => updateSettings({ ambienceEnabled: !room.ambienceEnabled })} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${room.ambienceEnabled ? 'bg-[#0D9488] text-white' : 'bg-white text-[#6B655D] border-2 border-[#DED9D1]'}`}>{room.ambienceEnabled ? <><Volume2 size={13} />Active</> : <><VolumeX size={13} />Muted</>}</button></div><div className="flex flex-col bg-[#FAF7F2] p-4 rounded-2xl border-2 border-[#E8E2D9]"><div className="flex justify-between items-center mb-2"><label htmlFor="host-voice-select" className="text-xs font-black text-[#3D3A35] uppercase tracking-wider">Caller Voice</label><button type="button" onClick={() => previewVoice(resolveVoiceId(room.voiceMode))} className="text-[10px] font-black uppercase text-white bg-[#0D9488] hover:bg-[#0F766E] px-2 py-0.5 rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1" title="Test selected voice"><Volume2 size={11} />Test</button></div><select id="host-voice-select" value={resolveVoiceId(room.voiceMode)} onChange={e => updateSettings({ voiceMode: e.target.value })} className="w-full py-2 px-1 bg-white rounded-xl text-[10px] font-bold text-[#3D3A35] uppercase border-2 border-[#DED9D1] outline-none cursor-pointer">
   <optgroup label="United States Natural Voices">
     {NATURAL_VOICES.filter(v => v.region === 'United States').map(v => (
       <option key={v.id} value={v.id}>{v.label}</option>

@@ -2,6 +2,10 @@ node_modules/
 build/
 dist/
 coverage/
+voice-cache/
+Lucky Bingo.app/
+macos/build/
+.impeccable/
 .DS_Store
 *.log
 .env*

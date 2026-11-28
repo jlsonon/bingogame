@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { motion } from 'framer-motion';
-import { PlayCircle, Users, Loader, Eye, Trophy } from 'lucide-react';
+import { PlayCircle, Users, Loader, Eye, Trophy, Wifi, CheckCircle2, Copy } from 'lucide-react';
 import { calculateCardsCost, formatPeso, hasCardPricing } from '../lib/bingo';
+import { useLanJoinBase, isLocalhostOrigin, copyTextSafe } from '../lib/lan';
 
 const COLORS = [
   { hex: '#ef4444', name: 'Red' },
@@ -29,6 +30,9 @@ export default function Landing() {
   const [loadingAction, setLoadingAction] = useState<'join' | 'host' | null>(null);
   const [error, setError] = useState('');
   const [publicRooms, setPublicRooms] = useState<any[]>([]);
+  const [lanCopied, setLanCopied] = useState(false);
+  const { baseUrl: lanBaseUrl, displayHost, isLanAddress } = useLanJoinBase();
+  const showHostLanBadge = isLocalhostOrigin() && isLanAddress;
 
   const isBusy = loadingAction !== null;
 
@@ -303,6 +307,31 @@ export default function Landing() {
             {loadingAction === 'host' ? <Loader className="animate-spin text-[#0D9488]" size={18} /> : <Users size={18} />}
             {loadingAction === 'host' ? 'Starting Room...' : 'Host New Room'}
           </button>
+
+          {showHostLanBadge && (
+            <button
+              type="button"
+              onClick={async () => {
+                await copyTextSafe(lanBaseUrl);
+                setLanCopied(true);
+                window.setTimeout(() => setLanCopied(false), 1600);
+              }}
+              className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl bg-[#FAF7F2] hover:bg-[#F3EFE9] border border-[#E8E2D9] text-left transition-colors"
+              title="Click to copy local Wi-Fi join URL for phones"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Wifi size={15} className="text-[#0D9488] shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-[#0F766E]">Local Wi-Fi Ready</div>
+                  <div className="text-xs font-bold text-[#3D3A35] truncate tabular-nums">{displayHost}</div>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#6B655D] shrink-0">
+                {lanCopied ? <CheckCircle2 size={14} className="text-[#0D9488]" /> : <Copy size={14} />}
+                <span>{lanCopied ? 'Copied' : 'Copy'}</span>
+              </span>
+            </button>
+          )}
         </form>
       </motion.div>
     </div>
