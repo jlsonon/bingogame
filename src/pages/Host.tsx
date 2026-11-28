@@ -223,24 +223,30 @@ export default function Host() {
     };
   }, [latestBall, audioEnabled, room?.voiceMode, maleVoice]);
 
-  // --- MIGRATION: ONE-TIME SYNC LOCAL PATTERNS TO SERVER ---
+  // Keep browser localStorage custom patterns synced to the server after redeploys without deleting the local backup
   useEffect(() => {
     const localSaved = localStorage.getItem('bingo_pattern_library');
     if (localSaved && socket?.connected) {
       try {
         const localPatterns: BingoPattern[] = JSON.parse(localSaved);
-        if (localPatterns.length > 0) {
-          console.log(`Found ${localPatterns.length} local patterns. Migrating to server...`);
-          localPatterns.forEach(p => saveGlobalPattern(p));
-          // Once migrated, clear local storage so we don't keep re-syncing
-          localStorage.removeItem('bingo_pattern_library');
+        const missingOnServer = localPatterns.filter(
+          lp =>
+            lp &&
+            lp.id &&
+            !isDeletedPattern(lp) &&
+            lp.match !== 'dikit' &&
+            Array.isArray(lp.cells) &&
+            lp.cells.filter(c => c !== 12).length > 0 &&
+            !globalPatterns.some(gp => gp.id === lp.id)
+        );
+        if (missingOnServer.length > 0) {
+          missingOnServer.forEach(p => saveGlobalPattern(p));
         }
       } catch (e) {
-        console.error("Migration failed:", e);
+        console.error("Pattern sync failed:", e);
       }
     }
-  }, [socket?.connected, saveGlobalPattern]);
-  // ---------------------------------------------------------
+  }, [socket?.connected, globalPatterns, saveGlobalPattern]);
 
   useEffect(() => {
     if (!socket || !code) return;

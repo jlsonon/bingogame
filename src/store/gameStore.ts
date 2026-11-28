@@ -260,7 +260,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     newSocket.on("global_patterns_updated", (patterns: BingoPattern[]) => {
       const cleaned = (patterns || []).filter(p => !isDeletedPattern(p) && p.match !== 'dikit');
       try {
-        localStorage.setItem('bingo_pattern_library', JSON.stringify(cleaned));
+        const stored = localStorage.getItem('bingo_pattern_library');
+        const existingLocal: BingoPattern[] = stored ? JSON.parse(stored) : [];
+        // Never wipe local browser cache if a freshly restarted server broadcasts []
+        if (cleaned.length > 0 || existingLocal.length === 0) {
+          localStorage.setItem('bingo_pattern_library', JSON.stringify(cleaned));
+        }
       } catch (e) {
         console.warn("Could not cache patterns to localStorage:", e);
       }
